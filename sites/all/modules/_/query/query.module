@@ -1,0 +1,57 @@
+<?
+
+/**
+ * Implementation of hook_menu_alter().
+ */
+function query_menu_alter(&$items)
+{
+  // убрать материалы с Главной
+  $items['node']['page callback'] = 'query_empty_front_page_callback';
+
+  // "Удалить" в локальные задачи материала
+  // http://xandeadx.ru/blog/drupal/339
+  $items['node/%node/delete']['context'] = MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE;
+
+  // убрать восстановление пароля со страницы входа
+  $items['user/password']['access callback'] = false;
+}
+
+/**
+ * menu callback
+ * убрать материалы с главной
+ */
+function query_empty_front_page_callback()
+{
+  drupal_set_title('');
+  return [];
+}
+
+/**
+ * hook_form_FORM_ID_alter
+ */
+function query_form_eck__entity__form_add_query_query_alter(&$form, &$form_state)
+{
+  $form["#submit"][] = 'query_form_eck__entity__form_add_query_query_submit';
+
+  // редактирование статуса только для админа
+  if (!user_has_role(3, $GLOBALS['user']) && !user_has_role(4, $GLOBALS['user'])) {
+    $form["field_query_status"]["#access"] = false;
+    $form["field_comment"]["#access"] = false;
+  }
+}
+
+function query_form_eck__entity__form_add_query_query_submit(&$form, &$form_state)
+{
+  // отправить письмо
+  $params['qid'] = $form_state["values"]["entity"]->id;
+  $params['period'] = ['value' => $form_state["values"]["field_period"]["und"][0]["value"], 'value2' => $form_state["values"]["field_period"]["und"][0]["value2"]];
+  $params['country'] = $form_state["values"]["field_country"]["und"][0]["value"];
+  $params['product'] = $form_state["values"]["field_product"]["und"][0]["value"];
+  $params['package'] = taxonomy_term_load($form_state["values"]["field_package"]["und"][0]["tid"])->name;
+  $params['qty'] = $form_state["values"]["field_qty"]["und"][0]["value"];
+  drupal_mail('mailer', 'manager_notify_new_query', MANAGER_EMAIL, language_default(), $params);
+
+  $form_state['redirect'] = '<front>';
+}
+
+

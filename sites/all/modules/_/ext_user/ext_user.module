@@ -1,0 +1,47 @@
+<?
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function ext_user_form_user_login_alter(&$form, &$form_state)
+{
+  $form['name']['#title'] = t('E-Mail');
+  $form['name']['#element_validate'][] = 'ext_user_login_name_validate';
+}
+
+/**
+ * Form element validation handler for the user login form.
+ *
+ * Allows users to authenticate by username OR email.
+ */
+function ext_user_login_name_validate($form, &$form_state)
+{
+  $user = ext_user_user_load_by_login($form_state['values']['name']);
+  if ($user->uid) {
+    $form_state['values']['name'] = $user->name;
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+
+/**
+ * Загрузить пользователя по указанному логину
+ * @param $login
+ *
+ * @return object
+ */
+function ext_user_user_load_by_login($login)
+{
+  // Try loading by email.
+  if ($user = user_load_by_mail($login)) {
+    return $user;
+  }
+
+  // Try loading by username.
+  if ($user = user_load_by_name($login)) {
+    return $user;
+  }
+  return user_load(0);
+}

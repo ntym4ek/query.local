@@ -1,0 +1,4 @@
+name = Ext User
+description = ""
+package = Custom
+core = 7.x

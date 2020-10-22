@@ -1,0 +1,4 @@
+name = Query
+description = Базовый модуль кастомных настроек
+package = Custom
+core = 7.x

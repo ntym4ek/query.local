@@ -1,0 +1,33 @@
+.date-form-element-content {
+  border: none;
+  padding: 0;
+  display: flex;
+  justify-content: flex-start;
+  .container-inline-date {
+    //flex: 0 0 auto;
+    width: initial;
+    .end-date-wrapper {
+      label {
+        font-weight: 400;
+        vertical-align: top;
+        line-height: 2.3;
+      }
+      .date-padding {
+        float: none;
+        display: inline-block;
+      }
+    }
+  }
+}
+
+form .form-control:not(.form-textarea) {
+  width: initial;
+}
+
+.table {
+  font-size: $font-size-small;
+  .form-control {
+    font-size: $font-size-small;
+  }
+  .views-field-field-comment { max-width: 250px; }
+}
