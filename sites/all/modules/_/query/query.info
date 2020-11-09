@@ -2,3 +2,7 @@ name = Query
 description = Базовый модуль кастомных настроек
 package = Custom
 core = 7.x
+
+scripts[] = js/query.js
+
+files[] = views/query_handler_field_produce_units.inc

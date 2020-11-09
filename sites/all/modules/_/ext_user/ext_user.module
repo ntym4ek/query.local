@@ -1,5 +1,8 @@
 <?
 
+define('ROLE_ADMIN', 3);
+define('ROLE_MANAGER', 4);
+
 /**
  * Implements hook_form_FORM_ID_alter().
  */
