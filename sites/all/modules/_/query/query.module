@@ -29,6 +29,16 @@ function query_empty_front_page_callback()
 /**
  * hook_form_FORM_ID_alter
  */
+function query_form_alter(&$form, &$form_state, $form_id)
+{
+  if ($form_id == 'eck__entity__form_edit_query_query' && !user_has_role(ROLE_ADMIN, $GLOBALS['user'])) {
+    $form["field_suggestions"]["#access"] = false;
+  }
+}
+
+/**
+ * hook_form_FORM_ID_alter
+ */
 function query_form_eck__entity__form_add_query_query_alter(&$form, &$form_state)
 {
   $form["#submit"][] = 'query_form_eck__entity__form_add_query_query_submit';

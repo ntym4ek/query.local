@@ -40,9 +40,6 @@ form .form-control:not(.form-textarea) {
   .view-header {
     margin-bottom: $grid-gutter-width/2;
   }
-  &.view-manager-queries {
-    .form-actions { display: none; }
-  }
   .view-item {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
@@ -53,12 +50,17 @@ form .form-control:not(.form-textarea) {
       border-top: 1px solid $gray-lightest;
     }
   }
-  &.view-queries {
+  .views-field-nothing a {
+    font-size: $font-size-small;
+  }
+  &.view-queries,
+  &.view-manager-queries {
     .view-item {
       border: 1px solid $gray-lightest;
       padding: 20px;
     }
   }
+  &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
 }
 
 .views-field .views-label,
@@ -85,7 +87,6 @@ form .form-control:not(.form-textarea) {
     }
   }
   .produce-unit-dates {
-
     border-right: 1px solid $gray-lightest;
     padding: 0 $grid-gutter-width/2;
     margin: 0;
