@@ -37,6 +37,7 @@ form .form-control:not(.form-textarea) {
 }
 
 .view {
+  .view-filters,
   .view-header {
     margin-bottom: $grid-gutter-width/2;
   }
@@ -44,47 +45,54 @@ form .form-control:not(.form-textarea) {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
     > div { }
-    .views-field-produce-units {
+    .views-field-produce-units-form {
       flex: 100%;
-      margin-top: $grid-gutter-width/2; padding-top: $grid-gutter-width/2;
+      margin-top: $grid-gutter-width/2; padding: $grid-gutter-width/2 0;
       border-top: 1px solid $gray-lightest;
     }
+    .views-field-produce-unit-load { flex: 100%; }
+    .views-field-field-query-type { flex-basis: 15%; }
+    &.locked { opacity: .5; }
   }
   .views-field-nothing a {
     font-size: $font-size-small;
+  }
+  .views-field-actions {
+    flex: 100%;
+    border-top: 1px solid $gray-lightest;
+    padding: 4px 0 4px;
+    text-align: right;
+    a { margin-left: 10px; }
   }
   &.view-queries,
   &.view-manager-queries {
     .view-item {
       border: 1px solid $gray-lightest;
-      padding: 20px;
+      padding: 20px 20px 0;
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
 }
 
+.views-exposed-widget label,
 .views-field .views-label,
 .form-item label {
-  color: $gray-lighter; font-weight: 400; font-size: .9em;
+  color: $gray-lighter; font-weight: 400; font-size: 12px;
   margin-bottom: 5px;
 }
 
 .produce-unit {
   display: flex;
+  h3 { margin: 0 0 2px 0; }
   .produce-unit-name {
-    flex: 0 1 120px;
+    flex: 0 1 145px;
     border-right: 1px solid $gray-lightest;
     padding-right: $grid-gutter-width/2; margin: 0;
-    h3 { margin: 0 0 2px 0; }
   }
-  .produce-unit-performance {
-    flex: 0 1 110px;
-    border-right: 1px solid $gray-lightest;
+  .produce-unit-aux {
+    flex: 0 1 130px;
+    text-align: right;
     padding: 0 $grid-gutter-width/2; margin: 0;
-    h4 {
-      line-height: $line-height-large; text-align: right;
-      margin: 0;
-    }
   }
   .produce-unit-dates {
     border-right: 1px solid $gray-lightest;
@@ -106,27 +114,42 @@ form .form-control:not(.form-textarea) {
       opacity: 0;
       z-index: -1;
     }
+    .c-box,
     input[type="checkbox"] + span {
       color: #000;
       display: flex; justify-content: center; align-items: center;
       width: 20px; height: 20px;
       border: 1px solid $gray-lightest;
+      user-select: none;
     }
+    input[type="checkbox"] + span:hover {
+      background: lighten($brand-success, 20%);
+    }
+    .c-box.selected,
     input[type="checkbox"]:checked + span {
-      background: $brand-success;
+      background: #caffca;
       border-color: $brand-success;
-      color: #fff;
+    }
+    .c-box.loaded,
+    input[type="checkbox"].loaded + span {
+      background: #ffeacb;
+      border-color: $brand-warning;
+    }
+    input[type="checkbox"].unavailable:not(.loaded) + span {
+      background: #dedede;
+      border-color: $gray-lighter;
     }
     input[type="checkbox"]:disabled + span {
-      background: $brand-warning;
-      border-color: $brand-warning;
-      color: #fff;
+      cursor: default;
     }
   }
+
+  .c-box,
   .checkbox {
-    font-size: .9em;
     margin: 0 2px 0;
   }
+  .c-box,
+  .form-item.checkbox span { font-size: 11px; }
   .produce-unit-form:last-child & {
     margin-bottom: 0;
   }
