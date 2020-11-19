@@ -64,10 +64,16 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_load"]["#access"] = false;
       $form["field_query_type"]["#access"] = false;
       $form["field_query_status_client"]["#access"] = false;
+      $form["field_query_status_manager"]["#access"] = false;
+      $form['field_comment']['#access'] = false;
+
+      if ($form["field_query_type"]["und"]["#default_value"][0] == 'correction') {
+        $form["field_nomenklatura"]['#disabled'] = true;
+        $form["field_month"]['#disabled'] = true;
+      }
 
       // ограничить клиентов
       if (!user_has_role(ROLE_MANAGER, $GLOBALS['user'])) {
-        $form["field_query_status_manager"]["#access"] = false;
 
         // ограничить Номенклатуру текущим юзером
         $query = new EntityFieldQuery();
@@ -77,7 +83,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
           ->fieldCondition('field_user', 'target_id', $GLOBALS['user']->uid)
           ->execute();
         if ($terms) {
-          $options = ['_none' => $form["field_nomenklatura"]["und"]["#options"]["_none"]];
+          $options = [];
           foreach ($terms['taxonomy_term'] as $term) {
             $options[$term->tid] = $form["field_nomenklatura"]["und"]["#options"][$term->tid];
           }
@@ -87,28 +93,70 @@ function query_form_alter(&$form, &$form_state, $form_id)
         }
       }
     }
+
+    // комментарий выведем текстом и строкой для добавления
+    $form['field_comment']['#access'] = false;
+
+    $form['comment'] = [
+      '#type' => 'container',
+      '#weight' => 10,
+      '#attributes' => ['class' => ['message-content']],
+    ];
+    if (empty($form_state["query"]->is_new)) {
+      $form['comment']['text'] = [
+        '#type' => 'item',
+        '#title' => 'Сообщения',
+        '#markup' => query_get_messages_html($form["field_comment"]["und"][0]["value"]["#default_value"]),
+      ];
+    }
+    $form['comment']['comment_add'] = [
+      '#type' => 'textarea',
+      '#title' => !empty($form_state["query"]->is_new) ? 'Сообщение' : '',
+      '#rows' => 3,
+    ];
+
+    $form["#validate"][] = 'query_form_eck__entity__form_query_query_validate';
   }
 
+  if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query', 'eck__entity__delete_form'])) {
+    $form["#submit"][] = 'query_form_redirect_submit';
+  }
+}
+
+function query_get_messages_html($data)
+{
+  $messages_html = '';
+  if ($messages = unserialize($data)) {
+    foreach ($messages as $time => $message) {
+      $messages_html .=
+        '<div>' .
+          '<div>' . date('d.m.y h:m', $time) . '</div>' .
+          '<div>' . ($message['from'] == 'user' ? '&nbsp;>>&nbsp;' : '&nbsp;<<&nbsp;') . '</div>' .
+          '<div>' . $message['message'] . '</div>' .
+        '</div>';
+    }
+  }
+
+  return '<div>' . $messages_html . '</div>';
 }
 
 /**
- * hook_form_FORM_ID_alter
+ * query_form_eck__entity__form validate callback
  */
-function query_form_eck__entity__form_add_query_query_alter(&$form, &$form_state)
+function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
 {
-  $form["#submit"][] = 'query_form_eck__entity__form_add_query_query_submit';
-
-  // редактирование статуса только для админа
-  if (!user_has_role(ROLE_ADMIN, $GLOBALS['user']) && !user_has_role(ROLE_MANAGER, $GLOBALS['user'])) {
-    $form["field_query_status"]["#access"] = false;
-    $form["field_comment"]["#access"] = false;
-  }
-  if (!user_has_role(ROLE_ADMIN, $GLOBALS['user'])) {
-    $form["field_suggestions"]["#access"] = false;
+  // новое сообщение внести в основное поле комментария
+  if ($form_state["values"]["comment_add"]) {
+    $messages = unserialize($form_state["values"]["field_comment"]["und"][0]["value"]);
+    if (!$messages) $messages = [];
+    $timestamp = time();
+    $messages[$timestamp]['message'] = $form_state["values"]["comment_add"];
+    $messages[$timestamp]['from'] = user_has_role(ROLE_MANAGER) ? 'manager' : 'user';
+    $form_state["values"]["field_comment"]["und"][0]["value"] = serialize($messages);
   }
 }
 
-function query_form_eck__entity__form_add_query_query_submit(&$form, &$form_state)
+function query_form_redirect_submit(&$form, &$form_state)
 {
   // отправить письмо
 //  $params['qid'] = $form_state["values"]["entity"]->id;
@@ -119,7 +167,9 @@ function query_form_eck__entity__form_add_query_query_submit(&$form, &$form_stat
 //  $params['qty'] = $form_state["values"]["field_qty"]["und"][0]["value"];
 //  drupal_mail('mailer', 'manager_notify_new_query', MANAGER_EMAIL, language_default(), $params);
 
-  $form_state['redirect'] = '<front>';
+  if (!user_has_role(ROLE_ADMIN)) {
+    $form_state['redirect'] = user_has_role(ROLE_MANAGER) ? 'manage' : 'queries';
+  }
 }
 
 
@@ -150,6 +200,12 @@ function query_views_data_alter(&$data)
       'title' => t('Actions'),
       'help' => t('Conditional actions'),
       'handler' => 'query_handler_field_actions',
+    ),
+  );
+  $data['eck_query']['comment'] = array(
+    'field' => array(
+      'title' => t('Formatted Comment'),
+      'handler' => 'query_handler_field_comment',
     ),
   );
   $data['taxonomy_term_data']['produce_unit_load'] = array(
@@ -298,13 +354,13 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
     // цикл по количеству дней в месяце
     for ($i = 1; $i <= date("t", $month_start); $i++) {
 
-      $today_start = gmmktime(0, 0, 0, date('n', 1608467456), date('j', 1608467456), date('Y', 1608467456));
-//      $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
+//      $today_start = gmmktime(0, 0, 0, date('n', 1608467456), date('j', 1608467456), date('Y', 1608467456));
+      $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
       $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
       // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-      $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura'] != $nom_tid;
-      $produce_unit_has_current_load = (int)!empty($current_load[$pu_tid][$day_start]);
+      $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
+      $produce_unit_has_current_load = !empty($current_load[$pu_tid][$day_start]);
 
       // дата недоступня для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
       $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
@@ -312,15 +368,16 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
                                   && ($day_start < $today_start + 3 *24*60*60)
                                   && $query_wr->field_query_type->value() == 'correction';
 
-      // todo вывести подсказку при наведении с выходом продукции в этот день
+      // вывести подсказку при наведении с выходом продукции в этот день
       $classes = [];
       if ($produce_unit_is_busy && !$produce_unit_has_current_load) $classes[] = 'loaded';
       if ($produce_unit_has_current_load) $classes[] = 'selected';
       if ($produce_unit_is_unavailable) $classes[] = 'unavailable';
+      $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
 
       if ($is_query_locked) {
         $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
-          '#markup' => '<span class="c-box ' . implode(' ', $classes) . '">' . $i . '</span>',
+          '#markup' => '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>',
         ];
       } else {
         $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
@@ -330,6 +387,13 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
           '#default_value' => $produce_unit_has_current_load,
           '#attributes' => ['class' => $classes],
         ];
+        if ($tooltip) {
+          $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#wrapper_attributes'] = [
+            'data-toggle' => 'tooltip',
+            'data-placement' => 'top',
+            'title' => $current_load[$pu_tid][$day_start],
+          ];
+        }
       }
     }
 
@@ -511,22 +575,26 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start)
     ->fieldCondition('field_query_status_manager', 'value', 'approved')
     ->execute();
   if ($result) {
-    $load_ids = [];
+    $load_nomenklatura = [];
     $queries = entity_load('query', array_keys($result['query']));
     foreach ($queries as $query) {
-      foreach ($query->field_load['und'] as $query_load) {
-        $load_ids[$query_load['target_id']] = $query->field_nomenklatura['und'][0]['target_id'];
+      $query_wr = entity_metadata_wrapper('query', $query);
+      foreach ($query_wr->field_load->getIterator() as $load_wr) {
+        $load_nomenklatura[$load_wr->getIdentifier()] = [
+          'tid' => $query_wr->field_nomenklatura->tid->value(),
+          'name' => $query_wr->field_nomenklatura->name->value()
+        ];
       }
     }
 
     // Загрузка для заданной Установки
-    if ($load_ids) {
-      $load = entity_load('load', array_keys($load_ids));
+    if ($load_nomenklatura) {
+      $load = entity_load('load', array_keys($load_nomenklatura));
       foreach ($load as $load_item) {
         if ($load_item->field_produce_unit["und"][0]["tid"] == $produce_unit_tid) {
           $load_array[$load_item->field_produce_date["und"][0]["value"]] = [
-            'output' => $load_item->field_produce_output["und"][0]["value"],
-            'nomenklatura' => $load_ids[$load_item->id],
+            'amount' => $load_item->field_produce_output["und"][0]["value"],
+            'nomenklatura' => $load_nomenklatura[$load_item->id],
           ];
         }
       }

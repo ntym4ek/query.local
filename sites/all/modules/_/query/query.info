@@ -8,3 +8,4 @@ scripts[] = js/query.js
 files[] = views/query_handler_field_produce_units_form.inc
 files[] = views/query_handler_field_actions.inc
 files[] = views/query_handler_field_produce_unit_load.inc
+files[] = views/query_handler_field_comment.inc
