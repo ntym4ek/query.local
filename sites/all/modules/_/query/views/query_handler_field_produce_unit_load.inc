@@ -41,12 +41,15 @@ class query_handler_field_produce_unit_load extends views_handler_field
         '<div class="form-checkboxes">';
     for ($i = 1; $i <= date("t", $month_start); $i++) {
       $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
-      $class = empty($load[$day_start]) ? '' : ' loaded';
-      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . '<br />' . $load[$day_start]['amount'] . '"';
+      $class = '';
+      if (!empty($load[$day_start])) {
+        $class = $load[$day_start]['amount'] ? ' loaded' : ' service';
+      };
+      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['amount'] ? '<br />' . $load[$day_start]['amount'] : '') . '"';
       $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
     }
     $output .=
-        '</div>' .
+      '</div>' .
       '</div>' .
       '<div class="produce-unit-aux">' .
         '<label class="views-label">Общий объём</label>' .

@@ -3,7 +3,8 @@
 
 function query_import()
 {
-  query_produce_plan_import();
+//  query_produce_plan_import();
+  query_produce_buzy_import();
 //  query_davalec_import();
 //  query_produce_units_import();
 //  query_nomenklatura_import();
@@ -16,12 +17,44 @@ function query_delete()
   $result = $efquery
     ->entityCondition('entity_type', 'query')
     ->execute();
-
   if ($result) {
     entity_delete_multiple('query', array_keys($result['query']));
   }
 
+  $efquery = new EntityFieldQuery();
+  $result = $efquery
+    ->entityCondition('entity_type', 'load')
+    ->execute();
+  if ($result) {
+    entity_delete_multiple('load', array_keys($result['load']));
+  }
+
   drupal_goto('<front>');
+}
+
+function query_produce_buzy_import()
+{
+  $buzy_array = file("d:\ЗанятостьУстановок.csv");
+  foreach($buzy_array as $key => $buzy) {
+    if (!$key) continue;
+
+    if ($buzy = iconv('Windows-1251', 'UTF-8', trim($buzy))) {
+      list($produce_unit_1cID, $date_str, $status) = explode('|', $buzy);
+
+      if ($status == 2) {
+        $produce_unit = query_get_produce_unit_by_1cID($produce_unit_1cID);
+        $date = strtotime($date_str);
+        $day_start = gmmktime(0, 0, 0, date('n', $date), date('j', $date), date('Y', $date));
+
+        $load = entity_create('load', ['type' => 'load']);
+        $load_wr = entity_metadata_wrapper('load', $load);
+        $load_wr->field_produce_unit = $produce_unit->tid;
+        $load_wr->field_produce_date = $day_start;
+        $load_wr->field_produce_output = 0;
+        $load_wr->save();
+      }
+    }
+  }
 }
 
 function query_produce_plan_import()
@@ -158,7 +191,7 @@ function query_produce_units_import()
       list($punit_id, $punit_name) = explode('|', $punit);
 
       if ($punit_id && $punit_name) {
-        $produce_unit = query_get_produce_unit_by_1cID();
+        $produce_unit = query_get_produce_unit_by_1cID($punit_id);
 
         if (!$produce_unit) {
           $produce_unit = (object)array(

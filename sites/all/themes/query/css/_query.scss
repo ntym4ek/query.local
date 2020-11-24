@@ -90,6 +90,7 @@ form {
 
 .produce-unit {
   display: flex;
+  margin-bottom: 0;
   h3 { margin: 0 0 2px 0; }
   .produce-unit-name {
     flex: 0 1 145px;
@@ -102,7 +103,6 @@ form {
     padding: 0 $grid-gutter-width/2; margin: 0;
   }
   .produce-unit-dates {
-    border-right: 1px solid $gray-lightest;
     padding: 0 $grid-gutter-width/2;
     margin: 0;
   }
@@ -114,7 +114,7 @@ form {
   }
   .form-checkboxes {
     display: flex; justify-content: space-between;
-    margin-top: 2px;
+    margin: 2px 0 10px 0;
     label { padding: 0; }
     input[type="checkbox"] {
       position: absolute;
@@ -137,6 +137,10 @@ form {
       background: #caffca;
       border-color: $brand-success;
     }
+    .c-box.service {
+      background: #ffd2d1;
+      border-color: $brand-danger;
+    }
     .c-box.loaded,
     input[type="checkbox"].loaded + span {
       background: #ffeacb;
@@ -157,15 +161,41 @@ form {
   }
   .c-box,
   .form-item.checkbox span { font-size: 11px; }
-  .produce-unit-form:last-child & {
-    margin-bottom: 0;
-  }
+}
 
+.produce-unit-legenda {
+  font-size: $font-size-small;
+  color: $text-muted;
+  span {
+    display: inline-block;
+    width: 20px; height: 10px;
+    border: 1px solid $gray-lightest;
+    margin-right: 5px;
+    vertical-align: middle;
+    &:not(:first-child) { margin-left: 30px; }
+    &.selected {
+      background: #caffca;
+      border-color: $brand-success;
+    }
+    &.loaded {
+      background: #ffeacb;
+      border-color: $brand-warning;
+    }
+    &.service {
+      background: #ffd2d1;
+      border-color: $brand-danger;
+    }
+  }
+  .attachment & {
+    margin-left: 162px;
+    margin-bottom: 15px;
+  }
 }
 
 
-form[id^=user-login],
-form[id^=eck-entity-form] {
+
+
+form[id^=user-login] {
   @include make-md-column-offset(3);
   @include make-md-column(6);
 }

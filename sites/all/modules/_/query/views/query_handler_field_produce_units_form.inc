@@ -16,6 +16,7 @@ class query_handler_field_produce_units_form extends views_handler_field
    */
   function render($values)
   {
+    // todo убрать формы, вывести статику
     // вывести формы выбора дат для каждой установки
     $query_id = $values->id;
 

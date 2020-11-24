@@ -17,12 +17,6 @@ function query_menu()
     'file' => 'includes/query.import.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['query/%/correction/add'] = array(
-    'page callback' => 'query_add_correction',
-    'page arguments' => [1],
-    'access callback' => true,
-    'type' => MENU_CALLBACK,
-  );
 
   return $items;
 }
@@ -74,7 +68,6 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
       // ограничить клиентов
       if (!user_has_role(ROLE_MANAGER, $GLOBALS['user'])) {
-
         // ограничить Номенклатуру текущим юзером
         $query = new EntityFieldQuery();
         $terms = $query
@@ -94,9 +87,130 @@ function query_form_alter(&$form, &$form_state, $form_id)
       }
     }
 
+    $form['#attributes'] = ['class' => ['query-form']];
+
+    // добавить в форму выбор дат
+    if (!empty($form_state["query"]->is_new) && !empty($_GET["query_id"])) {
+      $query_wr = entity_metadata_wrapper('query', $_GET["query_id"]);
+    } else {
+      $query_wr = entity_metadata_wrapper('query', $form_state["query"]);
+    }
+    if ($query_wr->value()) {
+      $month_start = $query_wr->field_month->value();
+
+      $nom_tid = null;
+      if ($query_wr->field_nomenklatura->value()) {
+        $nom_tid = $query_wr->field_nomenklatura->tid->value();
+      } else {
+        $nom_tid = empty($form["field_nomenklatura"]["und"]["#default_value"][0]) ? array_key_first($form["field_nomenklatura"]["und"]["#options"]) : $form["field_nomenklatura"]["und"]["#default_value"][0];
+      }
+
+      if ($nom_tid) {
+        // получить все установки, годные для производства Номенклатуры
+        $produce_units = query_get_produce_units_by_product($nom_tid);
+
+        // значения Загрузки по умолчанию
+        $current_load = [];
+        $current_load_days = 0;
+        foreach ($query_wr->field_load->getIterator() as $load_wr) {
+          if ($load_wr->value()) {
+            $pu_tid = $load_wr->field_produce_unit->tid->value();
+            $current_load[$pu_tid][$load_wr->field_produce_date->value()] = $load_wr->field_produce_output->value();
+            $current_load_days++;
+
+            // добавить установки из Загрузки (пока нет связи Номенклатура-Установка)
+            if (empty($produce_units[$pu_tid])) {
+              $produce_units[$pu_tid] = [
+                'tid' => $pu_tid,
+                'name' => $load_wr->field_produce_unit->name->value(),
+                'performance' => query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid),
+              ];
+            }
+          }
+        }
+
+        $form_state['data'] = [
+          'id' => $query_wr->getIdentifier(),
+          'month' => $month_start,
+          'volume' => $query_wr->field_qty->value(),
+          'produce_units' => $produce_units,
+        ];
+
+        foreach ($produce_units as $pu_tid => $produce_unit) {
+          $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start);
+
+          $form['produce_unit_' . $pu_tid] = [
+            '#type' => 'container',
+            '#attributes' => ['class' => ['produce-unit']],
+            '#weight' => 3,
+          ];
+          $form['produce_unit_' . $pu_tid]['name'] = [
+            '#type' => 'item',
+            '#title' => 'Установка',
+            '#markup' => '<h3>' . $produce_unit['name'] . '</h3>',
+            '#wrapper_attributes' => ['class' => ['produce-unit-name']],
+          ];
+
+          $form['produce_unit_' . $pu_tid]['selection'] = [
+            '#type' => 'container',
+            '#attributes' => ['class' => ['produce-unit-dates', 'form-item']],
+          ];
+          $form['produce_unit_' . $pu_tid]['selection']['title'] = [
+            '#markup' => '<label class="control-label">Даты</label>',
+          ];
+
+          $form['produce_unit_' . $pu_tid]['selection']['dates'] = [
+            '#type' => 'container',
+            '#attributes' => ['class' => ['form-checkboxes']],
+            '#suffix' => '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="loaded"></span>- установка занята <span class="selected"></span>- выбранные даты</div>',
+          ];
+
+          // цикл по количеству дней в месяце
+          for ($i = 1; $i <= date("t", $month_start); $i++) {
+
+  //      $today_start = gmmktime(0, 0, 0, date('n', 1608467456), date('j', 1608467456), date('Y', 1608467456));
+            $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
+            $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
+
+            // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
+            $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
+            $produce_unit_has_current_load = !empty($current_load[$pu_tid][$day_start]);
+
+            // дата недоступня для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
+            $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
+              && !user_has_role(ROLE_MANAGER)
+              && ($day_start < $today_start + 3 * 24 * 60 * 60)
+              && $query_wr->field_query_type->value() == 'correction';
+
+            // вывести подсказку при наведении с выходом продукции в этот день
+            $classes = [];
+            if ($produce_unit_is_busy && !$produce_unit_has_current_load) $classes[] = 'loaded';
+            if ($produce_unit_has_current_load) $classes[] = 'selected';
+            if ($produce_unit_is_unavailable) $classes[] = 'unavailable';
+            $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
+
+            $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
+              '#type' => 'checkbox',
+              '#title' => '<span>' . $i . '</span>',
+              '#disabled' => ($produce_unit_is_busy && !$produce_unit_has_current_load) || $produce_unit_is_unavailable,
+              '#default_value' => $produce_unit_has_current_load,
+              '#attributes' => ['class' => $classes],
+            ];
+            if ($tooltip) {
+              $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#wrapper_attributes'] = [
+                'data-toggle' => 'tooltip',
+                'data-placement' => 'top',
+                'title' => $current_load[$pu_tid][$day_start],
+              ];
+            }
+          }
+        }
+      }
+      $form["#submit"][] = 'query_form_eck__entity__form_query_query_submit';
+    }
+
     // комментарий выведем текстом и строкой для добавления
     $form['field_comment']['#access'] = false;
-
     $form['comment'] = [
       '#type' => 'container',
       '#weight' => 10,
@@ -118,27 +232,47 @@ function query_form_alter(&$form, &$form_state, $form_id)
     $form["#validate"][] = 'query_form_eck__entity__form_query_query_validate';
   }
 
+  // дополнительный обработчик сабмита
   if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query', 'eck__entity__delete_form'])) {
     $form["#submit"][] = 'query_form_redirect_submit';
   }
 }
 
-function query_get_messages_html($data)
+/**
+ * Implements hook_form_alter().
+ */
+function query_form_eck__entity__form_add_query_query_alter(&$form, &$form_state)
 {
-  $messages_html = '';
-  if ($messages = unserialize($data)) {
-    foreach ($messages as $time => $message) {
-      $messages_html .=
-        '<div>' .
-          '<div>' . date('d.m.y h:m', $time) . '</div>' .
-          '<div>' . ($message['from'] == 'user' ? '&nbsp;>>&nbsp;' : '&nbsp;<<&nbsp;') . '</div>' .
-          '<div>' . $message['message'] . '</div>' .
-        '</div>';
-    }
-  }
+  if (!empty($_GET['type']) && $_GET['type'] == 'correction' && !empty($_GET['query_id'])) {
 
-  return '<div>' . $messages_html . '</div>';
+    drupal_set_title('Корректирующая заявка');
+    $main_query_wr = entity_metadata_wrapper('query', $_GET['query_id']);
+
+    $form["field_qty"]["und"][0]["value"]["#default_value"] = $main_query_wr->field_qty->value();
+    $form["field_month"]["und"][0]["#default_value"]["value"] = $main_query_wr->field_month->value();
+    $form["field_month"]["und"][0]["#default_value"]["value2"] = $main_query_wr->field_month->value();
+    $form["field_nomenklatura"]["und"]["#default_value"] = $main_query_wr->field_nomenklatura->tid->value();
+    $form["field_query_type"]["und"]["#default_value"][0] = 'correction';
+    $form["field_query_status_client"]["und"]["#default_value"][0] = 'new';
+    $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
+
+//    $load = [];
+//    $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
+//    foreach ($main_query_wr->field_load->getIterator() as $field_load_wr) {
+//      // производство может быть запущено не ранее чем через 3 дня
+//      if ($field_load_wr->field_produce_date->value() >= $today_start + (1 + 3) * 24 * 60 * 60) {
+//        $load[] = [
+//          'field_produce_unit' => $field_load_wr->field_produce_unit->tid->value(),
+//          'field_produce_date' => $field_load_wr->field_produce_date->value(),
+//          'field_produce_output' => $field_load_wr->field_produce_output->value(),
+//        ];
+//      }
+//    }
+//
+//    query_query_load_update($query->id, $load);
+  }
 }
+
 
 /**
  * query_form_eck__entity__form validate callback
@@ -154,6 +288,46 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
     $messages[$timestamp]['from'] = user_has_role(ROLE_MANAGER) ? 'manager' : 'user';
     $form_state["values"]["field_comment"]["und"][0]["value"] = serialize($messages);
   }
+
+  // обычно месяц задан и не доступен для смены
+  if (!empty($form_state["data"]['month'])) {
+    $form_state["values"]["field_month"]["und"][0]["value"] = $form_state["data"]['month'];
+    $form_state["values"]["field_month"]["und"][0]["value2"] = $form_state["data"]['month'];
+  }
+
+}
+
+/**
+ * query_form_eck__entity__form submi callback
+ */
+function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
+{
+  // todo сохранить выбранные даты
+  $load = [];
+  $month_start = $form_state["data"]["month"] ? $form_state["data"]["month"] : $form_state["values"]["field_month"]["und"][0]["value"];
+  $volume = $form_state["values"]["field_qty"]["und"][0]["value"];
+  foreach($form_state["data"]["produce_units"] as $produce_unit_tid => $produce_unit) {
+    $performance = $produce_unit["performance"];
+    // сформировать Загрузку для выбранной установки
+    $i = 0;
+    foreach ($form_state['values'] as $key => $value) {
+      if (strpos($key, 'check_' . $produce_unit_tid) === 0 && $value) {
+        $day = str_replace('check_' . $produce_unit_tid . '_', '', $key);
+        $day_start = $month_start + ($day-1) * 60 * 60 * 24;
+        // вычислить выход на день (Производительность или Остаток)
+        $output = $volume-$i*$performance['amount'] >= $performance['amount'] ? $performance['amount'] : $volume-$i*$performance['amount'];
+        if ($output <= 0) break;
+        $i++;
+
+        $load[] = [
+          'field_produce_unit' => $produce_unit_tid,
+          'field_produce_date' => $day_start,
+          'field_produce_output' => $output,
+        ];
+      }
+    }
+  }
+  query_query_load_update($form_state["query"]->id, $load);
 }
 
 function query_form_redirect_submit(&$form, &$form_state)
@@ -242,6 +416,10 @@ function query_preprocess_views_view_unformatted(&$vars)
       }
     }
   }
+
+  if ($vars['view']->name == 'produce_units_load' && $vars['view']->current_display == 'page') {
+    $vars["view"]->attachment_before = '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="service"></span>- установка на обслуживании <span class="loaded"></span>- установка загружена</div>';
+  }
 }
 
 /**
@@ -294,7 +472,7 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
   $nom_tid = $query_wr->field_nomenklatura->tid->value();
 
   // получить все установки, годные для производства Номенклатуры
-  $produce_units = query_get_produce_units_by_product($nom_tid);
+//  $produce_units = query_get_produce_units_by_product($nom_tid);
 
   // значения Загрузки по умолчанию
   $current_load = [];
@@ -349,6 +527,7 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
     $form['produce_unit_' . $pu_tid]['selection']['dates'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['form-checkboxes']],
+      '#suffix' => '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="loaded"></span>- установка занята <span class="selected"></span>- выбранные даты</div>',
     ];
 
     // цикл по количеству дней в месяце
@@ -375,76 +554,15 @@ function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
       if ($produce_unit_is_unavailable) $classes[] = 'unavailable';
       $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
 
-      if ($is_query_locked) {
         $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
           '#markup' => '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>',
         ];
-      } else {
-        $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
-          '#type' => 'checkbox',
-          '#title' => '<span>' . $i . '</span>',
-          '#disabled' => ($produce_unit_is_busy&&!$produce_unit_has_current_load) || $produce_unit_is_unavailable,
-          '#default_value' => $produce_unit_has_current_load,
-          '#attributes' => ['class' => $classes],
-        ];
-        if ($tooltip) {
-          $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#wrapper_attributes'] = [
-            'data-toggle' => 'tooltip',
-            'data-placement' => 'top',
-            'title' => $current_load[$pu_tid][$day_start],
-          ];
-        }
-      }
-    }
-
-    if (!$is_query_locked) {
-      $form['produce_unit_' . $pu_tid]['actions'] = array(
-        '#type' => 'actions',
-        '#weight' => 40,
-      );
-      $form['produce_unit_' . $pu_tid]['actions']['submit_' . $pu_tid] = array(
-        '#type' => 'submit',
-        '#name' => 'submit_' . $pu_tid,
-        '#value' => t('Save'),
-        '#attributes' => ['class' => ['btn-xs']],
-      );
     }
   }
-
-  $form['#submit'][] = 'query_produce_unit_select_dates_form_submit';
 
   return $form;
 }
 
-function query_produce_unit_select_dates_form_submit($form, $form_state)
-{
-  if ($produce_unit_tid = str_replace('submit_', '', $form_state["triggering_element"]["#name"])) {
-    $month_start = $form_state["query"]["month"];
-    $volume = $form_state["query"]["volume"];
-    $performance = $form_state["query"]['produce_units'][$produce_unit_tid]["performance"];
-    // сформировать Загрузку для выбранной установки
-    $load = [];
-    $i = 0;
-    foreach ($form_state['values'] as $key => $value) {
-      if (strpos($key, 'check_' . $produce_unit_tid) === 0 && $value) {
-          $day = str_replace('check_' . $produce_unit_tid . '_', '', $key);
-          $day_start = $month_start + ($day-1) * 60 * 60 * 24;
-          // вычислить выход на день (Производительность или Остаток)
-          $output = $volume-$i*$performance['amount'] >= $performance['amount'] ? $performance['amount'] : $volume-$i*$performance['amount'];
-          if ($output <= 0) break;
-          $i++;
-
-          $load[] = [
-            'field_produce_unit' => $produce_unit_tid,
-            'field_produce_date' => $day_start,
-            'field_produce_output' => $output,
-          ];
-      }
-    }
-
-    query_query_load_update($form_state['query']['id'], $load);
-  }
-}
 
 /**
  * обновить Загрузку в Запросе
@@ -515,12 +633,12 @@ function query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid)
 {
   $output = [];
   // todo заменить тестовые данные
-  if ($pu_tid == 93 && $nom_tid == 301) {
+//  if ($pu_tid == 93 && $nom_tid == 301) {
     $output = [
-      'amount' => 9700,
+      'amount' => 10000,
       'unit' => 'л',
     ];
-  }
+//  }
   return $output;
 }
 
@@ -533,14 +651,16 @@ function query_get_produce_units_by_product($nom_tid)
   // todo для каждой установки узнать производительность
   $units = [];
 
-//  $terms = taxonomy_get_tree(taxonomy_vocabulary_machine_name_load('produce_units')->vid, 0, null, true);
-//  foreach ($terms as $term) {
-//    $units[$term->tid] = [
-//      'tid' => $term->tid,
-//      'name' => $term->name,
-//      'performance' => query_get_product_unit_performance_by_nomenklatura($term->tid, $nom_tid)
-//    ];
-//  }
+  $terms = taxonomy_get_tree(taxonomy_vocabulary_machine_name_load('produce_units')->vid, 0, null, true);
+  $i = 0;
+  foreach ($terms as $term) {
+    if ($i++ == 2) break; // todo ограничить двумя установками, пока нет связи Ном-Уст
+    $units[$term->tid] = [
+      'tid' => $term->tid,
+      'name' => $term->name,
+      'performance' => query_get_product_unit_performance_by_nomenklatura($term->tid, $nom_tid)
+    ];
+  }
 
   return $units;
 }
@@ -599,6 +719,28 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start)
         }
       }
     }
+
+    // todo пустая Загрузка (ремонт, ТО)
+    $next_month_start = gmmktime(0,0,0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
+
+    $efquery = new EntityFieldQuery();
+    $result = $efquery
+      ->entityCondition('entity_type', 'load')
+      ->fieldCondition('field_produce_date', 'value', $month_start, '>=')
+      ->fieldCondition('field_produce_date', 'value', $next_month_start, '<')
+      ->fieldCondition('field_produce_output', 'value', 0)
+      ->execute();
+    if ($result) {
+      $load = entity_load('load', array_keys($result['load']));
+      foreach ($load as $load_item) {
+        if ($load_item->field_produce_unit["und"][0]["tid"] == $produce_unit_tid) {
+          $load_array[$load_item->field_produce_date["und"][0]["value"]] = [
+            'amount' => 0,
+            'nomenklatura' => ['tid' => 0, 'name' => 'Технические работы'],
+          ];
+        }
+      }
+    }
   }
 
   return $load_array;
@@ -621,57 +763,19 @@ function query_entity_delete($entity, $type)
   }
 }
 
-/**
- * Добавить корректирующую Заявку на базе основной
- * @param $query_id
- */
-function query_add_correction($main_query_id)
+function query_get_messages_html($data)
 {
-  $main_query_wr = entity_metadata_wrapper('query', $main_query_id);
-
-  // проверить наличие корректирующего Запроса на месяц даты
-  $efquery = new EntityFieldQuery();
-  $result = $efquery
-    ->entityCondition('entity_type', 'query')
-    ->fieldCondition('field_month', 'value', $main_query_wr->field_month->value())
-    ->fieldCondition('field_nomenklatura', 'target_id', $main_query_wr->field_nomenklatura->tid->value())
-    ->fieldCondition('field_query_type', 'value', 'correction')
-    ->execute();
-
-  if (!$result) {
-    $query = entity_create('query', [
-      'type' => 'query',
-      'uid' => $main_query_wr->uid->uid->value(),
-    ]);
-    entity_save('query', $query);
-  } else {
-    $query = current($result['query']);
-  }
-
-  $query_wr = entity_metadata_wrapper('query', $query);
-  $query_wr->field_month = $main_query_wr->field_month->value();
-  $query_wr->field_nomenklatura = $main_query_wr->field_nomenklatura->tid->value();
-  $query_wr->field_qty = $main_query_wr->field_qty->value();
-  $query_wr->field_query_type = 'correction';
-  $query_wr->field_query_status_client = 'new';
-  $query_wr->field_query_status_manager = 'new';
-  $query_wr->save();
-
-  $load = [];
-  $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
-  foreach ($main_query_wr->field_load->getIterator() as $field_load_wr) {
-    // производство может быть запущено не ранее чем через 3 дня
-    if ($field_load_wr->field_produce_date->value() >= $today_start + (1 + 3)*24*60*60) {
-      $load[] = [
-        'field_produce_unit' => $field_load_wr->field_produce_unit->tid->value(),
-        'field_produce_date' => $field_load_wr->field_produce_date->value(),
-        'field_produce_output' => $field_load_wr->field_produce_output->value(),
-      ];
+  $messages_html = '';
+  if ($messages = unserialize($data)) {
+    foreach ($messages as $time => $message) {
+      $messages_html .=
+        '<div>' .
+        '<div>' . date('d.m.y h:m', $time) . '</div>' .
+        '<div>' . ($message['from'] == 'user' ? '&nbsp;>>&nbsp;' : '&nbsp;<<&nbsp;') . '</div>' .
+        '<div>' . $message['message'] . '</div>' .
+        '</div>';
     }
   }
 
-  query_query_load_update($query->id, $load);
-
-  drupal_goto('<front>');
+  return '<div>' . $messages_html . '</div>';
 }
-
