@@ -1,7 +1,7 @@
 <?php
 
 
-function query_import()
+function query_plan_import()
 {
 //  query_produce_plan_import();
   query_produce_buzy_import();
@@ -11,7 +11,7 @@ function query_import()
   drupal_goto('<front>');
 }
 
-function query_delete()
+function query_plan_delete()
 {
   $efquery = new EntityFieldQuery();
   $result = $efquery

@@ -6,15 +6,22 @@
 function query_menu()
 {
   $items['plan/import'] = array(
-    'page callback' => 'query_import',
+    'page callback' => 'query_plan_import',
     'access callback' => true,
     'file' => 'includes/query.import.inc',
     'type' => MENU_CALLBACK,
   );
   $items['plan/delete'] = array(
-    'page callback' => 'query_delete',
+    'page callback' => 'query_plan_delete',
     'access callback' => true,
     'file' => 'includes/query.import.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['query/%/approve'] = array(
+    'page callback' => 'query_approve_callback',
+    'page arguments' => [1],
+    'access callback' => true,
     'type' => MENU_CALLBACK,
   );
 
@@ -54,11 +61,11 @@ function query_form_alter(&$form, &$form_state, $form_id)
 {
   // ограничить менеджеров и клиентов
   if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query'])) {
+
     if (!user_has_role(ROLE_ADMIN, $GLOBALS['user'])) {
       $form["field_load"]["#access"] = false;
       $form["field_query_type"]["#access"] = false;
       $form["field_query_status_client"]["#access"] = false;
-      $form["field_query_status_manager"]["#access"] = false;
       $form['field_comment']['#access'] = false;
 
       if ($form["field_query_type"]["und"]["#default_value"][0] == 'correction') {
@@ -68,22 +75,38 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
       // ограничить клиентов
       if (!user_has_role(ROLE_MANAGER, $GLOBALS['user'])) {
+        $form["field_comment"]["und"][0]["#required"] = true;
+        $form["field_query_status_manager"]["#access"] = false;
+        $form["field_query_client_approve"]["#access"] = false;
+        $form["field_query_reason"]["#access"] = false;
+        // для клиента причина - по инициативе заказчика
+        $form["field_query_reason"]["und"]["#default_value"] = [553];
+
         // ограничить Номенклатуру текущим юзером
         $query = new EntityFieldQuery();
-        $terms = $query
+        $result = $query
           ->entityCondition('entity_type', 'taxonomy_term')
           ->propertyCondition('vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid)
           ->fieldCondition('field_user', 'target_id', $GLOBALS['user']->uid)
           ->execute();
-        if ($terms) {
+        if ($result) {
+          $terms = entity_load('taxonomy_term', array_keys($result['taxonomy_term']));
+
           $options = [];
-          foreach ($terms['taxonomy_term'] as $term) {
-            $options[$term->tid] = $form["field_nomenklatura"]["und"]["#options"][$term->tid];
+          foreach ($terms as $term) {
+            if (!empty($form["field_nomenklatura"]["und"]["#options"][$term->tid]) && strpos($form["field_nomenklatura"]["und"]["#options"][$term->tid], '_') !== 0) {
+              // todo у клиентов своё наименование
+              $name = $form["field_nomenklatura"]["und"]["#options"][$term->tid];
+              $options[$term->tid] = $name;
+            }
           }
           if ($options) {
             $form["field_nomenklatura"]["und"]["#options"] = $options;
+            $form["field_nomenklatura"]["und"]["#default_value"] = [array_key_first($options)];
           }
         }
+      } else {
+        unset($form["field_query_reason"]["und"]["#options"][553]);
       }
     }
 
@@ -107,7 +130,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
       if ($nom_tid) {
         // получить все установки, годные для производства Номенклатуры
-        $produce_units = query_get_produce_units_by_product($nom_tid);
+        if ($form_id == 'eck__entity__form_add_query_query') $produce_units = query_get_produce_units_by_product($nom_tid);
 
         // значения Загрузки по умолчанию
         $current_load = [];
@@ -236,6 +259,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
   if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query', 'eck__entity__delete_form'])) {
     $form["#submit"][] = 'query_form_redirect_submit';
   }
+
+  if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) $form["actions"]["submit"]["#value"] = 'Сохранить и отправить';
 }
 
 /**
@@ -253,23 +278,15 @@ function query_form_eck__entity__form_add_query_query_alter(&$form, &$form_state
     $form["field_month"]["und"][0]["#default_value"]["value2"] = $main_query_wr->field_month->value();
     $form["field_nomenklatura"]["und"]["#default_value"] = $main_query_wr->field_nomenklatura->tid->value();
     $form["field_query_type"]["und"]["#default_value"][0] = 'correction';
-    $form["field_query_status_client"]["und"]["#default_value"][0] = 'new';
-    $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
+    if (user_has_role(ROLE_MANAGER)) {
+      $form["field_query_status_client"]["und"]["#default_value"][0] = 'processing';
+      $form["field_query_status_manager"]["und"]["#default_value"][0] = 'approved';
+      $form["field_query_status_manager"]["und"]["#title"] = 'Статус заявки';
+    } else {
+      $form["field_query_status_client"]["und"]["#default_value"][0] = 'new';
+      $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
+    }
 
-//    $load = [];
-//    $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
-//    foreach ($main_query_wr->field_load->getIterator() as $field_load_wr) {
-//      // производство может быть запущено не ранее чем через 3 дня
-//      if ($field_load_wr->field_produce_date->value() >= $today_start + (1 + 3) * 24 * 60 * 60) {
-//        $load[] = [
-//          'field_produce_unit' => $field_load_wr->field_produce_unit->tid->value(),
-//          'field_produce_date' => $field_load_wr->field_produce_date->value(),
-//          'field_produce_output' => $field_load_wr->field_produce_output->value(),
-//        ];
-//      }
-//    }
-//
-//    query_query_load_update($query->id, $load);
   }
 }
 
@@ -287,6 +304,9 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
     $messages[$timestamp]['message'] = $form_state["values"]["comment_add"];
     $messages[$timestamp]['from'] = user_has_role(ROLE_MANAGER) ? 'manager' : 'user';
     $form_state["values"]["field_comment"]["und"][0]["value"] = serialize($messages);
+  } else {
+    form_set_error('comment_add', 'Комментарий обязателен');
+    return false;
   }
 
   // обычно месяц задан и не доступен для смены
@@ -295,6 +315,10 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
     $form_state["values"]["field_month"]["und"][0]["value2"] = $form_state["data"]['month'];
   }
 
+  // когда менеджер сохраняет заявку со статусом Утверждено, поменять статус клиента на На рассмотрении
+  if ($form_state["values"]["field_query_status_manager"]["und"][0]["value"] == 'approved') {
+    $form_state["values"]["field_query_status_client"]["und"][0]["value"] = 'processing';
+  }
 }
 
 /**
@@ -302,7 +326,7 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
  */
 function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
 {
-  // todo сохранить выбранные даты
+  // сохранить выбранные даты
   $load = [];
   $month_start = $form_state["data"]["month"] ? $form_state["data"]["month"] : $form_state["values"]["field_month"]["und"][0]["value"];
   $volume = $form_state["values"]["field_qty"]["und"][0]["value"];
@@ -393,6 +417,29 @@ function query_views_data_alter(&$data)
 
 
 /**
+ * Implements hook_views_pre_render().
+ */
+function query_views_pre_render($view)
+{
+  if ($view->name == 'queries' && $view->current_display == 'page_1') {
+    if (!empty($view->exposed_input["field_month_value"]["value"])) {
+      // проверка на наличие Заявок на подтверждение
+      $queries = [];
+      foreach ($view->result as $row) {
+        if ($row->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
+          $queries[] = $row->id;
+        }
+      }
+
+      if ($queries) {
+        $view->attachment_before = '<a href="/query/' . implode('+', $queries) . '/approve" class="btn btn-success">Согласовать весь план</a>';
+      }
+    }
+  }
+}
+
+
+/**
  * hook_preprocess_views_view_unformatted()
  */
 function query_preprocess_views_view_unformatted(&$vars)
@@ -420,147 +467,6 @@ function query_preprocess_views_view_unformatted(&$vars)
   if ($vars['view']->name == 'produce_units_load' && $vars['view']->current_display == 'page') {
     $vars["view"]->attachment_before = '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="service"></span>- установка на обслуживании <span class="loaded"></span>- установка загружена</div>';
   }
-}
-
-/**
- * Builds an appropriate cart form ID based on the query and unit ids.
- *
- * @see query_forms().
- */
-function query_produce_unit_select_dates_form_id($query_id)
-{
-  return 'query_produce_unit_select_dates_form_' . $query_id;
-}
-
-/**
- * Implements hook_forms().
- *
- * To provide distinct form IDs for forms, the query and unit ids
- * referenced by the form are appended to the base ID,
- * query_produce_unit_select_dates_form. When such a form is built or submitted, this
- * function will return the proper callback function to use for the given form.
- */
-function query_forms($form_id, $args)
-{
-  $forms = array();
-
-  // Construct a valid cart form ID from the arguments.
-  if (strpos($form_id, 'query_produce_unit_select_dates_form_') === 0) {
-    $forms[$form_id] = array(
-      'callback' => 'query_produce_unit_select_dates_form',
-    );
-  }
-
-  return $forms;
-}
-
-/**
- * produce_unit_select_dates_form
- * форма выбора периодов из свободных дат для производства продукта
- */
-function query_produce_unit_select_dates_form($form, &$form_state, $query_id)
-{
-  // todo добавить легенду
-  // todo 1. занято
-  // todo 2. свободно
-  // todo 3. запрос
-  // todo 3. пересечение запрошенных дат с занятыми (менеджеру)
-
-  $query_wr = entity_metadata_wrapper('query', $query_id);
-  $is_query_locked = $query_wr->field_query_status_client->value() == 'approved' && $query_wr->field_query_status_manager->value() == 'approved';
-  $month_start = $query_wr->field_month->value();
-  $nom_tid = $query_wr->field_nomenklatura->tid->value();
-
-  // получить все установки, годные для производства Номенклатуры
-//  $produce_units = query_get_produce_units_by_product($nom_tid);
-
-  // значения Загрузки по умолчанию
-  $current_load = [];
-  $current_load_days = 0;
-  foreach ($query_wr->field_load->getIterator() as $load_wr) {
-    if ($load_wr->value()) {
-      $pu_tid = $load_wr->field_produce_unit->tid->value();
-      $current_load[$pu_tid][$load_wr->field_produce_date->value()] = $load_wr->field_produce_output->value();
-      $current_load_days++;
-
-      // добавить установки из Загрузки (пока нет связи Номенклатура-Установка)
-      if (empty($produce_units[$pu_tid])) {
-        $produce_units[$pu_tid] = [
-          'tid' => $pu_tid,
-          'name' => $load_wr->field_produce_unit->name->value(),
-          'performance' => query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid),
-        ];
-      }
-    }
-  }
-
-  $form_state['query'] = [
-    'id' => $query_id,
-    'month' => $month_start,
-    'volume' => $query_wr->field_qty->value(),
-    'produce_units' => $produce_units,
-  ];
-  $form['#attributes'] = ['class' => ['produce-unit-form']];
-
-  foreach ($produce_units as $pu_tid => $produce_unit) {
-    $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start);
-
-    $form['produce_unit_' . $pu_tid] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['produce-unit']],
-    ];
-    $form['produce_unit_' . $pu_tid]['name'] = [
-      '#type' => 'item',
-      '#title' => 'Установка',
-      '#markup' => '<h3>' . $produce_unit['name'] . '</h3>',
-      '#wrapper_attributes' => ['class' => ['produce-unit-name']],
-    ];
-
-    $form['produce_unit_' . $pu_tid]['selection'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['produce-unit-dates', 'form-item']],
-    ];
-    $form['produce_unit_' . $pu_tid]['selection']['title'] = [
-      '#markup' => '<label class="control-label">Даты</label>',
-    ];
-
-    $form['produce_unit_' . $pu_tid]['selection']['dates'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['form-checkboxes']],
-      '#suffix' => '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="loaded"></span>- установка занята <span class="selected"></span>- выбранные даты</div>',
-    ];
-
-    // цикл по количеству дней в месяце
-    for ($i = 1; $i <= date("t", $month_start); $i++) {
-
-//      $today_start = gmmktime(0, 0, 0, date('n', 1608467456), date('j', 1608467456), date('Y', 1608467456));
-      $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
-      $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
-
-      // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-      $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
-      $produce_unit_has_current_load = !empty($current_load[$pu_tid][$day_start]);
-
-      // дата недоступня для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
-      $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
-                                  && !user_has_role(ROLE_MANAGER)
-                                  && ($day_start < $today_start + 3 *24*60*60)
-                                  && $query_wr->field_query_type->value() == 'correction';
-
-      // вывести подсказку при наведении с выходом продукции в этот день
-      $classes = [];
-      if ($produce_unit_is_busy && !$produce_unit_has_current_load) $classes[] = 'loaded';
-      if ($produce_unit_has_current_load) $classes[] = 'selected';
-      if ($produce_unit_is_unavailable) $classes[] = 'unavailable';
-      $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
-
-        $form['produce_unit_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
-          '#markup' => '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>',
-        ];
-    }
-  }
-
-  return $form;
 }
 
 
@@ -720,7 +626,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start)
       }
     }
 
-    // todo пустая Загрузка (ремонт, ТО)
+    // пустая Загрузка (ремонт, ТО)
     $next_month_start = gmmktime(0,0,0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
 
     $efquery = new EntityFieldQuery();
@@ -778,4 +684,44 @@ function query_get_messages_html($data)
   }
 
   return '<div>' . $messages_html . '</div>';
+}
+
+
+/**
+ * query_approve_callback
+ * обработчик кновки согласования
+ */
+function query_approve_callback($data)
+{
+  $queries = explode('+', $data);
+  if ($queries) {
+    foreach($queries as $query_id) {
+     query_query_approve($query_id);
+    }
+    if (count($queries) == 1) {
+      drupal_set_message('Заявка ' . $query_id . ' согласована');
+    } else {
+      drupal_set_message('План согласован');
+    }
+  }
+
+  drupal_goto('<front>');
+}
+
+/**
+ * @param $query_id
+ * смена статуса Заявки клиента
+ */
+function query_query_approve($query_id)
+{
+  $query_wr = entity_metadata_wrapper('query', $query_id);
+  if ($query_wr->value()) {
+    // проверка прав
+    if ($query_wr->field_nomenklatura->field_user->uid->value() == $GLOBALS['user']->uid) {
+      $query_wr->field_query_status_client = 'approved';
+      $query_wr->save();
+    }
+  }
+
+  return true;
 }

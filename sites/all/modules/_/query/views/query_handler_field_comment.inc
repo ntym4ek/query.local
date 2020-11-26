@@ -18,7 +18,7 @@ class query_handler_field_comment extends views_handler_field
   {
     $output = 'нет';
     if (!empty($values->field_field_comment) && $messages_html = query_get_messages_html($values->field_field_comment[0]["raw"]["value"])) {
-      $output = '<a data-container="body" data-toggle="popover" data-html="true" data-placement="right" data-content="' . $messages_html . '">посмотреть</a>';
+      $output = '<a data-container="body" data-toggle="popover" data-html="true" data-placement="right" data-content="' . $messages_html . '">открыть</a>';
     }
 
     return $output;
