@@ -44,16 +44,16 @@
       $("body").mousedown(function() { isMouseDown = true });
       $("body").mouseup(function() { isMouseDown = false });
 
-      $(".query-form input[type=checkbox]+span").mousedown(function(e) {
+      $(".produce-unit input[type=checkbox]+span").mousedown(function(e) {
         isMouseDown = true;
         var input = $(this).closest('.form-type-checkbox').find('input');
         checkCheck(input);
       });
-      $(".query-form input[type=checkbox]+span").mouseover(function() {
+      $(".produce-unit input[type=checkbox]+span").mouseover(function() {
         var input = $(this).closest('.form-type-checkbox').find('input');
         checkCheck(input)
       });
-      $('.query-form input[type="checkbox"]').click(function(e) {
+      $('.produce-unit input[type="checkbox"]').click(function(e) {
         e.preventDefault();
         e.stopPropagation();
       });

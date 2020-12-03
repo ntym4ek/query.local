@@ -48,9 +48,12 @@ form {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
     > div { }
+    .views-field-id {
+      margin-bottom: $grid-gutter-width/2;
+    }
     .views-field-produce-units-form {
       flex: 100%;
-      margin-top: $grid-gutter-width/2; padding: $grid-gutter-width/2 0;
+      padding: $grid-gutter-width/2 0;
       border-top: 1px solid $gray-lightest;
     }
     .views-field-produce-unit-load { flex: 100%; }
@@ -73,6 +76,7 @@ form {
   }
   &.view-queries,
   &.view-manager-queries {
+    h3 { margin-top: 40px; }
     .view-item {
       border: 1px solid $gray-lightest;
       padding: 20px 20px 0;
@@ -132,20 +136,31 @@ form {
     input[type="checkbox"] + span:hover {
       background: lighten($brand-success, 20%);
     }
+
     .c-box.selected,
     input[type="checkbox"]:checked + span {
       background: #caffca;
       border-color: $brand-success;
     }
+
     .c-box.service {
       background: #ffd2d1;
       border-color: $brand-danger;
     }
+
     .c-box.loaded,
     input[type="checkbox"].loaded + span {
+      background: #ffc29f;
+      border-color: #ff5d00;
+    }
+
+    .c-box.company-loaded,
+    input[type="checkbox"].company-loaded + span {
       background: #ffeacb;
       border-color: $brand-warning;
     }
+
+
     input[type="checkbox"].unavailable:not(.loaded) + span {
       background: #dedede;
       border-color: $gray-lighter;
@@ -178,6 +193,10 @@ form {
       border-color: $brand-success;
     }
     &.loaded {
+      background: #ffc29f;
+      border-color: #ff5d00;
+    }
+    &.company-loaded {
       background: #ffeacb;
       border-color: $brand-warning;
     }
