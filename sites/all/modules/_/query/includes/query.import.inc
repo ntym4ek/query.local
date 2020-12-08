@@ -245,7 +245,7 @@ function query_nomenklatura_import()
       if (!$key) continue;
 
       if ($nom = iconv('Windows-1251', 'UTF-8', trim($nom))) {
-        list($artikul, $name, $artikul_davalec, $davalec_id, $davalec_name) = explode('|', $nom);
+        list($artikul, $name, $name_davalec, $artikul_davalec, $davalec_id, $davalec_name) = explode('|', $nom);
 
         if ($name && $artikul && $davalec_id) {
           // проверить наличие записи Номенклатуры
@@ -272,20 +272,20 @@ function query_nomenklatura_import()
             ->entityCondition('entity_type', 'user')
             ->fieldCondition('field_oc_davalec_id', 'value', $davalec_id)
             ->execute();
-          if (!$users) {
-            // todo ошибку в лог
-          } else {
-            $user = current($users['user']);
-          }
+          if ($users) {
+            // обновить значения полей
+            if ($user = current($users['user'])) {
+              $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
+              $term_wr->name = $name;
+              $term_wr->field_oc_artikul = $artikul;
+              $term_wr->field_oc_name_davalec = $name_davalec;
+              $term_wr->field_oc_artikul_davalec = $artikul_davalec;
+              $term_wr->field_user = $user->uid;
+              $term_wr->save();
+            }
 
-          // обновить значения полей
-          if ($user) {
-            $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
-            $term_wr->name = $name;
-            $term_wr->field_oc_artikul = $artikul;
-            $term_wr->field_oc_artikul_davalec = $artikul_davalec;
-            $term_wr->field_user = $user->uid;
-            $term_wr->save();
+          } else {
+            // todo ошибку в лог
           }
         }
       }

@@ -32,25 +32,28 @@ class query_handler_field_actions extends views_handler_field
 
       // для клиента
       if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) {
-        if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
+        if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing' && $values->field_field_query_type[0]["raw"]["value"] != 'main') {
           $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">согласовать</a>';
         }
-        if ($values->field_field_query_type[0]["raw"]["value"] != 'cancel') {
-          $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить заявку</a>';
+        if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
+          || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
+          $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить производство</a>';
         }
       // для менеджера
       } else {
         if ($values->field_field_query_status_manager[0]["raw"]["value"] != 'approved') {
+          $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">утвердить</a>';
           $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';
-          $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/delete">удалить</a>';
         }
-        if ($values->field_field_query_type[0]["raw"]["value"] != 'cancel') {
-          $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить заявку</a>';
+        if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
+          || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
+          $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить производство</a>';
         }
       }
 
       // для обоих
-      if ($values->field_field_query_type[0]["raw"]["value"] != 'cancel') {
+      if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
+        || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
         $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&query_id=' . $query_id . '">создать корректировку</a>';
       }
     }

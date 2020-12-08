@@ -40,9 +40,11 @@ form {
 }
 
 .view {
+  .attachment-before,
   .view-filters,
   .view-header {
     margin-bottom: $grid-gutter-width/2;
+    a.btn { margin-right: 15px; }
   }
   .view-item {
     display: flex; justify-content: space-between; flex-wrap: wrap;
@@ -76,7 +78,7 @@ form {
   }
   &.view-queries,
   &.view-manager-queries {
-    h3 { margin-top: 40px; }
+    .view-content > h3 { margin-top: 40px; }
     .view-item {
       border: 1px solid $gray-lightest;
       padding: 20px 20px 0;
@@ -226,7 +228,7 @@ form[id^=user-login] {
   display: flex;
   > div:first-child {
     color: $text-muted;
-    flex: 0 0 80px;
+    flex: 0 0 85px;
   }
   > div:nth-child(2) {  }
   > div:nth-child(3) { flex: 0 0 300px; }

@@ -1,4 +1,4 @@
-name = 'Query Theme'
+name = 'Prod Theme'
 description = 'A Drupal Bootstrap 3 based sub-theme.'
 core = 7.x
 base theme = bootstrap

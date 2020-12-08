@@ -83,6 +83,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
         if (user_has_role(ROLE_MANAGER)) {
           $form["field_query_status_client"]["und"]["#default_value"][0] = 'processing';
           $form["field_query_status_manager"]["und"]["#default_value"][0] = 'approved';
+          $form["field_query_status_manager"]['#access'] = false;
         } else {
           $form["field_query_status_client"]["und"]["#default_value"][0] = 'new';
           $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
@@ -127,6 +128,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
       if (in_array($form["field_query_type"]["und"]["#default_value"][0], ['correction', 'cancel'])) {
         $form["field_nomenklatura"]['#disabled'] = true;
         $form["field_month"]['#disabled'] = true;
+      }
+      if ($form["field_query_type"]["und"]["#default_value"][0] == 'cancel') {
         $form["field_qty"]['#disabled'] = true;
       }
 
@@ -198,6 +201,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
       $form_state['data'] = [
         'id' => $query_wr->getIdentifier(),
+        'main_query_id' => isset($main_query_wr) && !empty($main_query_wr->value()) ? $main_query_wr->getIdentifier() : 0,
         'is_new' => !empty($form_state['query']->is_new),
         'month' => $month_start,
         'volume' => $query_wr->field_qty->value(),
@@ -416,6 +420,14 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
     }
     query_query_load_update($form_state["query"]->id, $load);
   }
+  if (!empty($form_state["data"]["main_query_id"])) {
+    $query = entity_metadata_wrapper('query', $form_state["data"]["main_query_id"]);
+    if ($query->field_query_status_manager->value() == 'processing') {
+      $query->field_query_status_manager = 'deny';
+      $query->save();
+    }
+  }
+
 }
 
 function query_form_redirect_submit(&$form, &$form_state)
@@ -479,7 +491,6 @@ function query_views_data_alter(&$data)
   );
 }
 
-
 /**
  * Implements hook_views_pre_render().
  */
@@ -491,7 +502,16 @@ function query_views_pre_render(&$view)
       $queries = [];
       foreach ($view->result as $row) {
         if ($row->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
-          $queries[] = $row->id;
+          $efquery = new EntityFieldQuery();
+          $has_correction = $efquery
+            ->entityCondition('entity_type', 'query')
+            ->propertyCondition('created', $row->eck_query_created, '>')
+            ->fieldCondition('field_month', 'value', $row->field_field_month[0]["raw"]["value"])
+            ->fieldCondition('field_nomenklatura', 'target_id', $row->field_field_nomenklatura[0]["raw"]["target_id"])
+            ->count()
+            ->execute();
+
+          if (!$has_correction) $queries[] = $row->id;
         }
       }
 
@@ -500,7 +520,14 @@ function query_views_pre_render(&$view)
         $view->attachment_before = '<a href="/query/' . implode('+', $queries) . '/approve" class="btn btn-success">Согласовать весь план</a>';
       }
     }
+
+    // добавить кнопку Новая заявка (Торговые Дома)
+    if (in_array($GLOBALS['user']->uid,[91, 80])) {
+      $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-primary">Новая заявка</a>';
+    }
   }
+
+
 
   if ($view->name == 'produced_nomenklatura' && $view->current_display == 'page') {
     // определяем последнюю Заявку по Номенклатуре
@@ -522,7 +549,6 @@ function query_views_pre_render(&$view)
     $view->result = $result;
   }
 }
-
 
 /**
  * hook_preprocess_views_view_unformatted()
@@ -549,6 +575,34 @@ function query_preprocess_views_view_unformatted(&$vars)
 
   if ($vars['view']->name == 'produce_units_load' && $vars['view']->current_display == 'page') {
     $vars["view"]->attachment_before = '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="service"></span>- установка на обслуживании <span class="loaded"></span>- установка загружена</div>';
+  }
+}
+
+/**
+ * hook_preprocess_views_view_field()
+ */
+function query_preprocess_views_view_field(&$vars)
+{
+  if ($vars["view"]->name == 'queries' && isset($vars["field"]->field_info["field_name"])) {
+    if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
+      $name = [];
+      $artikul = empty($vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"]) ? '' : $vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"];
+      if ($artikul) $name[] = $artikul;
+      $title = empty($vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"]) ? $vars["output"] : $vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"];
+      if ($title) $name[] = $title;
+      if ($name) {
+        $vars["output"] = implode(' ', $name);
+      }
+    }
+
+    if ($vars["field"]->field_info["field_name"] == 'field_query_status_client') {
+      // если Заявка без согласования с клиентом, то есго статус помениять с Согласовано на Уведомление
+      if ($vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
+        && isset($vars["row"]->field_field_query_client_approve[0]["raw"]["value"]) && $vars["row"]->field_field_query_client_approve[0]["raw"]["value"] == 0
+       ) {
+        $vars["output"] = 'Уведомление';
+      }
+    }
   }
 }
 
@@ -636,18 +690,17 @@ function query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid)
  */
 function query_get_produce_units_by_product($nom_tid)
 {
-  // вернуть список установок, используемых для производства заданного продукта
-  // todo для каждой установки узнать производительность
+  // вернуть список установок с производительностью, используемых для производства заданного продукта
   $units = [];
 
   $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom_tid);
   if ($nom_wr->value()) {
     foreach ($nom_wr->field_produce_units->getIterator() as $performance_wr) {
-      $units[$performance_wr->field_pruduce_unit->getIdentifier()] = [
-        'tid' => $performance_wr->field_pruduce_unit->getIdentifier(),
-        'name' => $performance_wr->field_pruduce_unit->getLabel(),
+      $units[$performance_wr->field_produce_unit->getIdentifier()] = [
+        'tid' => $performance_wr->field_produce_unit->getIdentifier(),
+        'name' => $performance_wr->field_produce_unit->name->value(),
         'performance' => [
-          'amount' => $performance_wr->field_pruduce_unit_output->value(),
+          'amount' => $performance_wr->field_produce_unit_output->value(),
           'unit' => 'л',
         ]
       ];
@@ -660,7 +713,7 @@ function query_get_produce_units_by_product($nom_tid)
 /**
  * get_produce_unit_load
  */
-function query_get_produce_unit_load($produce_unit_tid, $month_start)
+function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = null)
 {
   // todo добавить учёт даты в месяце, до которой нужно вернуть загрузку,
   // todo так как:
@@ -668,27 +721,46 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start)
   // todo 2. если запрошенные даты двух заявок пересекаются, то нужно выделить цветом для второй, что установка уже занята
   // todo    и менеджеру нужно перенести запрос на свободные даты
 
-  // todo добавить учёт времени на подготовку
-
   // вернуть список периодов загрузки заданной установки на заданный месяц
   // учитывать нужно только утверждённые заявки
-  // todo Загрузку нужно возвращать с привязкой к Номенклатуре,
-  // todo   например,
-  // todo   чтобы в корректирующих Заявке не выводить Загрузку из основной Заявки,
-  // todo   т.к нужна возможность распределить её на эти даты снова
+  // Загрузку нужно возвращать с привязкой к Номенклатуре,
+  //   например,
+  //   чтобы в корректирующих Заявке не выводить Загрузку из основной Заявки,
+  //   т.к нужна возможность распределить её на эти даты снова
   $load_array = [];
 
-  // утверждённые Заявки месяца
+  $ids = [];
+  // начальные Заявки месяца
   $efquery = new EntityFieldQuery();
-  $result = $efquery
+  $result_main = $efquery
     ->entityCondition('entity_type', 'query')
     ->fieldCondition('field_month', 'value', $month_start)
     ->fieldCondition('field_query_status_client', 'value', ['approved', 'processing'], 'IN')
     ->fieldCondition('field_query_status_manager', 'value', 'approved')
+    ->fieldCondition('field_query_type', 'value', 'main')
     ->execute();
-  if ($result) {
+  if ($result_main) {
+    $ids = array_keys($result_main['query']);
+  }
+
+  // утверждённые Корректировки и Отмены
+  $efquery = new EntityFieldQuery();
+  $efquery
+    ->entityCondition('entity_type', 'query')
+    ->fieldCondition('field_query_type', 'value', 'main', '!=')
+    ->fieldCondition('field_month', 'value', $month_start)
+    ->fieldCondition('field_query_status_client', 'value', 'approved')
+    ->fieldCondition('field_query_status_manager', 'value', 'approved');
+  if ($date) {
+    $efquery->propertyCondition('created',  $date, '<');
+  }
+  if ($result = $efquery->execute()) {
+    $ids = array_merge($ids, array_keys($result['query']));
+  }
+
+  if ($ids) {
     $load_nomenklatura = [];
-    $queries = entity_load('query', array_keys($result['query']));
+    $queries = entity_load('query', $ids);
 
     // исключить неактуальные Заявки (для которых есть корректировки)
     // (оставляем последнюю утверждённую для Номенклатуры)
@@ -804,7 +876,7 @@ function query_approve_callback($data)
      query_query_approve($query_id);
     }
     if (count($queries) == 1) {
-      drupal_set_message('Заявка ' . $query_id . ' согласована');
+      drupal_set_message('Заявка ' . $query_id . (user_has_role(ROLE_MANAGER) ? ' утверждена' : ' согласована'));
     } else {
       drupal_set_message('План согласован');
     }
@@ -821,10 +893,17 @@ function query_query_approve($query_id)
 {
   $query_wr = entity_metadata_wrapper('query', $query_id);
   if ($query_wr->value()) {
-    // проверка прав
-    if ($query_wr->field_nomenklatura->field_user->uid->value() == $GLOBALS['user']->uid) {
-      $query_wr->field_query_status_client = 'approved';
+    // менеджер или клиент
+    if (user_has_role(ROLE_MANAGER)) {
+      $query_wr->field_query_status_manager = 'approved';
+      $query_wr->field_query_status_client = 'processing';
       $query_wr->save();
+    } else {
+      // проверка прав
+      if ($query_wr->field_nomenklatura->field_user->uid->value() == $GLOBALS['user']->uid) {
+        $query_wr->field_query_status_client = 'approved';
+        $query_wr->save();
+      }
     }
   }
 

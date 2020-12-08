@@ -47,7 +47,7 @@ class query_handler_field_produce_units_form extends views_handler_field
     }
 
     foreach ($produce_units as $pu_tid => $produce_unit) {
-      $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start);
+      $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value());
 
       $output .=
         '<div class="produce-unit">' .
