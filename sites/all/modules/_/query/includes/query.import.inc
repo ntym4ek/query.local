@@ -81,6 +81,7 @@ function query_produce_plan_import()
     // подготовить массив с Планом для внесения в базу
     // определить Заявки и посчитать общее производимое количество
     $plan = [];
+    $user_mails = []; // массив с пользователями, кому нужно отправить уведомление об импорте плана
     foreach ($plan_array_1c as $key => $plan_item_1c) {
       if (!$key) continue;
 
@@ -145,15 +146,33 @@ function query_produce_plan_import()
       }
 
       $query_wr = entity_metadata_wrapper('query', $query);
-      $query_wr->field_month = $plan_item['field_month'];
-      $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
-      $query_wr->field_qty = $plan_item['field_qty'];
-      $query_wr->field_query_type = 'main';
-      $query_wr->field_query_status_client = 'processing';
-      $query_wr->field_query_status_manager = 'approved';
-      $query_wr->save();
+      // утверждённые заявки не заменять
+      if ($query_wr->field_query_status_client->value() != 'approved' || $query_wr->field_query_status_manager->value() != 'approved') {
+        $query_wr->field_month = $plan_item['field_month'];
+        $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
+        $query_wr->field_qty = $plan_item['field_qty'];
+        $query_wr->field_query_type = 'main';
+        $query_wr->field_query_status_client = 'processing';
+        $query_wr->field_query_status_manager = 'approved';
+        $query_wr->save();
 
-      query_query_load_update($query->id, $plan_item['field_load']);
+        query_query_load_update($query->id, $plan_item['field_load']);
+
+        // если импортирована заявка, внести в список пользователей, кому отправить email
+        $uid = $query_wr->field_nomenklatura->field_user->uid->value();
+        $user_mails[$uid] = [
+          'month' => $plan_item['field_month'],
+          'account' => $query_wr->field_nomenklatura->field_user->value()
+        ];
+      }
+    }
+
+    // отправить письма об импорте плана
+    if ($user_mails) {
+      foreach ($user_mails as $user_id => $data) {
+        $params['month'] = t(date('F', $data['month']));
+        drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
+      }
     }
 
     drupal_set_message('План производства импортирован');

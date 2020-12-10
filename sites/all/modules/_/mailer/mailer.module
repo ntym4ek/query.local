@@ -1,72 +1,114 @@
 <?
 
-define('MANAGER_EMAIL', 'mega_comp@mail.ru');
-define('TEST_USER_EMAIL', 'mega_comp@mail.ru');
-
-/**
- * Implements hook_menu()
- */
-function mailer_menu()
-{
-  $items['services/handling-notify/%'] = [
-    'page callback' => 'mailer_handling_notify',
-    'page arguments' => [2],
-    'access callback' => true,
-    'type' => MENU_CALLBACK,
-  ];
-
-  return $items;
-}
-
-function mailer_handling_notify($qid)
-{
-  $query_wr = entity_metadata_wrapper('query', $qid);
-
-  $account = user_load($query_wr->uid->value());
-  $params['qid'] = $qid;
-  $params['status'] = $query_wr->field_query_status->name->value();
-  $params['comment'] = $query_wr->field_comment->value();
-  $params['product'] = $query_wr->field_product->value();
-  drupal_mail('mailer', 'user_notify_query_handling', TEST_USER_EMAIL, user_preferred_language($account), $params);
-
-  drupal_set_message('Уведомление по заявке ' . $params['qid'] . ' отправлено на E-Mail');
-  drupal_goto($_GET['destination']);
-}
-
 /**
  * Implements hook_mail
  */
 function mailer_mail($key, &$message, $params)
 {
+  $front_url = url('<front>', ['absolute' => true]);
   switch($key) {
-    case 'manager_notify_new_query':
-      $message['subject'] = 'Новая заявка на производство';
-
+    case 'manager_notify_query_correction_new':
+      $message['subject'] = 'Новая корректировка';
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
-        '<p>Новая заявка на производство:</p>' .
+        '<p>Новая корректировка на сайте "Управление заказами":</p>' .
         'Номер: ' . $params["qid"] . '<br />' .
-        'Период: ' . $params["period"]["value"] . ' - ' . $params["period"]["value2"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
-        'Страна: ' . $params["country"] .  '<br />' .
-        'Упаковка: ' . $params['package'] . '<br />' .
-        'Количество: ' . $params["qty"] .
-        '<p>Перейти к заявкам в <a href="' . url('<front>', ['absolute' => true]) . '">Личный кабинет</a></p>';
+        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
 
-    case 'user_notify_query_handling':
-      $message['subject'] = 'Статус заявки на производство изменился';
-
+    case 'manager_notify_query_cancel_new':
+      $message['subject'] = 'Отмена заявки на производство';
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
-        '<p>Вы оставили заявку на производство ' . $params['product'] . ' на сайте компании ООО "Кирово-Чепецкий завод Агрохимикат"</p>' .
-        '<p>' .
-        'Текущий статус заявки №' . $params['qid'] . ': ' . $params['status'] .
-        ($params['comment'] ? '<br />Комментарий: ' . $params['comment'] : $params['comment']) .
-        '</p>' .
-        '<p>Состояние всех заявок можно посмотреть в <a href="' . url('<front>', ['absolute' => true]) . '">Личном кабинете</a></p>';
+        '<p>На сайте "Управление заказами" пользователь запросил отмену производства:</p>' .
+        'Номер заявки: ' . $params["qid"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
+
+      case 'client_notify_query_correction_new':
+      $message['subject'] = 'Новая корректировка по вашей заявке';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> внесена корректирующая заявка в план производства на ' . $params['month'] . '. </p>' .
+        'Номер заявки: ' . $params["qid"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        'Причина: ' . $params["reason"] .  '<br />' .
+        'Требуется согласование: ' . ($params["client_approve"] ? 'да' : 'нет')  .  '<br />' .
+        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'client_notify_query_cancel_new':
+      $message['subject'] = 'Отмена вашей заявки на производство';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> отменено производство препарата</p>' .
+        'Номер заявки на отмену: ' . $params["qid"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        'Причина: ' . $params["reason"] .  '<br />' .
+        'Требуется согласование: ' . ($params["client_approve"] ? 'да' : 'нет')  .  '<br />' .
+        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'client_notify_query_handling':
+      $message['subject'] = 'Статус заявки на производство изменился';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> изменился статус заявки.</p>' .
+        'Номер заявки: ' . $params["qid"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        'Новый статус: ' . $params["manager_client"] .  '<br />' .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'manager_notify_query_handling':
+      $message['subject'] = 'Статус заявки на производство изменился';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте "Управление заказами" пользователь изменил статус заявки:</p>' .
+        'Номер заявки: ' . $params["qid"] . '<br />' .
+        'Месяц: ' . $params["month"] . '<br />' .
+        'Продукт: ' . $params["product"] .  '<br />' .
+        'Новый статус: ' . $params["status_client"] .  '<br />' .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+    case 'user_notify_plan_import':
+      $message['subject'] = 'Импортирован план на ' . $params['month'];
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="http://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . '. </p>' .
+        '<p>Необходимо до 25 числа проверить свои заявки на производство и принять план или связаться с нашим менеджером для внесения изменений.</p>' .
+        '<p>Для принятия плана перейдите на <a href="http://prod.kccc.ru">сайт</a> и нажмите кнопку "Согласовать весь план"</p>';
+
+      break;
+  }
+}
+
+
+/**
+ * Implements hook_mail_alter
+ */
+function mailer_mail_alter(&$message)
+{
+  if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE && empty($message["params"]["force_local_send"])) {
+    $message['send'] = false;
+    watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: ' . $message['to'] . '.<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
   }
 }

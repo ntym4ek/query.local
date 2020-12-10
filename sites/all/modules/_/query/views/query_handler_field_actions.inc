@@ -43,7 +43,7 @@ class query_handler_field_actions extends views_handler_field
       } else {
         if ($values->field_field_query_status_manager[0]["raw"]["value"] != 'approved') {
           $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">утвердить</a>';
-          $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';
+//          $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';
         }
         if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
           || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {

@@ -25,6 +25,16 @@ form {
     width: initial;
   }
   .form-actions { margin-top: $grid-gutter-width/2; }
+
+  #field-nomenklatura {
+    .field-name-field-nomenklatura,
+    button { display: inline-block; }
+    button {
+      display: inline-block;
+      vertical-align: top;
+      margin: 24px 0 0 15px;
+    }
+  }
 }
 
 .block-views {
@@ -44,11 +54,12 @@ form {
   .view-filters,
   .view-header {
     margin-bottom: $grid-gutter-width/2;
-    a.btn { margin-right: 15px; }
+    a.btn { margin-right: 5px; }
   }
   .view-item {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
+    position: relative;
     > div { }
     .views-field-id {
       margin-bottom: $grid-gutter-width/2;
@@ -60,7 +71,6 @@ form {
     }
     .views-field-produce-unit-load { flex: 100%; }
     .views-field-field-query-type { flex-basis: 15%; }
-    &.locked { opacity: .5; }
   }
   .views-field-nothing a {
     font-size: $font-size-small;
@@ -82,6 +92,21 @@ form {
     .view-item {
       border: 1px solid $gray-lightest;
       padding: 20px 20px 0;
+      &.attention { border-color: $brand-danger; }
+      &.processing { border-color: $brand-warning; }
+      &.locked { opacity: 0.5; }
+      &.locked:after {
+        content: "ИЗМЕНЕНА";
+        position: absolute; top: 50px; left: 40%; z-index: 1;
+        transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
+        color: #c00; font-size: 26px;
+        background: #fff;
+        border: solid 4px #c00; border-radius: 5px;
+        padding: 5px;
+        zoom: 1; filter: alpha(opacity=50); opacity: 0.5;
+        text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
+        box-shadow: 0 0 2px #c00;
+      }
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
@@ -162,10 +187,10 @@ form {
       border-color: $brand-warning;
     }
 
-
+    .c-box.unavailable,
     input[type="checkbox"].unavailable:not(.loaded) + span {
       background: #dedede;
-      border-color: $gray-lighter;
+      border-color: #888888;
     }
     input[type="checkbox"]:disabled + span {
       cursor: default;
@@ -201,6 +226,10 @@ form {
     &.company-loaded {
       background: #ffeacb;
       border-color: $brand-warning;
+    }
+    &.unavailable {
+      background: #dedede;
+      border-color: #888888;
     }
     &.service {
       background: #ffd2d1;
