@@ -649,6 +649,7 @@ function query_preprocess_views_view_unformatted(&$vars)
   // добавить класс строке основного Запроса, если есть корректирующий
   if (in_array($vars['view']->name, ['queries', 'manager_queries']) && $vars['view']->current_display == 'page_1') {
     foreach ($vars["classes"] as $key => $value) {
+      // если есть Корректировки, наложить штамп "ИЗМЕНЕНА"
       $efquery = new EntityFieldQuery();
       $has_correction = $efquery
         ->entityCondition('entity_type', 'query')
@@ -657,9 +658,13 @@ function query_preprocess_views_view_unformatted(&$vars)
         ->fieldCondition('field_nomenklatura', 'target_id', $vars["view"]->result[$key]->field_field_nomenklatura[0]["raw"]["target_id"])
         ->count()
         ->execute();
-
       if ($has_correction) {
         $vars["classes_array"][$key] .= ' locked';
+      } else {
+        // если дата производства наступила - наложить штамп "ПРОИЗВОДИТСЯ"
+        if (query_check_query_produce_started($vars["view"]->result[$key]->id)) {
+          $vars["classes_array"][$key] .= ' producing';
+        }
       }
 
       if (user_has_role(ROLE_MANAGER)) {
@@ -1018,3 +1023,23 @@ function query_query_approve($query_id)
   return true;
 }
 
+/**
+ * проверка, началось ли производство по Заявке
+ * @param $query
+ * @return bool
+ */
+function query_check_query_produce_started($query)
+{
+  $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
+  $query_wr = entity_metadata_wrapper('query', $query);
+  foreach ($query_wr->field_load->getIterator() as $load_wr) {
+    if ($load_wr->value()) {
+      // за сутки до начала производства и позже - производство началось
+      if ($today_start > $load_wr->field_produce_date->value() - 24*60*60) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}

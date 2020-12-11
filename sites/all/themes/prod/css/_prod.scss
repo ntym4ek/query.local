@@ -107,6 +107,18 @@ form {
         text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
         box-shadow: 0 0 2px #c00;
       }
+      &.producing:after {
+        content: "ПРОИЗВОДИТСЯ";
+        position: absolute; top: 50px; left: 40%; z-index: 1;
+        transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
+        color: #c00; font-size: 26px;
+        background: #fff;
+        border: solid 4px #c00; border-radius: 5px;
+        padding: 5px;
+        zoom: 1; filter: alpha(opacity=50); opacity: 0.5;
+        text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
+        box-shadow: 0 0 2px #c00;
+      }
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
