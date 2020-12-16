@@ -79,28 +79,19 @@ function query_form_alter(&$form, &$form_state, $form_id)
       if ($_GET['type'] == 'correction') {
         drupal_set_title('Корректирующая заявка');
         $form["field_query_type"]["und"]["#default_value"][0] = 'correction';
-
-        if (user_has_role(ROLE_MANAGER)) {
-          $form["field_query_status_client"]["und"]["#default_value"][0] = 'processing';
-          $form["field_query_status_manager"]["und"]["#default_value"][0] = 'approved';
-          $form["field_query_status_manager"]['#access'] = false;
-        } else {
-          $form["field_query_status_client"]["und"]["#default_value"][0] = 'new';
-          $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
-        }
       }
       if ($_GET['type'] == 'cancel') {
         drupal_set_title('Заявка на отмену производства');
         $form["field_query_type"]["und"]["#default_value"][0] = 'cancel';
+      }
 
-        if (user_has_role(ROLE_MANAGER)) {
-          $form["field_query_status_client"]["und"]["#default_value"][0] = 'processing';
-          $form["field_query_status_manager"]["und"]["#default_value"][0] = 'approved';
-          $form["field_query_status_manager"]['#access'] = false;
-        } else {
-          $form["field_query_status_client"]["und"]["#default_value"][0] = 'approved';
-          $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
-        }
+      if (user_has_role(ROLE_MANAGER)) {
+        $form["field_query_status_client"]["und"]["#default_value"][0] = 'processing';
+        $form["field_query_status_manager"]["und"]["#default_value"][0] = 'approved';
+        $form["field_query_status_manager"]['#access'] = false;
+      } else {
+        $form["field_query_status_client"]["und"]["#default_value"][0] = 'approved';
+        $form["field_query_status_manager"]["und"]["#default_value"][0] = 'processing';
       }
 
       $form["field_qty"]["und"][0]["value"]["#default_value"] = $main_query_wr->field_qty->value();
@@ -117,6 +108,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
 
   if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query'])) {
+    $form["field_qty"]["#weight"] = 4;
 
     if (!user_has_role(ROLE_ADMIN, $GLOBALS['user'])) {
       $form["field_load"]["#access"] = false;
@@ -318,6 +310,12 @@ function query_form_alter(&$form, &$form_state, $form_id)
                 }
               }
             }
+          } else {
+            // Установки не найдены
+            $form['produce_unit'] = [
+              '#markup' => '<div class="alert alert-warning" role="alert">Не найдены установки для выбранной номенклатуры</div>',
+              '#weight' => 3,
+            ];
           }
         }
         $form["#submit"][] = 'query_form_eck__entity__form_query_query_submit';
@@ -325,7 +323,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
     }
 
     // ajax кнопки выбора номенклатуры для смены Установки при смене Наименования
-    if (!$form['field_nomenklatura']['#disabled']) {
+    if (empty($form["field_nomenklatura"]['#disabled'])) {
       $form["fn_wrapper"] = [
         '#prefix' => '<div id="field-nomenklatura">',
         '#suffix' => '</div>',
@@ -340,6 +338,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
       unset($form['field_nomenklatura']);
       $form["fn_wrapper"]['field_nomenklatura_submit'] = array(
         '#type' => 'submit',
+        '#name' => 'field_nomenklatura_submit',
         '#value' => 'Показать установки',
         // При отправки формы с помощью этой кнопки, валидацию будет проходить только поле fields_count
         '#limit_validation_errors' => [['field_nomenklatura']],
@@ -456,9 +455,15 @@ function query_form_redirect_submit(&$form, &$form_state)
   }
 }
 
-function query_entity_insert($entity)
+/**
+ * Implements hook_entity_insert().
+ * @param $entity
+ * @param $type
+ */
+function query_entity_insert($entity, $type)
 {
-  if ($entity->entityType() == 'query' && $entity->bundle() == 'query') {
+  if ($type == 'query' && $entity->bundle() == 'query') {
+    // отправка уведомлений при создании новой Заявки
     $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
     $query_wr = entity_metadata_wrapper('query', $entity);
     $params = [
@@ -495,9 +500,15 @@ function query_entity_insert($entity)
   }
 }
 
+/**
+ * Implements hook_entity_update().
+ * @param $entity
+ * @param $type
+ */
 function query_entity_update($entity, $type)
 {
-  if ($entity->entityType() == 'query' && $entity->bundle() == 'query') {
+  if ($type == 'query' && $entity->bundle() == 'query') {
+    // отправка уведомлений при наличии изменений в Заявке
     $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
     $query_wr = entity_metadata_wrapper('query', $entity);
     $params = [
@@ -607,9 +618,10 @@ function query_views_pre_render(&$view)
         }
       }
 
-      // вывести кнопку Согласовать все
+      // вывести кнопку Согласовать весь план
       if ($queries) {
-        $view->attachment_before = '<a href="/query/' . implode('+', $queries) . '/approve" class="btn btn-success">Согласовать весь план</a>';
+        $view->attachment_before =  '<a href="/query/' . implode('+', $queries) . '/approve" class="btn btn-success">Согласовать весь план</a>' .
+                                    '<p class="text-muted">Необходимо согласовать план не позднее 25 числа месяца, предшествующего плановому.</p>';
       }
     }
 
@@ -662,8 +674,14 @@ function query_preprocess_views_view_unformatted(&$vars)
         $vars["classes_array"][$key] .= ' locked';
       } else {
         // если дата производства наступила - наложить штамп "ПРОИЗВОДИТСЯ"
-        if (query_check_query_produce_started($vars["view"]->result[$key]->id)) {
-          $vars["classes_array"][$key] .= ' producing';
+        if (query_check_query_produce_finished($vars["view"]->result[$key]->id)) {
+          $vars["classes_array"][$key] .= ' produced';
+        }
+
+        // утверждённая заявка
+        if ($vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"] == 'approved'
+        && $vars["view"]->result[$key]->field_field_query_status_client[0]["raw"]["value"] == 'approved') {
+          $vars["classes_array"][$key] .= ' approved';
         }
       }
 
@@ -714,6 +732,23 @@ function query_preprocess_views_view_field(&$vars)
        ) {
         $vars["output"] = 'Уведомление';
       }
+    }
+  }
+
+  if ($vars["view"]->name == 'produced_nomenklatura') {
+    if ($vars["field"]->field_alias == 'taxonomy_term_data_name') {
+      $name = [];
+      $artikul = empty($vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"]) ? '' : $vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"];
+      if ($artikul) $name[] = $artikul;
+      $title = empty($vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"]) ? $vars["output"] : $vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"];
+      if ($title) $name[] = $title;
+      if ($name) {
+        $vars["output"] = implode(' ', $name);
+      }
+
+    }
+    if (isset($vars["field"]->field_info["field_name"]) && $vars["field"]->field_info["field_name"] == 'field_produce_output') {
+      $vars["output"] = number_format($vars["field"]->original_value, 0, ',', ' ');
     }
   }
 }
@@ -1042,4 +1077,25 @@ function query_check_query_produce_started($query)
   }
 
   return false;
+}
+
+/**
+ * проверка, закончилось ли производство по Заявке (последняя дата считается за окончание)
+ * @param $query
+ * @return bool
+ */
+function query_check_query_produce_finished($query)
+{
+  $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
+  $query_wr = entity_metadata_wrapper('query', $query);
+  foreach ($query_wr->field_load->getIterator() as $load_wr) {
+    if ($load_wr->value()) {
+      // за сутки до начала производства и позже - производство началось
+      if ($today_start < $load_wr->field_produce_date->value()) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }

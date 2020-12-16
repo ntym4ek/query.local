@@ -3,6 +3,13 @@
 define('ROLE_ADMIN', 3);
 define('ROLE_MANAGER', 4);
 
+function ext_user_preprocess_menu_link(&$vars)
+{
+  if ($vars["element"]["#href"] == 'user' && user_is_logged_in()) {
+    $vars["element"]["#title"] = $GLOBALS['user']->name;
+  }
+}
+
 /**
  * Implements hook_form_FORM_ID_alter().
  */

@@ -71,7 +71,7 @@ function mailer_mail($key, &$message, $params)
         'Номер заявки: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
-        'Новый статус: ' . $params["manager_client"] .  '<br />' .
+        'Новый статус: ' . $params["status_manager"] .  '<br />' .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
