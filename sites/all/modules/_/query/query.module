@@ -601,6 +601,7 @@ function query_views_pre_render(&$view)
 {
   if ($view->name == 'queries' && $view->current_display == 'page_1') {
     if (!empty($view->filter["field_month_value"]->value["value"])) {
+      $month_start = gmmktime(0, 0, 0, explode('-', $view->filter["field_month_value"]->value["value"])[1], 1, explode('-', $view->filter["field_month_value"]->value["value"])[0]);
       // проверка на наличие Заявок на подтверждение
       $queries = [];
       foreach ($view->result as $row) {
@@ -619,7 +620,10 @@ function query_views_pre_render(&$view)
       }
 
       // вывести кнопку Согласовать весь план
-      if ($queries) {
+      // до 25 числа включительно
+      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+      $deadline_start = gmmktime(0, 0, 0, date('n', $month_start)-1, 26, date('Y', $month_start));
+      if ($queries && $today_start < $deadline_start) {
         $view->attachment_before =  '<a href="/query/' . implode('+', $queries) . '/approve" class="btn btn-success">Согласовать весь план</a>' .
                                     '<p class="text-muted">Необходимо согласовать план не позднее 25 числа месяца, предшествующего плановому.</p>';
       }
@@ -663,17 +667,25 @@ function query_preprocess_views_view_unformatted(&$vars)
     foreach ($vars["classes"] as $key => $value) {
       // если есть Корректировки, наложить штамп "ИЗМЕНЕНА"
       $efquery = new EntityFieldQuery();
-      $has_correction = $efquery
+      $result = $efquery
         ->entityCondition('entity_type', 'query')
         ->propertyCondition('created', $vars["view"]->result[$key]->eck_query_created, '>')
         ->fieldCondition('field_month', 'value', $vars["view"]->result[$key]->field_field_month[0]["raw"]["value"])
         ->fieldCondition('field_nomenklatura', 'target_id', $vars["view"]->result[$key]->field_field_nomenklatura[0]["raw"]["target_id"])
-        ->count()
         ->execute();
-      if ($has_correction) {
-        $vars["classes_array"][$key] .= ' locked';
+      if ($result) {
+        $queries = entity_load('query', array_keys($result['query']));
+        krsort($queries);
+        $last_query = current($queries);
+        if ($last_query->field_query_type["und"][0]["value"] == 'cancel'
+          && $last_query->field_query_status_client["und"][0]["value"] == 'approved'
+          && $last_query->field_query_status_manager["und"][0]["value"] == 'approved') {
+          $vars["classes_array"][$key] .= ' cancelled';
+        } else {
+          $vars["classes_array"][$key] .= ' locked';
+        }
       } else {
-        // если дата производства наступила - наложить штамп "ПРОИЗВОДИТСЯ"
+        // если дата производства наступила - наложить штамп "ЗАБЛОКИРОВАНО"
         if (query_check_query_produce_finished($vars["view"]->result[$key]->id)) {
           $vars["classes_array"][$key] .= ' produced';
         }
@@ -699,6 +711,10 @@ function query_preprocess_views_view_unformatted(&$vars)
         if ($vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"] == 'processing') {
           $vars["classes_array"][$key] .= ' processing';
         }
+      }
+
+      if ($vars["view"]->result[$key]->field_field_query_type[0]["raw"]["value"] == 'cancel') {
+        $vars["classes_array"][$key] .= ' cancel-item';
       }
     }
   }
@@ -1088,14 +1104,16 @@ function query_check_query_produce_finished($query)
 {
   $today_start = gmmktime(0, 0, 0, date('n', time()), date('j', time()), date('Y', time()));
   $query_wr = entity_metadata_wrapper('query', $query);
+  $date_start = null;
   foreach ($query_wr->field_load->getIterator() as $load_wr) {
     if ($load_wr->value()) {
       // за сутки до начала производства и позже - производство началось
-      if ($today_start < $load_wr->field_produce_date->value()) {
+      $date_start = $load_wr->field_produce_date->value();
+      if ($today_start < $date_start) {
         return false;
       }
     }
   }
 
-  return true;
+  return $date_start ? true : false;
 }

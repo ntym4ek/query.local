@@ -91,13 +91,15 @@ form {
     .view-content > h3 { margin-top: 40px; }
     .view-item {
       border: 1px solid $gray-lightest;
+      border-top: 5px solid $gray-lightest;
       padding: 20px 20px 0;
       &.approved:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
       &.locked { opacity: 0.5; }
-      &.locked:after {
-        content: "ИЗМЕНЕНА";
+      &.locked:after,
+      &.produced:after,
+      &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
         color: #c00; font-size: 26px;
@@ -108,17 +110,19 @@ form {
         text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
         box-shadow: 0 0 2px #c00;
       }
+      &.locked.cancel-item:after,
+      &.produced.cancel-item:after,
+      &.cancelled.cancel-item:after {
+        top: 8px;
+      }
+      &.locked:after {
+        content: "ИЗМЕНЕНА";
+      }
       &.produced:after {
-        content: "ЗАБЛОКИРОВАНО";
-        position: absolute; top: 50px; left: 40%; z-index: 1;
-        transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
-        color: #c00; font-size: 26px;
-        background: #fff;
-        border: solid 4px #c00; border-radius: 5px;
-        padding: 5px;
-        zoom: 1; filter: alpha(opacity=50); opacity: 0.5;
-        text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
-        box-shadow: 0 0 2px #c00;
+        content: "ЗАБЛОКИРОВАНА";
+      }
+      &.cancelled:after {
+        content: "ОТМЕНЕНА";
       }
     }
   }
