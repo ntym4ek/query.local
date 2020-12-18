@@ -22,7 +22,7 @@
 
 form {
   .form-control:not(.form-textarea) {
-    width: initial;
+    //width: initial; // в установке, поле производительность на всю длинну вместо 100% заданного flex контейнера
   }
   .form-actions { margin-top: $grid-gutter-width/2; }
 
@@ -138,7 +138,7 @@ form {
 
 .produce-unit {
   display: flex;
-  margin-bottom: 0;
+  //margin-bottom: 0; // если установок две, то между ними нет интервала
   h3 { margin: 0 0 2px 0; }
   .produce-unit-name {
     flex: 0 1 145px;
@@ -151,6 +151,12 @@ form {
     padding: 0 $grid-gutter-width/2; margin: 0;
   }
   .produce-unit-dates {
+    padding: 0 $grid-gutter-width/2;
+    margin: 0;
+  }
+  .produce-unit-performance {
+    flex: 0 1 170px;
+    border-left: 1px solid $gray-lightest;
     padding: 0 $grid-gutter-width/2;
     margin: 0;
   }
@@ -265,6 +271,32 @@ form {
 form[id^=user-login] {
   @include make-md-column-offset(3);
   @include make-md-column(6);
+}
+
+form.query-form {
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .field-name-field-month {
+    flex: 100%;
+  }
+  .field-name-field-nomenklatura {
+    margin-right: $grid-gutter-width/2;
+  }
+  .produce-units-wrapper {
+    flex: 100%;
+    .alert { margin-bottom: $grid-gutter-width/2; }
+  }
+  .produce-unit-add-wrapper {
+    flex: 100%;
+    display: flex;
+    align-items: flex-end;
+    .form-item-pu-select { margin: 0 $grid-gutter-width/2 0 0; }
+  }
+  .field-name-field-comment {
+    flex: 100%;
+  }
 }
 
 .popover { max-width: initial; }

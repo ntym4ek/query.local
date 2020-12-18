@@ -32,7 +32,7 @@ class query_handler_field_actions extends views_handler_field
       ->execute();
     if (!$has_correction) {
       // изменения за сутки до начала производства запретить
-      if (!query_check_query_produce_started($query_id)) {
+      if (!query_check_query_produce_finished($query_id) || user_has_role(ROLE_MANAGER)) {
         // для клиента
         if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) {
           if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing' && $values->field_field_query_type[0]["raw"]["value"] != 'main') {
@@ -40,7 +40,7 @@ class query_handler_field_actions extends views_handler_field
           }
           if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
             || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить производство</a>';
+            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&source_query_id=' . $query_id . '">отменить производство</a>';
           }
           // для менеджера
         } else {
@@ -50,7 +50,7 @@ class query_handler_field_actions extends views_handler_field
           }
           if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
             || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&query_id=' . $query_id . '">отменить производство</a>';
+            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&source_query_id=' . $query_id . '">отменить производство</a>';
           }
         }
 
@@ -58,7 +58,7 @@ class query_handler_field_actions extends views_handler_field
         if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
           || ($values->field_field_query_type[0]["raw"]["value"] == 'cancel' && ($values->field_field_query_status_client[0]["raw"]["value"] != 'approved' || $values->field_field_query_status_manager[0]["raw"]["value"] != 'approved'))
           || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-          $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&query_id=' . $query_id . '">создать корректировку</a>';
+          $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&source_query_id=' . $query_id . '">создать корректировку</a>';
         }
       }
     }

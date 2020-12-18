@@ -41,21 +41,29 @@
       // });
 
       // выделение нескольких чекбоксов проведением над ними -----------------------------------------------------------
-      $("body").mousedown(function() { isMouseDown = true });
-      $("body").mouseup(function() { isMouseDown = false });
+      $("body").once(function() {
+        $("body").mousedown(function() {
+          isMouseDown = true
+        });
+        $("body").mouseup(function() {
+          isMouseDown = false
+        });
+      });
 
-      $(".produce-unit input[type=checkbox]+span").mousedown(function(e) {
-        isMouseDown = true;
-        var input = $(this).closest('.form-type-checkbox').find('input');
-        checkCheck(input);
-      });
-      $(".produce-unit input[type=checkbox]+span").mouseover(function() {
-        var input = $(this).closest('.form-type-checkbox').find('input');
-        checkCheck(input)
-      });
-      $('.produce-unit input[type="checkbox"]').click(function(e) {
-        e.preventDefault();
-        e.stopPropagation();
+      $(".query-form").once(function() {
+        $(".produce-unit input[type=checkbox]+span").mousedown(function (e) {
+          isMouseDown = true;
+          var input = $(this).closest('.form-type-checkbox').find('input');
+          checkCheck(input);
+        });
+        $(".produce-unit input[type=checkbox]+span").mouseover(function () {
+          var input = $(this).closest('.form-type-checkbox').find('input');
+          checkCheck(input)
+        });
+        $('.produce-unit input[type="checkbox"]').click(function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        });
       });
 
       function checkCheck(el) {
