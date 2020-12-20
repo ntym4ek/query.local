@@ -20,6 +20,8 @@ class query_handler_field_actions extends views_handler_field
     // вывести формы выбора дат для каждой установки
     $query_id = $values->id;
     $month_start = $values->field_field_month[0]["raw"]["value"];
+    $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+    $deadline_start = gmmktime(0, 0, 0, date('n', $month_start)-1, 26, date('Y', $month_start));
 
     // новая корректировка только при утверждённой основной и отсутствии созданных позже
     $efquery = new EntityFieldQuery();
@@ -30,7 +32,8 @@ class query_handler_field_actions extends views_handler_field
       ->fieldCondition('field_nomenklatura', 'target_id', $values->field_field_nomenklatura[0]["raw"]["target_id"])
       ->count()
       ->execute();
-    if (!$has_correction) {
+    // если нет Корректировок и прошло 25 число
+    if (!$has_correction && $today_start >= $deadline_start) {
       // изменения за сутки до начала производства запретить
       if (!query_check_query_produce_finished($query_id) || user_has_role(ROLE_MANAGER)) {
         // для клиента
@@ -40,7 +43,7 @@ class query_handler_field_actions extends views_handler_field
           }
           if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
             || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&source_query_id=' . $query_id . '">отменить производство</a>';
+            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
           }
           // для менеджера
         } else {
@@ -50,7 +53,7 @@ class query_handler_field_actions extends views_handler_field
           }
           if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
             || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&source_query_id=' . $query_id . '">отменить производство</a>';
+            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
           }
         }
 
@@ -58,7 +61,7 @@ class query_handler_field_actions extends views_handler_field
         if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
           || ($values->field_field_query_type[0]["raw"]["value"] == 'cancel' && ($values->field_field_query_status_client[0]["raw"]["value"] != 'approved' || $values->field_field_query_status_manager[0]["raw"]["value"] != 'approved'))
           || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
-          $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&source_query_id=' . $query_id . '">создать корректировку</a>';
+          $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
         }
       }
     }
