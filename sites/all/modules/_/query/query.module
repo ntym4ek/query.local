@@ -357,7 +357,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
                 // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
                 $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
-                $produce_unit_has_current_load = !empty($current_load[$pu_tid][$day_start]);
+                $produce_unit_has_current_load = (int)!empty($current_load[$pu_tid][$day_start]);
 
                 // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
                 $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
@@ -377,7 +377,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
                   $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
                     '#type' => 'checkbox',
                     '#title' => '<span>' . $i . '</span>',
-                    '#disabled' => ($produce_unit_is_busy && !$produce_unit_has_current_load) || $produce_unit_is_unavailable,
+                    '#disabled' => ($produce_unit_is_busy && !$produce_unit_has_current_load) || ($produce_unit_is_unavailable && !$produce_unit_has_current_load),
                     '#default_value' => $produce_unit_has_current_load,
                     '#attributes' => ['class' => $classes],
                   ];
@@ -459,20 +459,9 @@ function query_form_alter(&$form, &$form_state, $form_id)
   }
 }
 
-
-function query_form_query_add_field_nomenklatura_change()
-{
-
-}
-
 function query_form_produce_unit_add_ajax_callback($form, &$form_state)
 {
   return $form;
-}
-
-function query_form_query_add_field_nomenklatura_change_ajax($form, &$form_state)
-{
-  return $form['field_nomenklatura_wrapper'];
 }
 
 /**
@@ -548,11 +537,11 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
   }
 
   // статус старой Заявки изменить на Отказано
-  if (!empty($form_state["data"]["source_query_id"])) {
-    $main_query_wr = entity_metadata_wrapper('query', $form_state['data']['source_query']['id']);
-    if ($main_query_wr->field_query_status_manager->value() == 'processing') {
-      $main_query_wr->field_query_status_manager = 'deny';
-      $main_query_wr->save();
+  if (!empty($form_state["data"]["last_query"]['id'])) {
+    $last_query_wr = entity_metadata_wrapper('query', $form_state['data']['last_query']['id']);
+    if ($last_query_wr->field_query_status_manager->value() == 'processing') {
+      $last_query_wr->field_query_status_manager = 'deny';
+      $last_query_wr->save();
     }
   }
 }
@@ -627,6 +616,7 @@ function query_entity_update($entity, $type)
       'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
       'status_client' => $query_wr->field_query_status_client->label(),
       'status_manager' => $query_wr->field_query_status_manager->label(),
+      'reason' => $query_wr->field_query_reason->name->value(),
       'client_approve' => $query_wr->field_query_client_approve->value(),
       'type' => $query_wr->field_query_type->value(),
       'comment' => $query_wr->field_comment->value(),
@@ -667,7 +657,8 @@ function query_get_managers_to_notify()
 /**
  * Implements hook_views_api().
  */
-function query_views_api() {
+function query_views_api()
+{
   return array(
     'api' => 3,
     'path' => drupal_get_path('module', 'query') . '/views',
