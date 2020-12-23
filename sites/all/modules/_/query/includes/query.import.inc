@@ -1,28 +1,130 @@
 <?php
 
-
-function query_buzy_import()
+function query_import_form($form, &$form_state)
 {
-  query_produce_buzy_import();
-  drupal_goto('<front>');
+
+  $form['davalec'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'Справочник давальцев',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
+  $form['produce_units'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'Справочник установок',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
+  $form['nomenklatura'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'Справочник номенклатуры',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
+  $form['buzy'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'Занятость установок',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
+  $form['plan'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'План',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#name'  => 'import',
+    '#value' => 'Импорт',
+  );
+  $form['actions']['delete'] = array(
+    '#type'  => 'submit',
+    '#name'  => 'delete',
+    '#value' => t('Удалить все заявки'),
+  );
+
+
+  $form['#validate'][] = 'query_import_validate';
+  $form['#submit'][] = 'query_import_submit';
+
+  return $form;
 }
 
-function query_plan_import()
-{
-  query_produce_plan_import();
 
-  drupal_goto('<front>');
+/**
+ * Form validate callback.
+ */
+function query_import_validate($form, &$form_state)
+{
 }
 
-function query_other_import()
+/**
+ * Form submit callback.
+ */
+function query_import_submit($form, &$form_state)
 {
-  query_davalec_import();
-  query_produce_units_import();
-  query_nomenklatura_import();
-  query_nomenklatura_produce_units_import();
+  if ($form_state['triggering_element']['#name'] == 'import') {
+    if (!empty($form_state['values']['davalec'])) {
+      $file = file_load($form_state['values']['davalec']);
+      $array = file($file->uri);
+      query_davalec_import($array);
+    }
+    if (!empty($form_state['values']['produce_units'])) {
+      $file = file_load($form_state['values']['produce_units']);
+      $array = file($file->uri);
+      query_produce_units_import($array);
+    }
+    if (!empty($form_state['values']['nomenklatura'])) {
+      $file = file_load($form_state['values']['nomenklatura']);
+      $array = file($file->uri);
+      query_nomenklatura_import($array);
+    }
 
-  drupal_goto('<front>');
+    if (!empty($form_state['values']['buzy'])) {
+      $file = file_load($form_state['values']['buzy']);
+      $array = file($file->uri);
+      query_produce_buzy_import($array);
+    }
+
+    if (!empty($form_state['values']['plan'])) {
+      $file = file_load($form_state['values']['plan']);
+      $array = file($file->uri);
+      query_produce_plan_import($array);
+    }
+  }
+  if ($form_state['triggering_element']['#name'] == 'delete') {
+    query_plan_delete();
+  }
 }
+
+
 
 function query_plan_delete()
 {
@@ -42,12 +144,12 @@ function query_plan_delete()
     entity_delete_multiple('load', array_keys($result['load']));
   }
 
-  drupal_goto('<front>');
+  drupal_set_message('Заявки удалены.');
 }
 
-function query_produce_buzy_import()
+function query_produce_buzy_import($buzy_array)
 {
-  if ($buzy_array = file("c:\ЗанятостьУстановок.csv")) {
+  if (is_array($buzy_array)) {
     foreach($buzy_array as $key => $buzy) {
       if (!$key) continue;
 
@@ -59,7 +161,20 @@ function query_produce_buzy_import()
           $date = strtotime($date_str);
           $day_start = gmmktime(0, 0, 0, date('n', $date), date('j', $date), date('Y', $date));
 
-          $load = entity_create('load', ['type' => 'load']);
+          $efquery = new EntityFieldQuery();
+          $result = $efquery
+            ->entityCondition('entity_type', 'load')
+            ->fieldCondition('field_produce_date', 'value', $day_start)
+            ->fieldCondition('field_produce_unit', 'tid', $produce_unit->tid)
+            ->execute();
+
+          if (!$result) {
+            $load = entity_create('load', ['type' => 'load']);
+            entity_save('query', $load);
+          } else {
+            $load = current($result['load']);
+          }
+
           $load_wr = entity_metadata_wrapper('load', $load);
           $load_wr->field_produce_unit = $produce_unit->tid;
           $load_wr->field_produce_date = $day_start;
@@ -68,15 +183,15 @@ function query_produce_buzy_import()
         }
       }
     }
-    drupal_set_message('Занятость установок импортирована');
+    drupal_set_message('Занятость установок импортирована.');
   } else {
-    drupal_set_message('Файл ЗанятостьУстановок.csv не найден.', 'warning');
+    drupal_set_message('Импорт занятости установок не выполнен.', 'warning');
   }
 }
 
-function query_produce_plan_import()
+function query_produce_plan_import($plan_array_1c)
 {
-  if ($plan_array_1c = file("c:\ПланПроизводства.csv")) {
+  if (is_array($plan_array_1c)) {
 
     // подготовить массив с Планом для внесения в базу
     // определить Заявки и посчитать общее производимое количество
@@ -118,7 +233,13 @@ function query_produce_plan_import()
               ];
             }
           } else {
-            // todo ошибку об отсутствии Номенклатуры или Установки в лог
+            if (empty($nom)) {
+              drupal_set_message('Не найдена номенклатура с 1с ID: ' . $articul, 'error');
+            }
+            if (empty($produce_unit)) {
+              drupal_set_message('Не найдена установка с 1с ID: ' . $produce_unit_1cID, 'error');
+            }
+            return false;
           }
         }
       }
@@ -175,15 +296,15 @@ function query_produce_plan_import()
       }
     }
 
-    drupal_set_message('План производства импортирован');
+    drupal_set_message('План производства импортирован.');
   } else {
-    drupal_set_message('Файл ПланПроизводства.csv не найден.', 'warning');
+    drupal_set_message('Импорт плана не выполнен.', 'warning');
   }
 }
 
-function query_davalec_import()
+function query_davalec_import($davalec_array)
 {
-  if ($davalec_array = file("c:\Давальцы.csv")) {
+  if (is_array($davalec_array)) {
     foreach ($davalec_array as $key => $davalec) {
       if (!$key) continue;
 
@@ -215,15 +336,15 @@ function query_davalec_import()
         }
       }
     }
-    drupal_set_message('Давальцы импортированы');
+    drupal_set_message('Давальцы импортированы.');
   } else {
-    drupal_set_message('Файл Давальцы.csv не найден.', 'warning');
+    drupal_set_message('Импорт давальцев не выполнен.', 'warning');
   }
 }
 
-function query_produce_units_import()
+function query_produce_units_import($pu_array)
 {
-  if ($pu_array = file("c:\Установки.csv")) {
+  if (is_array($pu_array)) {
     foreach($pu_array as $key => $punit) {
       if (!$key) continue;
 
@@ -249,15 +370,15 @@ function query_produce_units_import()
         }
       }
     }
-    drupal_set_message('Установки импортированы');
+    drupal_set_message('Установки импортированы.');
   } else {
-    drupal_set_message('Файл Установки.csv не найден.', 'warning');
+    drupal_set_message('Импорт установок не выполнен.', 'warning');
   }
 }
 
-function query_nomenklatura_import()
+function query_nomenklatura_import($nom_array)
 {
-  if ($nom_array = file("c:\Номенклатура.csv")) {
+  if (is_array($nom_array)) {
     $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
 
     foreach($nom_array as $key => $nom) {
@@ -304,62 +425,14 @@ function query_nomenklatura_import()
             }
 
           } else {
-            // todo ошибку в лог
+            drupal_set_message('Не найден давалец с ID: ' . $davalec_id, 'error');
+            return false;
           }
         }
       }
     }
-    drupal_set_message('Номенклатура импортирована');
+    drupal_set_message('Номенклатура импортирована.');
   } else {
-    drupal_set_message('Файл Номенклатура.csv не найден.', 'warning');
+    drupal_set_message('Импорт номенклатуры не выполнен.', 'warning');
   }
 }
-
-function query_nomenklatura_produce_units_import()
-{
-  if ($nom_units_array = file("c:\Производительность.csv")) {
-
-    foreach($nom_units_array as $key => $nom_unit) {
-      if (!$key) continue;
-
-      if ($nom_unit = iconv('Windows-1251', 'UTF-8', trim($nom_unit))) {
-        list($artikul, $punit_id, $output) = explode('|', $nom_unit);
-
-        if ($artikul && $punit_id && $output) {
-          $nom = query_get_nomenklatura_by_artikul($artikul);
-          $produce_unit = query_get_produce_unit_by_1cID($punit_id);
-
-          if ($nom && $produce_unit) {
-            $nom_wr = entity_metadata_wrapper('taxonomy_term', $nom);
-            $produce_unit_wr = entity_metadata_wrapper('taxonomy_term', $produce_unit);
-            $unit_exists = false;
-            foreach ($nom_wr->field_produce_units->getIterator() as $performance_wr) {
-              // если уже есть запись об установке - обновить производительность
-              if ($performance_wr->field_produce_unit->getIdentifier() == $produce_unit_wr->getIdentifier()) {
-                $performance_wr->field_produce_unit_output = $output;
-                $performance_wr->save();
-                $unit_exists = true;
-              }
-            }
-            // запись о производительности Установки в Номенклатуре не найдена - добавить
-            if (!$unit_exists) {
-              $performance = entity_create('performance', [
-                'type' => 'performance',
-              ]);
-              $performance->field_produce_unit = array(LANGUAGE_NONE => array(0 => array('tid' => $produce_unit_wr->getIdentifier())));
-              $performance->field_produce_unit_output = array(LANGUAGE_NONE => array(0 => array('value' => $output)));
-              entity_save('performance', $performance);
-
-              $nom_wr->field_produce_units[] = $performance->id;
-              $nom_wr->save();
-            }
-          }
-        }
-      }
-    }
-    drupal_set_message('Производительность импортирована');
-  } else {
-    drupal_set_message('Файл Производительность.csv не найден.', 'warning');
-  }
-}
-

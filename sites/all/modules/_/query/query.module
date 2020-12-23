@@ -51,6 +51,14 @@ function query_menu()
     'type' => MENU_CALLBACK,
   );
 
+  $items['admin/config/query/import'] = array(
+    'title' => 'Импорт',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('query_import_form'),
+    'access arguments' => array('access manager settings'),
+    'file' => 'includes/query.import.inc',
+  );
+
   return $items;
 }
 
@@ -605,7 +613,7 @@ function query_form_redirect_submit(&$form, &$form_state)
  */
 function query_entity_insert($entity, $type)
 {
-  if ($type == 'query' && $entity->bundle() == 'query') {
+  if ($type == 'query' && $entity->bundle() == 'query' && strpos($_GET["q"], 'import') === false) {
     // отправка уведомлений при создании новой Заявки
     $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
     $query_wr = entity_metadata_wrapper('query', $entity);
@@ -652,7 +660,7 @@ function query_entity_insert($entity, $type)
  */
 function query_entity_update($entity, $type)
 {
-  if ($type == 'query' && $entity->bundle() == 'query') {
+  if ($type == 'query' && $entity->bundle() == 'query' && strpos($_GET["q"], 'import') === false) {
     // отправка уведомлений при наличии изменений в Заявке
     $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
     $query_wr = entity_metadata_wrapper('query', $entity);
@@ -1411,6 +1419,7 @@ function query_check_query_produce_finished($query)
 
 function query_date_select_process_alter(&$element, $form_state, $context)
 {
+  // заменить короткие месяца на полные
   if (!empty($element["month"]["#options"])) {
     foreach ($element["month"]["#options"] as $key => &$option) {
       $year = $element["year"]["#default_value"];
