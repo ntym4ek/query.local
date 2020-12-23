@@ -56,6 +56,9 @@ form {
     margin-bottom: $grid-gutter-width/2;
     a.btn { margin: 0  5px $grid-gutter-width/2 0; }
   }
+  .form-item-field-month-value-value-month,
+  .form-item-field-produce-date-value-value-month,
+  .form-item-month-value-month { margin-right: 5px; }
   .view-item {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
@@ -96,8 +99,8 @@ form {
       &.approved:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
-      &.locked { opacity: 0.5; }
-      &.locked:after,
+      &.changed { opacity: 0.5; }
+      &.changed:after,
       &.produced:after,
       &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
@@ -110,19 +113,19 @@ form {
         text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
         box-shadow: 0 0 2px #c00;
       }
-      &.locked.cancel-item:after,
+      &.changed.cancel-item:after,
       &.produced.cancel-item:after,
       &.cancelled.cancel-item:after {
         top: 8px;
       }
-      &.locked:after {
-        content: "ИЗМЕНЕНА";
+      &.changed:after {
+        content: "ИЗМЕНЕНО";
       }
       &.produced:after {
-        content: "ЗАБЛОКИРОВАНА";
+        content: "ВЫПОЛНЕНО";
       }
       &.cancelled:after {
-        content: "ОТМЕНЕНА";
+        content: "ОТМЕНЕНО";
       }
     }
   }
@@ -210,7 +213,7 @@ form {
       border-color: $brand-warning;
     }
 
-    .c-box.unavailable,
+    //.c-box.unavailable,
     input[type="checkbox"].unavailable:not(.loaded) + span {
       background: #dedede;
       border-color: #888888;

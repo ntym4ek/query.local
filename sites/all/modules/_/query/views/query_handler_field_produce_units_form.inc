@@ -26,28 +26,29 @@ class query_handler_field_produce_units_form extends views_handler_field
     $nom_client_id = $query_wr->field_nomenklatura->field_user->uid->value();
 
     // значения Загрузки по умолчанию
-    $produce_units = [];
-    $current_load = [];
-    $current_load_days = 0;
-    foreach ($query_wr->field_load->getIterator() as $load_wr) {
-      if ($load_wr->value()) {
-        $pu_tid = $load_wr->field_produce_unit->tid->value();
-        $current_load[$pu_tid][$load_wr->field_produce_date->value()] = $load_wr->field_produce_output->value();
-        $current_load_days++;
-
-        // добавить установки из Загрузки (пока нет связи Номенклатура-Установка)
-        if (empty($produce_units[$pu_tid])) {
-          $produce_units[$pu_tid] = [
-            'tid' => $pu_tid,
-            'name' => $load_wr->field_produce_unit->name->value(),
-            'performance' => query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid),
-          ];
-        }
-      }
-    }
+//    $produce_units = [];
+//    $current_load = [];
+//    $current_load_days = 0;
+//    foreach ($query_wr->field_load->getIterator() as $load_wr) {
+//      if ($load_wr->value()) {
+//        $pu_tid = $load_wr->field_produce_unit->tid->value();
+//        $current_load[$pu_tid][$load_wr->field_produce_date->value()] = $load_wr->field_produce_output->value();
+//        $current_load_days++;
+//
+//        // добавить установки из Загрузки (пока нет связи Номенклатура-Установка)
+//        if (empty($produce_units[$pu_tid])) {
+//          $produce_units[$pu_tid] = [
+//            'tid' => $pu_tid,
+//            'name' => $load_wr->field_produce_unit->name->value(),
+//            'performance' => query_get_product_unit_performance_by_nomenklatura($pu_tid, $nom_tid),
+//          ];
+//        }
+//      }
+//    }
+    $produce_units = query_get_produce_units_from_query($query_wr->value());
 
     foreach ($produce_units as $pu_tid => $produce_unit) {
-      $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value());
+      $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
 
       $output .=
         '<div class="produce-unit">' .
@@ -62,25 +63,32 @@ class query_handler_field_produce_units_form extends views_handler_field
         $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
         // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-        $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
+        $is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
         $produce_unit_has_current_load = !empty($current_load[$pu_tid][$day_start]);
         // загрузка установки этим же клиентом
-        $produce_unit_is_busy_same_company = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['client_id'] == $nom_client_id;
+        $is_busy_same_company = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['client_id'] == $nom_client_id;
+
+        $is_busy = !empty($produce_unit_load[$day_start]['is_busy']);
+        $is_current_load = (int)!empty($produce_unit_load[$day_start]['is_current_load']);
+        $is_unavailable = (int)!empty($produce_unit_load[$day_start]['is_unavailable']);
+        $is_busy_same_company = (int)!empty($produce_unit_load[$day_start]['is_busy_same_company']);
 
 
         // вывести подсказку при наведении с выходом продукции в этот день
-        $classes = [];
-        if ($produce_unit_has_current_load) {
-          $classes[] = 'selected';
-        } else {
-          if ($produce_unit_is_busy_same_company) {
-            $classes[] = 'company-loaded';
-          } else {
-            if ($produce_unit_is_busy) $classes[] = 'loaded';
-          }
-        }
+//        $classes = [];
+//        if ($is_current_load) {
+//          $classes[] = 'selected';
+//        } else {
+//          if ($is_busy_same_company) {
+//            $classes[] = 'company-loaded';
+//          } else {
+//            if ($is_busy) $classes[] = 'loaded';
+//          }
+//        }
+        $classes = empty($produce_unit_load[$day_start]['classes']) ? [] : $produce_unit_load[$day_start]['classes'];
 
-        $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
+        $tooltip = empty($produce_unit_load[$day_start]['output']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $produce_unit_load[$day_start]['output'] . '"';
+//        $tooltip = empty($current_load[$pu_tid][$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $current_load[$pu_tid][$day_start] . '"';
 
         $output .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
       }

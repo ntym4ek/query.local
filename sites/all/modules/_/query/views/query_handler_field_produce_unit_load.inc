@@ -27,7 +27,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
     $load = query_get_produce_unit_load($produce_unit_tid, $month_start);
     $volume = 0;
     foreach($load as $load_item) {
-      $volume += $load_item['amount'];
+      $volume += $load_item['output'];
     }
 
     $output =
@@ -43,9 +43,9 @@ class query_handler_field_produce_unit_load extends views_handler_field
       $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
       $class = '';
       if (!empty($load[$day_start])) {
-        $class = $load[$day_start]['amount'] ? ' loaded' : ' service';
+        $class = $load[$day_start]['output'] ? ' loaded' : ' service';
       };
-      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['amount'] ? '<br />' . $load[$day_start]['amount'] : '') . '"';
+      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
       $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
     }
     $output .=

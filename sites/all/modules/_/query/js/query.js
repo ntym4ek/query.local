@@ -69,8 +69,10 @@
       function checkCheck(el) {
         if (isMouseDown) {
           var input_value = el.is(':checked');
-          el.prop("checked", !input_value);
-          console.log(!input_value);
+          var is_disabled = el.is(':disabled');
+          if (!is_disabled) {
+            el.prop("checked", !input_value);
+          }
         }
       }
 
