@@ -160,8 +160,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
     // если задан исходный Запрос
     // задать дефолтные значения
-    if (!empty($form_state['data']['source_query']['volume'])) {
-      $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['source_query']['volume'];
+    if (!empty($form_state['data']['last_query']['volume'])) {
+      $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['last_query']['volume'];
     }
     if (!empty($form_state['data']['month_start'])) {
       $form["field_month"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
@@ -287,14 +287,15 @@ function query_form_alter(&$form, &$form_state, $form_id)
     $month_start = empty($form_state['data']['month_start']) ? 0 : $form_state['data']['month_start'];
 
     // текущую Загрузку извлекаем:
-    // - для новой Заявки из предыдущей Заявки с заданной Загрузкой
-    // - для редактируемой - из неё же
+    // - для новой Заявки из предыдущей Заявки с заданной Загрузкой (если есть)
+    // - для редактируемой - из неё самой
+    $load_query_id = null;
     if (!empty($form_state['data']['query']['id'])) {
       $load_query_id = $form_state['data']['query']['id'];
     } elseif(!empty($form_state['data']['source_query']['id'])) {
       $load_query_id = $form_state['data']['source_query']['id'];
     }
-    if (!empty($load_query_id)) {
+    if ($load_query_id) {
       $load_query_wr = entity_metadata_wrapper('query', $load_query_id);
       if ($load_query_id && $load_query_wr->value()) {
         $nom_tid = null;
@@ -304,13 +305,10 @@ function query_form_alter(&$form, &$form_state, $form_id)
           $nom_tid = empty($form["field_nomenklatura"]["und"]["#default_value"][0]) ? array_key_first($form["field_nomenklatura"]["und"]["#options"]) : $form["field_nomenklatura"]["und"]["#default_value"][0];
         }
 
-        // добавить в форму выбор дат ------------------------------------------------------------------------------------
         if ($form["field_query_type"]["und"]["#default_value"][0] != 'cancel') {
           if ($nom_tid) {
             // получить Установки, уже выбранные в данной форме
             $produce_units = empty($form_state['data']['produce_units']) ? [] : $form_state['data']['produce_units'];
-
-
 
             // получить Установки и их Загрузку из Запроса
             $load_produce_units = query_get_produce_units_from_query($load_query_wr->value());
@@ -319,150 +317,154 @@ function query_form_alter(&$form, &$form_state, $form_id)
             }
 
             $form_state['data']['produce_units'] = $produce_units;
+          }
+        }
+      }
+    }
 
-            $form['produce_units'] = [
-              '#type' => 'container',
-              '#attributes' => [
-                'id' => ['produce-units-wrapper'],
-                'class' => ['produce-units-wrapper'],
-              ],
-              '#weight' => 4,
-            ];
-            if ($produce_units) {
-              foreach ($produce_units as $pu_tid => $produce_unit) {
-                $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, null, $load_query_wr->value());
 
-                $form['produce_units']['pu_' . $pu_tid] = [
-                  '#type' => 'container',
-                  '#attributes' => ['class' => ['produce-unit']],
-                  '#weight' => 3,
-                ];
-                $form['produce_units']['pu_' . $pu_tid]['name'] = [
-                  '#type' => 'item',
-                  '#title' => 'Установка',
-                  '#markup' => '<h3>' . $produce_unit['name'] . '</h3>',
-                  '#wrapper_attributes' => ['class' => ['produce-unit-name']],
-                ];
+    // добавить в форму выбор дат ------------------------------------------------------------------------------------
+    $produce_units = empty($form_state['data']['produce_units']) ? [] : $form_state['data']['produce_units'];
 
-                $form['produce_units']['pu_' . $pu_tid]['selection'] = [
-                  '#type' => 'container',
-                  '#attributes' => ['class' => ['produce-unit-dates', 'form-item']],
-                ];
-                $form['produce_units']['pu_' . $pu_tid]['selection']['title'] = [
-                  '#markup' => '<label class="control-label">Даты</label>',
-                ];
+    $form['produce_units'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => ['produce-units-wrapper'],
+        'class' => ['produce-units-wrapper'],
+      ],
+      '#weight' => 4,
+    ];
+    if ($produce_units) {
+      foreach ($produce_units as $pu_tid => $produce_unit) {
+        $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, null, $load_query_id);
 
-                $form['produce_units']['pu_' . $pu_tid]['selection']['dates'] = [
-                  '#type' => 'container',
-                  '#attributes' => ['class' => ['form-checkboxes']],
-                  '#suffix' => '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="unavailable"></span>- установка недоступна <span class="loaded"></span>- установка занята <span class="selected"></span>- выбранные даты</div>',
-                ];
+        $form['produce_units']['pu_' . $pu_tid] = [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['produce-unit']],
+          '#weight' => 3,
+        ];
+        $form['produce_units']['pu_' . $pu_tid]['name'] = [
+          '#type' => 'item',
+          '#title' => 'Установка',
+          '#markup' => '<h3>' . $produce_unit['name'] . '</h3>',
+          '#wrapper_attributes' => ['class' => ['produce-unit-name']],
+        ];
 
-                // цикл по количеству дней в месяце
-                for ($i = 1; $i <= date("t", $month_start); $i++) {
+        $form['produce_units']['pu_' . $pu_tid]['selection'] = [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['produce-unit-dates', 'form-item']],
+        ];
+        $form['produce_units']['pu_' . $pu_tid]['selection']['title'] = [
+          '#markup' => '<label class="control-label">Даты</label>',
+        ];
 
-                  $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-                  $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
+        $form['produce_units']['pu_' . $pu_tid]['selection']['dates'] = [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['form-checkboxes']],
+          '#suffix' => '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="unavailable"></span>- установка недоступна <span class="loaded"></span>- установка занята <span class="selected"></span>- выбранные даты</div>',
+        ];
 
-                  // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
+        // цикл по количеству дней в месяце
+        for ($i = 1; $i <= date("t", $month_start); $i++) {
+
+          $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+          $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
+
+          // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
 //                  $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
 //                  $produce_unit_has_current_load = (int)!empty($current_load[$pu_tid][$day_start]);
-                  $produce_unit_is_busy = !empty($produce_unit_load[$day_start]['is_busy']);
-                  $produce_unit_has_current_load = (int)!empty($produce_unit_load[$day_start]['is_current_load']);
-                  $produce_unit_is_unavailable = (int)!empty($produce_unit_load[$day_start]['is_unavailable']);
-                  $classes = empty($produce_unit_load[$day_start]['classes']) ? [] : $produce_unit_load[$day_start]['classes'];
-                  // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
+          $produce_unit_is_busy = !empty($produce_unit_load[$day_start]['is_busy']);
+          $produce_unit_has_current_load = (int)!empty($produce_unit_load[$day_start]['is_current_load']);
+          $produce_unit_is_unavailable = (int)!empty($produce_unit_load[$day_start]['is_unavailable']);
+          $classes = empty($produce_unit_load[$day_start]['classes']) ? [] : $produce_unit_load[$day_start]['classes'];
+          // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
 //                  $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
 //                    && !user_has_role(ROLE_MANAGER)
 //                    && ($day_start < $today_start + 3 * 24 * 60 * 60)
 //                    && in_array($load_query_wr->field_query_type->value(), ['main', 'correction']); // данные могут быть получены из начальной и корректирующей
 
-                  // вывести подсказку при наведении с выходом продукции в этот день
+          // вывести подсказку при наведении с выходом продукции в этот день
 //                  $classes = [];
 //                  if ($produce_unit_is_busy && !$produce_unit_has_current_load) $classes[] = 'loaded';
 //                  if ($produce_unit_has_current_load) $classes[] = 'selected';
 //                  if ($produce_unit_is_unavailable && !$produce_unit_has_current_load) $classes[] = 'unavailable';
-                  $tooltip = empty($produce_unit_load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $produce_unit_load[$day_start]['output'] . '"';
+          $tooltip = empty($produce_unit_load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $produce_unit_load[$day_start]['output'] . '"';
 
-                  // при создании заявки даты можно выбирать, при редактировании нет
-                  if (!empty($form_state['query']->is_new)) {
-                    $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
-                      '#type' => 'checkbox',
-                      '#title' => '<span>' . $i . '</span>',
-                      '#disabled' => ($produce_unit_is_busy && !$produce_unit_has_current_load) || ($produce_unit_is_unavailable && !user_has_role(ROLE_MANAGER)),
-                      '#default_value' => $produce_unit_has_current_load,
-                      '#attributes' => ['class' => $classes],
-                    ];
-                    if ($tooltip) {
-                      $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#wrapper_attributes'] = [
-                        'data-toggle' => 'tooltip',
-                        'data-placement' => 'top',
-                        'title' => empty($produce_unit_load[$day_start]['is_current_load']) ? '' : $produce_unit_load[$day_start]['output'],
-                      ];
-                    }
-                  } else {
-                    $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#markup'] = '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
-                  }
-                }
-
-                // производительность
-                $form['produce_units']['pu_' . $pu_tid]['performance_' . $pu_tid] = [
-                  '#type' => 'textfield',
-                  '#title' => 'Производительность',
-                  '#required' => true,
-                  '#access' => user_has_role(ROLE_MANAGER),
-                  '#default_value' => empty($produce_unit['performance']) ? 0 : $produce_unit['performance'],
-                  '#wrapper_attributes' => ['class' => ['produce-unit-performance']],
-                ];
-
-              }
-            } else {
-              // Установки не найдены
-              $form['produce_units']['message'] = [
-                '#markup' => '<div class="alert alert-warning" role="alert">Установки не заданы</div>',
-                '#weight' => 3,
+          // при создании заявки даты можно выбирать, при редактировании нет
+          if (!empty($form_state['query']->is_new)) {
+            $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i] = [
+              '#type' => 'checkbox',
+              '#title' => '<span>' . $i . '</span>',
+              '#disabled' => ($produce_unit_is_busy && !$produce_unit_has_current_load) || ($produce_unit_is_unavailable && !user_has_role(ROLE_MANAGER)),
+              '#default_value' => $produce_unit_has_current_load,
+              '#attributes' => ['class' => $classes],
+            ];
+            if ($tooltip) {
+              $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#wrapper_attributes'] = [
+                'data-toggle' => 'tooltip',
+                'data-placement' => 'top',
+                'title' => empty($produce_unit_load[$day_start]['is_current_load']) ? '' : $produce_unit_load[$day_start]['output'],
               ];
             }
+          } else {
+            $form['produce_units']['pu_' . $pu_tid]['selection']['dates']['check_' . $pu_tid . '_' . $i]['#markup'] = '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
           }
-          $form["#submit"][] = 'query_form_eck__entity__form_query_query_submit';
         }
 
-        // для менеджеров вывести добавление установки
-        if (user_has_role(ROLE_MANAGER)) {
-          $pu_options = [];
-          foreach ($produce_units_list as $punit) {
-            if (empty($form_state['data']['produce_units'][$punit->tid]))
-              $pu_options[$punit->tid] = $punit->name;
-          }
-          // элементы формы
-          $form['produce_units']["pu_add"] = [
-            '#type' => 'container',
-            '#attributes' => ['class' => ['produce-unit-add-wrapper']],
-            '#weight' => 4,
-          ];
-          $form['produce_units']["pu_add"]['pu_select'] = [
-            '#type' => 'select',
-            '#title' => 'Установка',
-            '#options' => $pu_options,
-          ];
-          $form['produce_units']["pu_add"]['pu_submit'] = [
-            '#type' => 'button',
-            '#value' => 'Добавить',
-            '#name' => 'pu_add',
-            '#limit_validation_errors' => [['pu_select']],
-            '#ajax' => array(
-              'callback' => 'query_form_produce_unit_add_ajax_callback',
-              'wrapper' => $form['#id'],
-            ),
-          ];
-        }
+        // производительность
+        $form['produce_units']['pu_' . $pu_tid]['performance_' . $pu_tid] = [
+          '#type' => 'textfield',
+          '#title' => 'Производительность',
+          '#required' => true,
+          '#access' => user_has_role(ROLE_MANAGER),
+          '#default_value' => empty($produce_unit['performance']) ? 0 : $produce_unit['performance'],
+          '#wrapper_attributes' => ['class' => ['produce-unit-performance']],
+        ];
+
       }
+    } else {
+      // Установки не найдены
+      $form['produce_units']['message'] = [
+        '#markup' => '<div class="alert alert-warning" role="alert">Установки не заданы</div>',
+        '#weight' => 3,
+      ];
     }
+
+    // для менеджеров вывести добавление установки
+    if (user_has_role(ROLE_MANAGER)) {
+      $pu_options = [];
+      foreach ($produce_units_list as $punit) {
+        if (empty($form_state['data']['produce_units'][$punit->tid]))
+          $pu_options[$punit->tid] = $punit->name;
+      }
+      // элементы формы
+      $form['produce_units']["pu_add"] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['produce-unit-add-wrapper']],
+        '#weight' => 4,
+      ];
+      $form['produce_units']["pu_add"]['pu_select'] = [
+        '#type' => 'select',
+        '#title' => 'Установка',
+        '#options' => $pu_options,
+      ];
+      $form['produce_units']["pu_add"]['pu_submit'] = [
+        '#type' => 'button',
+        '#value' => 'Добавить',
+        '#name' => 'pu_add',
+        '#limit_validation_errors' => [['pu_select']],
+        '#ajax' => array(
+          'callback' => 'query_form_produce_unit_add_ajax_callback',
+          'wrapper' => $form['#id'],
+        ),
+      ];
+    }
+
 
     $form["field_comment"]["und"][0]["value"]["#required"] = !user_has_role(ROLE_MANAGER);
 
     $form["#validate"][] = 'query_form_eck__entity__form_query_query_validate';
-
+    $form["#submit"][] = 'query_form_eck__entity__form_query_query_submit';
     $form["actions"]["submit"]["#name"] = 'eck_submit';
   }
 
@@ -594,6 +596,10 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
     $last_query_wr = entity_metadata_wrapper('query', $form_state['data']['last_query']['id']);
     if ($last_query_wr->field_query_status_manager->value() == 'processing') {
       $last_query_wr->field_query_status_manager = 'deny';
+      $last_query_wr->save();
+    }
+    if ($last_query_wr->field_query_status_client->value() == 'processing') {
+      $last_query_wr->field_query_status_client = 'deny';
       $last_query_wr->save();
     }
   }
@@ -896,8 +902,8 @@ function query_preprocess_views_view_unformatted(&$vars)
         }
       }
 
-      if ($vars["view"]->result[$key]->field_field_query_type[0]["raw"]["value"] == 'cancel') {
-        $vars["classes_array"][$key] .= ' cancel-item';
+      if (empty($vars["view"]->result[$key]->field_data_field_load_field_load_target_id)) {
+        $vars["classes_array"][$key] .= ' no-load';
       }
     }
   }
@@ -1227,37 +1233,37 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
               ];
             }
           }
+        }
+      }
 
-          $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-          foreach ($load_array as $day_start => $load_array_item) {
-            // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-            $load_array[$day_start]['is_busy'] = !empty($load_array[$day_start]) && $load_array[$day_start]['nomenklatura']['tid'] != $current_nom_tid;
-            // дозаполним текущую Загрузку для которой значение false
-            $load_array[$day_start]['is_current_load'] = !empty($load_array[$day_start]['is_current_load']);
+      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+      foreach ($load_array as $day_start => $load_array_item) {
+        // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
+        $load_array[$day_start]['is_busy'] = !empty($load_array[$day_start]) && $load_array[$day_start]['nomenklatura']['tid'] != $current_nom_tid;
+        // дозаполним текущую Загрузку для которой значение false
+        $load_array[$day_start]['is_current_load'] = !empty($load_array[$day_start]['is_current_load']);
 
-            // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя DAYS_UNAVAILABLE дней
-            // данные могут быть получены из начальной и корректирующей Заявок
-            $load_array[$day_start]['is_unavailable'] =
-              !user_has_role(ROLE_MANAGER)
-              && ($day_start < $today_start + DAYS_UNAVAILABLE * 24 * 60 * 60)
-              && in_array($current_query_type, ['main', 'correction']);
+        // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя DAYS_UNAVAILABLE дней
+        // данные могут быть получены из начальной и корректирующей Заявок
+        $load_array[$day_start]['is_unavailable'] =
+          !user_has_role(ROLE_MANAGER)
+          && ($day_start < $today_start + DAYS_UNAVAILABLE * 24 * 60 * 60)
+          && in_array($current_query_type, ['main', 'correction']);
 
-            // загрузка установки этим же клиентом
-            $load_array[$day_start]['is_busy_same_company'] = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['client_id'] == $current_client_id;
+        // загрузка установки этим же клиентом
+        $load_array[$day_start]['is_busy_same_company'] = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['client_id'] == $current_client_id;
 
-            $classes = [];
-            if ($load_array[$day_start]['is_busy_same_company']) {
-              $classes[] = 'company-loaded';
-            } else {
-              if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
-            }
+        $classes = [];
+        if ($load_array[$day_start]['is_busy_same_company']) {
+          $classes[] = 'company-loaded';
+        } else {
+          if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
+        }
 
 //              if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
-            if ($load_array[$day_start]['is_current_load']) $classes[] = 'selected';
-            if ($load_array[$day_start]['is_unavailable'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'unavailable';
-            $load_array[$day_start]['classes'] = $classes;
-          }
-        }
+        if ($load_array[$day_start]['is_current_load']) $classes[] = 'selected';
+        if ($load_array[$day_start]['is_unavailable'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'unavailable';
+        $load_array[$day_start]['classes'] = $classes;
       }
     }
 
@@ -1425,7 +1431,7 @@ function query_date_select_process_alter(&$element, $form_state, $context)
       $year = $element["year"]["#default_value"];
       if (!empty($form_state["values"]["field_produce_date_value"]["value"]["year"])) {
          $year = $form_state["values"]["field_produce_date_value"]["value"]["year"];
-      } elseif (!empty($form_state["values"]["field_month_value"])) {
+      } elseif (!empty($form_state["values"]["field_month_value"]['year'])) {
         $year = $form_state["values"]["field_month_value"]["value"]["year"];
       }
       if (is_numeric($key)) $option = t(date('F', gmmktime(0, 0, 0, $key, 1, $year)));

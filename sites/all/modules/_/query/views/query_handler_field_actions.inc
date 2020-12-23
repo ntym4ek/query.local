@@ -65,7 +65,8 @@ class query_handler_field_actions extends views_handler_field
 //          || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
 //          || user_has_role(ROLE_MANAGER)) {
 
-      if (($values->field_field_query_type[0]["raw"]["value"] != 'main' || $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')) {
+      if (($values->field_field_query_type[0]["raw"]["value"] != 'main' || $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
+        || user_has_role(ROLE_MANAGER)) {
         $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
       }
     }
