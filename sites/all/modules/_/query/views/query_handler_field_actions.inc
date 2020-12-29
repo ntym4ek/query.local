@@ -40,23 +40,26 @@ class query_handler_field_actions extends views_handler_field
           if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing' && $values->field_field_query_type[0]["raw"]["value"] != 'main') {
             $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">согласовать</a>';
           }
-          if (($values->field_field_query_type[0]["raw"]["value"] == 'correction'
-            || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved'))
-            && !query_check_query_produce_started($query_id)) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
+//          if (($values->field_field_query_type[0]["raw"]["value"] == 'correction'
+//            || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved'))
+//            && !query_check_query_produce_started($query_id)) {
+//            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
+//          }
+          if (($values->field_field_query_status_client[0]["raw"]["value"] == 'approved' && $values->field_field_query_status_manager[0]["raw"]["value"] == 'approved')) {
+            $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
           }
+
           // для менеджера
         } else {
-          if ($values->field_field_query_status_manager[0]["raw"]["value"] != 'approved') {
-            $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">утвердить</a>';
-            // todo заполнить комментарий, если нужно редактирование менеджеру
-//            $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';
-          }
-          if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
-            || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
-            && !query_check_query_produce_finished($query_id)) {
-            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
-          }
+//          if ($values->field_field_query_status_manager[0]["raw"]["value"] != 'approved') {
+//            $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">утвердить</a>';
+////            $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';
+//          }
+//          if ($values->field_field_query_type[0]["raw"]["value"] == 'correction'
+//            || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
+//            && !query_check_query_produce_finished($query_id)) {
+//            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
+//          }
         }
 
         // для обоих
@@ -65,10 +68,6 @@ class query_handler_field_actions extends views_handler_field
 //          || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
 //          || user_has_role(ROLE_MANAGER)) {
 
-      if (($values->field_field_query_type[0]["raw"]["value"] != 'main' || $values->field_field_query_status_client[0]["raw"]["value"] == 'approved')
-        || user_has_role(ROLE_MANAGER)) {
-        $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
-      }
     }
 
     return $output;

@@ -25,6 +25,17 @@ function query_import_form($form, &$form_state)
     '#element_validate' => array('file_managed_file_validate'),
   );
 
+  $form['reasons'] = array(
+    '#type' => 'managed_file',
+    '#title' => 'Справочник причин',
+    '#description' => 'Выберите файл с расширением csv',
+    '#upload_location' => "public://import/",
+    '#upload_validators' => array(
+      'file_validate_extensions' => array('csv'),
+    ),
+    '#element_validate' => array('file_managed_file_validate'),
+  );
+
   $form['nomenklatura'] = array(
     '#type' => 'managed_file',
     '#title' => 'Справочник номенклатуры',
@@ -69,6 +80,11 @@ function query_import_form($form, &$form_state)
     '#name'  => 'delete',
     '#value' => t('Удалить все заявки'),
   );
+  $form['actions']['query'] = array(
+    '#type'  => 'submit',
+    '#name'  => 'query',
+    '#value' => t('Импортировать заявку'),
+  );
 
 
   $form['#validate'][] = 'query_import_validate';
@@ -101,6 +117,11 @@ function query_import_submit($form, &$form_state)
       $array = file($file->uri);
       query_produce_units_import($array);
     }
+    if (!empty($form_state['values']['reasons'])) {
+      $file = file_load($form_state['values']['reasons']);
+      $array = file($file->uri);
+      query_reasons_import($array);
+    }
     if (!empty($form_state['values']['nomenklatura'])) {
       $file = file_load($form_state['values']['nomenklatura']);
       $array = file($file->uri);
@@ -121,6 +142,9 @@ function query_import_submit($form, &$form_state)
   }
   if ($form_state['triggering_element']['#name'] == 'delete') {
     query_plan_delete();
+  }
+  if ($form_state['triggering_element']['#name'] == 'query') {
+    query_process_incoming_queries();
   }
 }
 
@@ -259,7 +283,7 @@ function query_produce_plan_import($plan_array_1c)
       if (!$result) {
         $query = entity_create('query', [
           'type' => 'query',
-          'uid' => $plan_item['uid'],
+          'uid' => 0,
         ]);
         entity_save('query', $query);
       } else {
@@ -376,6 +400,40 @@ function query_produce_units_import($pu_array)
   }
 }
 
+function query_reasons_import($r_array)
+{
+  if (is_array($r_array)) {
+    foreach($r_array as $key => $r_item) {
+      if (!$key) continue;
+
+      if ($r_item = iconv('Windows-1251', 'UTF-8', trim($r_item))) {
+        list($r_id, $r_name) = explode('|', $r_item);
+
+        if ($r_id && $r_name) {
+          $reason = query_get_reason_by_oc_id($r_id);
+
+          if (!$reason) {
+            $reason = (object)array(
+              'vid' => taxonomy_vocabulary_machine_name_load('reasons')->vid,
+              'name' => $r_name,
+            );
+            taxonomy_term_save($reason);
+          }
+
+          // обновить значения полей
+          $reason_wr = entity_metadata_wrapper('taxonomy_term', $reason);
+          $reason_wr->name = $r_name;
+          $reason_wr->field_reason_oc_id = $r_id;
+          $reason_wr->save();
+        }
+      }
+    }
+    drupal_set_message('Причины импортированы.');
+  } else {
+    drupal_set_message('Импорт справочника причин не выполнен.', 'warning');
+  }
+}
+
 function query_nomenklatura_import($nom_array)
 {
   if (is_array($nom_array)) {
@@ -436,3 +494,4 @@ function query_nomenklatura_import($nom_array)
     drupal_set_message('Импорт номенклатуры не выполнен.', 'warning');
   }
 }
+

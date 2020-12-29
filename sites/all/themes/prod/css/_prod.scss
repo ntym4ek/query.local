@@ -10,7 +10,7 @@
       label {
         font-weight: 400;
         vertical-align: top;
-        line-height: 2.3;
+        line-height: 2.5;
       }
       .date-padding {
         float: none;
@@ -71,6 +71,9 @@ form {
       flex: 100%;
       padding: $grid-gutter-width/2 0;
       border-top: 1px solid $gray-lightest;
+      .query-comment {
+        width: 100%;
+      }
     }
     .views-field-produce-unit-load { flex: 100%; }
     .views-field-field-query-type { flex-basis: 15%; }
@@ -101,6 +104,7 @@ form {
       &.processing { border-color: $brand-warning; }
       &.changed { opacity: 0.5; }
       &.changed:after,
+      &.waiting:after,
       &.produced:after,
       &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
@@ -120,6 +124,9 @@ form {
       }
       &.changed:after {
         content: "ИЗМЕНЕНО";
+      }
+      &.waiting:after {
+        content: "НА СОГЛАСОВАНИИ";
       }
       &.produced:after {
         content: "ВЫПОЛНЕНО";
@@ -286,6 +293,20 @@ form.query-form {
   }
   .field-name-field-nomenklatura {
     margin-right: $grid-gutter-width/2;
+  }
+  .field-name-old-qty {
+    margin-right: $grid-gutter-width/2;
+    .form-markup {
+      font-size: 1.2em;
+      margin: 5px 0 5px;
+      text-align: right;
+    }
+  }
+  .field-name-field-qty input { text-align: right; }
+  .field-name-field-query-period {
+    flex: 100%;
+    .form-item-field-query-period-und-0-value-time,
+    .form-item-field-query-period-und-0-value2-time { display: none; }
   }
   .produce-units-wrapper {
     flex: 100%;
