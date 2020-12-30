@@ -106,6 +106,7 @@ form {
       &.changed:after,
       &.waiting:after,
       &.produced:after,
+      &.deal:after,
       &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
@@ -120,10 +121,14 @@ form {
       &.changed.no-load:after,
       &.produced.no-load:after,
       &.cancelled.no-load:after {
-        top: 8px;
+        //top: 8px;
+      }
+      &.deal:after {
+        content: "СОГЛАСОВАНА";
       }
       &.changed:after {
-        content: "ИЗМЕНЕНО";
+        content: "АРХИВ";
+        left: 45%;
       }
       &.waiting:after {
         content: "НА СОГЛАСОВАНИИ";

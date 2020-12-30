@@ -37,9 +37,9 @@ class query_handler_field_actions extends views_handler_field
       // изменения за сутки до начала производства запретить
         // для клиента
         if (!user_has_role(ROLE_MANAGER)) {
-          if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing' && $values->field_field_query_type[0]["raw"]["value"] != 'main') {
-            $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">согласовать</a>';
-          }
+//          if ($values->field_field_query_status_client[0]["raw"]["value"] == 'processing' && $values->field_field_query_type[0]["raw"]["value"] != 'main') {
+//            $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">согласовать</a>';
+//          }
 //          if (($values->field_field_query_type[0]["raw"]["value"] == 'correction'
 //            || ($values->field_field_query_type[0]["raw"]["value"] == 'main' && $values->field_field_query_status_client[0]["raw"]["value"] == 'approved'))
 //            && !query_check_query_produce_started($query_id)) {

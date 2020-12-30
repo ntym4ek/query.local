@@ -2,7 +2,6 @@
 
 function query_import_form($form, &$form_state)
 {
-
   $form['davalec'] = array(
     '#type' => 'managed_file',
     '#title' => 'Справочник давальцев',
@@ -75,30 +74,15 @@ function query_import_form($form, &$form_state)
     '#name'  => 'import',
     '#value' => 'Импорт',
   );
-  $form['actions']['delete'] = array(
-    '#type'  => 'submit',
-    '#name'  => 'delete',
-    '#value' => t('Удалить все заявки'),
-  );
   $form['actions']['query'] = array(
     '#type'  => 'submit',
     '#name'  => 'query',
     '#value' => t('Импортировать заявку'),
   );
 
-
-  $form['#validate'][] = 'query_import_validate';
   $form['#submit'][] = 'query_import_submit';
 
   return $form;
-}
-
-
-/**
- * Form validate callback.
- */
-function query_import_validate($form, &$form_state)
-{
 }
 
 /**
@@ -148,27 +132,65 @@ function query_import_submit($form, &$form_state)
   }
 }
 
-
-
-function query_plan_delete()
+function query_delete_form($form, &$form_state)
 {
-  $efquery = new EntityFieldQuery();
-  $result = $efquery
-    ->entityCondition('entity_type', 'query')
-    ->execute();
-  if ($result) {
-    entity_delete_multiple('query', array_keys($result['query']));
-  }
+  $form['month'] = array(
+    '#type' => 'date_select',
+    '#title' => t('Sample from'),
+    '#date_format' => 'm.Y',
+    '#default_value' => array(
+      'month' => date('n'),
+      'year' => date('Y'),
+    ),
+  );
 
-  $efquery = new EntityFieldQuery();
-  $result = $efquery
-    ->entityCondition('entity_type', 'load')
-    ->execute();
-  if ($result) {
-    entity_delete_multiple('load', array_keys($result['load']));
-  }
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#name'  => 'delete',
+    '#value' => 'Удалить заявки за месяц',
+  );
 
-  drupal_set_message('Заявки удалены.');
+  $form['#submit'][] = 'query_delete_submit';
+
+  return $form;
+}
+
+/**
+ * Form submit callback.
+ */
+function query_delete_submit($form, &$form_state)
+{
+  $date_array = explode('-', $form_state["values"]["month"]);
+  $month_start = gmmktime(0, 0, 0, $date_array[1], 1, $date_array[0]);
+  query_plan_delete($month_start);
+}
+
+function query_plan_delete($month_start = null)
+{
+  if ($month_start) {
+    $efquery = new EntityFieldQuery();
+    $result = $efquery
+      ->entityCondition('entity_type', 'query')
+      ->fieldCondition('field_month', 'value', $month_start)
+      ->execute();
+    if ($result) {
+      entity_delete_multiple('query', array_keys($result['query']));
+    }
+
+    $next_month_start = gmmktime(0,0,0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
+    $efquery = new EntityFieldQuery();
+    $result = $efquery
+      ->entityCondition('entity_type', 'load')
+      ->fieldCondition('field_produce_date', 'value', $month_start, '>=')
+      ->fieldCondition('field_produce_date', 'value', $next_month_start, '<')
+      ->execute();
+    if ($result) {
+      entity_delete_multiple('load', array_keys($result['load']));
+    }
+
+    drupal_set_message('Заявки удалены.');
+  }
 }
 
 function query_produce_buzy_import($buzy_array)
@@ -286,29 +308,33 @@ function query_produce_plan_import($plan_array_1c)
           'uid' => 0,
         ]);
         entity_save('query', $query);
+
+
+        $query_wr = entity_metadata_wrapper('query', $query);
+        // утверждённые заявки не заменять
+        if ($query_wr->field_query_status_client->value() != 'approved' || $query_wr->field_query_status_manager->value() != 'approved') {
+          $query_wr->field_month = $plan_item['field_month'];
+          $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
+          $query_wr->field_qty = $plan_item['field_qty'];
+          $query_wr->field_query_type = 'main';
+          $query_wr->field_query_status_client = 'processing';
+          $query_wr->field_query_status_manager = 'approved';
+          $query_wr->save();
+
+          query_query_load_update($query->id, $plan_item['field_load']);
+
+          // если импортирована заявка, внести в список пользователей, кому отправить email
+          $uid = $query_wr->field_nomenklatura->field_user->uid->value();
+          $user_mails[$uid] = [
+            'month' => $plan_item['field_month'],
+            'account' => $query_wr->field_nomenklatura->field_user->value()
+          ];
+        }
       } else {
-        $query = current($result['query']);
-      }
+        //        $query = current($result['query']);
 
-      $query_wr = entity_metadata_wrapper('query', $query);
-      // утверждённые заявки не заменять
-      if ($query_wr->field_query_status_client->value() != 'approved' || $query_wr->field_query_status_manager->value() != 'approved') {
-        $query_wr->field_month = $plan_item['field_month'];
-        $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
-        $query_wr->field_qty = $plan_item['field_qty'];
-        $query_wr->field_query_type = 'main';
-        $query_wr->field_query_status_client = 'processing';
-        $query_wr->field_query_status_manager = 'approved';
-        $query_wr->save();
-
-        query_query_load_update($query->id, $plan_item['field_load']);
-
-        // если импортирована заявка, внести в список пользователей, кому отправить email
-        $uid = $query_wr->field_nomenklatura->field_user->uid->value();
-        $user_mails[$uid] = [
-          'month' => $plan_item['field_month'],
-          'account' => $query_wr->field_nomenklatura->field_user->value()
-        ];
+        drupal_set_message('План по номенклатуре ' . $articul . ' на заданный месяц уже загружен. Импорт остановлен.', 'warning');
+        return false;
       }
     }
 
