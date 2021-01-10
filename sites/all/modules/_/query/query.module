@@ -149,15 +149,13 @@ function query_form_alter(&$form, &$form_state, $form_id)
       }
     }
 
+    $form["field_query_type"]["und"]["#default_value"][0] = 'correction';
+    drupal_set_title('Заявка на производство');
 
     if (!empty($form_state['data']['query']['type'])) {
       if ($form_state['data']['query']['type'] == 'correction') {
         drupal_set_title('Корректирующая заявка');
         $form["field_query_type"]["und"]["#default_value"][0] = 'correction';
-      }
-      if ($form_state['data']['query']['type'] == 'cancel') {
-        drupal_set_title('Заявка на отмену производства');
-        $form["field_query_type"]["und"]["#default_value"][0] = 'cancel';
       }
 
       if (user_has_role(ROLE_MANAGER)) {
@@ -239,7 +237,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_query_status_manager"]["und"]["#title"] = 'Статус заявки';
       $form["actions"]["submit"]["#value"] = 'Сохранить и отправить';
 
-      if (in_array($form["field_query_type"]["und"]["#default_value"][0], ['correction', 'cancel'])) {
+      if (!empty($form_state['data']['last_query']['id'])) {
         $form["field_nomenklatura"]['#disabled'] = true;
         $form["field_month"]['#disabled'] = true;
       }
@@ -1075,7 +1073,7 @@ function query_preprocess_views_view_unformatted(&$vars)
       $status_manager = $vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"];
       $status_client = $vars["view"]->result[$key]->field_field_query_status_client[0]["raw"]["value"];
 
-      // есть ли Корректировки
+      // есть ли Корректировки после
       $efquery = new EntityFieldQuery();
       $result = $efquery
         ->entityCondition('entity_type', 'query')
@@ -1145,6 +1143,20 @@ function query_preprocess_views_view_unformatted(&$vars)
         $vars["classes_array"][$key] .= ' no-load';
       }
     }
+
+    // обернуть Заявки до Основной в Архив
+    $start_row_key = -1;
+    foreach($vars["rows"] as $key => $row) {
+      if ($vars["view"]->result[$key]->field_field_query_type[0]["raw"]["value"] == 'main' && !empty($vars["rows"][$key+1])) {
+        $start_row_key = $key+1;
+      }
+    }
+    if ($start_row_key != -1) {
+      $end_row_key = array_key_last($vars["rows"]);
+      $vars["prefix_row_key"] = $start_row_key;
+      $vars["suffix_row_key"] = $end_row_key;
+    }
+
   }
 
   if ($vars['view']->name == 'produce_units_load' && $vars['view']->current_display == 'page') {
@@ -1685,12 +1697,16 @@ function query_cron()
 
 function query_process_incoming_queries()
 {
+  require 'includes/query.import.inc';
+
+  $directory = 'private://exchange/';
+
+  // -- Заявки
   // получить список файлов по шаблону
   $mask = '/query_import_.*.json/';
-  $directory = 'private://exchange/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
-  // импортировать Заявки
+  // импортировать
   if ($files) {
     foreach($files as $file) {
       $query_arr = drupal_json_decode(file_get_contents($file->uri));
@@ -1698,6 +1714,96 @@ function query_process_incoming_queries()
         if (query_query_import($query_arr)) {
           file_unmanaged_delete($file->uri);
         }
+      }
+    }
+  }
+
+  // -- Справочник Давальцев
+  // получить список файлов по шаблону
+  $mask = '/Давальцы.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_davalec_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
+  // -- Справочник Установок
+  // получить список файлов по шаблону
+  $mask = '/Установки.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_produce_units_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
+  // -- Справочник Причин
+  // получить список файлов по шаблону
+  $mask = '/Причины.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_reasons_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
+  // -- Справочник Номенклатуры
+  // получить список файлов по шаблону
+  $mask = '/Номенклатура.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_nomenklatura_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
+  // -- Справочник Занятости
+  // получить список файлов по шаблону
+  $mask = '/ЗанятостьУстановок.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_produce_buzy_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
+  // -- План
+  // получить список файлов по шаблону
+  $mask = '/ПланПроизводства.csv/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = file($file->uri);
+      if (query_produce_plan_import($array)) {
+        file_unmanaged_delete($file->uri);
       }
     }
   }

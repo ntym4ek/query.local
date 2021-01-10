@@ -94,7 +94,11 @@ form {
   }
   &.view-queries,
   &.view-manager-queries {
-    .view-content > h3 { margin-top: 40px; }
+    .view-content {
+      > h3 { margin-top: 40px; }
+      .collapse.in,
+      .collapsing { padding-top: 15px; }
+    }
     .view-item {
       border: 1px solid $gray-lightest;
       border-top: 5px solid $gray-lightest;

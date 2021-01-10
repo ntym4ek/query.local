@@ -230,8 +230,12 @@ function query_produce_buzy_import($buzy_array)
       }
     }
     drupal_set_message('Занятость установок импортирована.');
+    watchdog('import', 'Занятость установок импортирована.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт занятости установок не выполнен.', 'warning');
+    watchdog('import', 'Импорт занятости установок не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
@@ -281,9 +285,11 @@ function query_produce_plan_import($plan_array_1c)
           } else {
             if (empty($nom)) {
               drupal_set_message('Не найдена номенклатура с 1с ID: ' . $articul, 'error');
+              watchdog('import', 'Не найдена номенклатура с 1с ID: ' . $articul, [], WATCHDOG_ERROR);
             }
             if (empty($produce_unit)) {
               drupal_set_message('Не найдена установка с 1с ID: ' . $produce_unit_1cID, 'error');
+              watchdog('import', 'Не найдена установка с 1с ID: ' . $produce_unit_1cID, [], WATCHDOG_ERROR);
             }
             return false;
           }
@@ -317,7 +323,7 @@ function query_produce_plan_import($plan_array_1c)
           $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
           $query_wr->field_qty = $plan_item['field_qty'];
           $query_wr->field_query_type = 'main';
-          $query_wr->field_query_status_client = 'processing';
+          $query_wr->field_query_status_client = 'approved';
           $query_wr->field_query_status_manager = 'approved';
           $query_wr->save();
 
@@ -334,6 +340,7 @@ function query_produce_plan_import($plan_array_1c)
         //        $query = current($result['query']);
 
         drupal_set_message('План по номенклатуре ' . $articul . ' на заданный месяц уже загружен. Импорт остановлен.', 'warning');
+        watchdog('import', 'План по номенклатуре ' . $articul . ' на заданный месяц уже загружен. Импорт остановлен.', [], WATCHDOG_ERROR);
         return false;
       }
     }
@@ -347,8 +354,12 @@ function query_produce_plan_import($plan_array_1c)
     }
 
     drupal_set_message('План производства импортирован.');
+    watchdog('import', 'План производства импортирован.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт плана не выполнен.', 'warning');
+    watchdog('import', 'Импорт плана не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
@@ -387,8 +398,12 @@ function query_davalec_import($davalec_array)
       }
     }
     drupal_set_message('Давальцы импортированы.');
+    watchdog('import', 'Давальцы импортированы.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт давальцев не выполнен.', 'warning');
+    watchdog('import', 'Импорт давальцев не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
@@ -421,8 +436,12 @@ function query_produce_units_import($pu_array)
       }
     }
     drupal_set_message('Установки импортированы.');
+    watchdog('import', 'Установки импортированы.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт установок не выполнен.', 'warning');
+    watchdog('import', 'Импорт установок не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
@@ -455,8 +474,12 @@ function query_reasons_import($r_array)
       }
     }
     drupal_set_message('Причины импортированы.');
+    watchdog('import', 'Причины импортированы.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт справочника причин не выполнен.', 'warning');
+    watchdog('import', 'Импорт справочника причин не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
@@ -510,14 +533,19 @@ function query_nomenklatura_import($nom_array)
 
           } else {
             drupal_set_message('Не найден давалец с ID: ' . $davalec_id, 'error');
+            watchdog('import', 'Импорт номенклатуры не выполнен. Не найден давалец с ID: ' . $davalec_id, [], WATCHDOG_ERROR);
             return false;
           }
         }
       }
     }
     drupal_set_message('Номенклатура импортирована.');
+    watchdog('import', 'Номенклатура импортирована.', [], WATCHDOG_INFO);
+    return true;
   } else {
     drupal_set_message('Импорт номенклатуры не выполнен.', 'warning');
+    watchdog('import', 'Импорт номенклатуры не выполнен.', [], WATCHDOG_ERROR);
+    return false;
   }
 }
 
