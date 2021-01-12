@@ -710,7 +710,7 @@ function query_query_export($query)
   $query_arr = [
     'id' => $query_wr->getIdentifier(),
     'id_1c' => '',
-    'created' => date('d.m.Y h:i:s', $query_wr->created->value()),
+    'created' => date('d.m.Y H:i:s', $query_wr->created->value()),
     'month' => date('d.m.Y', $query_wr->field_month->value()),
     'artikul_1c' => $query_wr->field_nomenklatura->field_oc_artikul->value(),
     'volume' => $query_wr->field_qty->value(),
@@ -1019,9 +1019,9 @@ function query_views_pre_render(&$view)
     }
 
     // добавить кнопку Новая заявка (Торговый Дом)
-    if (in_array($GLOBALS['user']->uid,[91, 80])) {
-      $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-primary">Новая заявка</a>';
-    }
+//    if (in_array($GLOBALS['user']->uid,[91, 80])) {
+    $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-primary">Новая заявка</a>';
+//    }
   }
 
   // дополнительная сортировка по важности Заявки
@@ -1494,7 +1494,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
       foreach ($load_array as $day_start => $load_array_item) {
         // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-        $load_array[$day_start]['is_busy'] = !empty($load_array[$day_start]) && $load_array[$day_start]['nomenklatura']['tid'] != $current_nom_tid;
+        $load_array[$day_start]['is_busy'] = !empty($load_array[$day_start] && isset($current_nom_tid)) && $load_array[$day_start]['nomenklatura']['tid'] != $current_nom_tid;
         // дозаполним текущую Загрузку для которой значение false
         $load_array[$day_start]['is_current_load'] = !empty($load_array[$day_start]['is_current_load']);
 
@@ -1506,10 +1506,10 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
           && in_array($current_query_type, ['main', 'correction']);
 
         // загрузка установки этим же клиентом
-        $load_array[$day_start]['is_busy_same_company'] = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['client_id'] == $current_client_id;
+        $load_array[$day_start]['is_busy_same_company'] = !empty($load_array[$day_start] && isset($current_client_id)) && $load_array[$day_start]['nomenklatura']['client_id'] == $current_client_id;
 
         $classes = [];
-        if ($load_array[$day_start]['is_busy_same_company']) {
+        if ($load_array[$day_start]['is_busy_same_company'] && !$load_array[$day_start]['is_current_load']) {
           $classes[] = 'company-loaded';
         } else {
           if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
@@ -1701,7 +1701,7 @@ function query_cron()
 
 function query_process_incoming_queries()
 {
-  require 'includes/query.import.inc';
+  require_once 'includes/query.import.inc';
 
   $directory = 'private://exchange/';
 
@@ -1782,7 +1782,23 @@ function query_process_incoming_queries()
     }
   }
 
+  // -- План
+  // получить список файлов по шаблону
+  $mask = '/plan.*\.json/';
+  $files = file_scan_directory($directory, $mask, [], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if ($plan = query_produce_plan_import($array)) {
+        file_unmanaged_delete($file->uri);
+      }
+    }
+  }
+
   // -- Справочник Занятости
+  // Занятость после Плана, так как импорт плана затирает занятость
   // получить список файлов по шаблону
   $mask = '/zan.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
@@ -1791,43 +1807,10 @@ function query_process_incoming_queries()
   if ($files) {
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
-      if (query_produce_buzy_import($array)) {
+      if (query_produce_busy_import($array)) {
         file_unmanaged_delete($file->uri);
       }
     }
   }
 
-  // -- План
-  // получить список файлов по шаблону
-  $mask = '/plan.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
-
-  // импортировать
-  if ($files) {
-    $user_mails = [];
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if ($plan = query_produce_plan_import($array)) {
-        // внести в список пользователей, кому отправить email
-        foreach ($plan as $plan_item) {
-          $uid = $plan_item['uid'];
-          $user_mails[$uid] = [
-            'month' => $plan_item['field_month'],
-            'account' => user_load($uid)
-          ];
-        }
-
-        file_unmanaged_delete($file->uri);
-      }
-    }
-
-    // отправить письма об импорте плана
-    if ($user_mails) {
-      foreach ($user_mails as $user_id => $data) {
-        $params['month'] = t(date('F', $data['month']));
-        drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
-      }
-    }
-
-  }
 }

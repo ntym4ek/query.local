@@ -38,7 +38,7 @@ class query_handler_field_produce_units_form extends views_handler_field
     else {
       $produce_units = query_get_produce_units_from_query($query_wr->value());
       foreach ($produce_units as $pu_tid => $produce_unit) {
-        $produce_unit_load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
+        $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
 
         $output .=
           '<div class="produce-unit">' .
@@ -52,9 +52,9 @@ class query_handler_field_produce_units_form extends views_handler_field
         for ($i = 1; $i <= date("t", $month_start); $i++) {
           $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
-          $classes = empty($produce_unit_load[$day_start]['classes']) ? [] : $produce_unit_load[$day_start]['classes'];
+          $classes = empty($load[$day_start]['classes']) ? [] : $load[$day_start]['classes'];
 
-          $tooltip = empty($produce_unit_load[$day_start]['output']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $produce_unit_load[$day_start]['output'] . '"';
+          $tooltip = empty($load[$day_start]['output']) || empty($load[$day_start]['is_busy_same_company']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $load[$day_start]['output'] . '"';
 
           $output .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
         }

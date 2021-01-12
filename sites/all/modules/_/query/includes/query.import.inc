@@ -2,127 +2,18 @@
 
 function query_import_form($form, &$form_state)
 {
-  $form['davalec'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'Справочник давальцев',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
-  $form['produce_units'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'Справочник установок',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
-  $form['reasons'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'Справочник причин',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
-  $form['nomenklatura'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'Справочник номенклатуры',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
-  $form['buzy'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'Занятость установок',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
-  $form['plan'] = array(
-    '#type' => 'managed_file',
-    '#title' => 'План',
-    '#description' => 'Выберите файл с расширением csv',
-    '#upload_location' => "public://import/",
-    '#upload_validators' => array(
-      'file_validate_extensions' => array('csv'),
-    ),
-    '#element_validate' => array('file_managed_file_validate'),
-  );
-
   $form['actions'] = array('#type' => 'actions');
   $form['actions']['submit'] = array(
     '#type'  => 'submit',
-    '#name'  => 'import',
-    '#value' => 'Импорт',
+    '#name'  => 'delete',
+    '#value' => 'Сабмит',
   );
 
-  $form['#submit'][] = 'query_import_submit';
+//  $form['#submit'][] = 'query_import_submit';
 
   return $form;
 }
 
-/**
- * Form submit callback.
- */
-function query_import_submit($form, &$form_state)
-{
-  if ($form_state['triggering_element']['#name'] == 'import') {
-    if (!empty($form_state['values']['davalec'])) {
-      $file = file_load($form_state['values']['davalec']);
-      $array = file($file->uri);
-      query_davalec_import($array);
-    }
-    if (!empty($form_state['values']['produce_units'])) {
-      $file = file_load($form_state['values']['produce_units']);
-      $array = file($file->uri);
-      query_produce_units_import($array);
-    }
-    if (!empty($form_state['values']['reasons'])) {
-      $file = file_load($form_state['values']['reasons']);
-      $array = file($file->uri);
-      query_reasons_import($array);
-    }
-    if (!empty($form_state['values']['nomenklatura'])) {
-      $file = file_load($form_state['values']['nomenklatura']);
-      $array = file($file->uri);
-      query_nomenklatura_import($array);
-    }
-
-    if (!empty($form_state['values']['buzy'])) {
-      $file = file_load($form_state['values']['buzy']);
-      $array = file($file->uri);
-      query_produce_buzy_import($array);
-    }
-
-    if (!empty($form_state['values']['plan'])) {
-      $file = file_load($form_state['values']['plan']);
-      $array = file($file->uri);
-      query_produce_plan_import($array);
-    }
-  }
-  if ($form_state['triggering_element']['#name'] == 'delete') {
-    // todo очистка месяца от всех заявок
-  }
-}
 
 function query_delete_form($form, &$form_state)
 {
@@ -137,10 +28,16 @@ function query_delete_form($form, &$form_state)
   );
 
   $form['actions'] = array('#type' => 'actions');
-  $form['actions']['submit'] = array(
+  $form['actions']['delete'] = array(
     '#type'  => 'submit',
     '#name'  => 'delete',
     '#value' => 'Удалить заявки за месяц',
+  );
+
+  $form['actions']['delete_all'] = array(
+    '#type'  => 'submit',
+    '#name'  => 'delete_all',
+    '#value' => 'Удалить все заявки',
   );
 
   $form['#submit'][] = 'query_delete_submit';
@@ -153,9 +50,13 @@ function query_delete_form($form, &$form_state)
  */
 function query_delete_submit($form, &$form_state)
 {
-  $date_array = explode('-', $form_state["values"]["month"]);
-  $month_start = gmmktime(0, 0, 0, $date_array[1], 1, $date_array[0]);
-  query_plan_delete($month_start);
+  if ($form_state["triggering_element"]["#name"] == 'delete') {
+    $date_array = explode('-', $form_state["values"]["month"]);
+    $month_start = gmmktime(0, 0, 0, $date_array[1], 1, $date_array[0]);
+    query_queries_delete($month_start);
+  } elseif ($form_state["triggering_element"]["#name"] == 'delete_all') {
+    query_queries_delete();
+  }
 }
 
 function query_plan_delete($month_start, $delete_approved = false)
@@ -191,7 +92,35 @@ function query_plan_delete($month_start, $delete_approved = false)
   }
 }
 
-function query_produce_buzy_import($array)
+function query_queries_delete($month_start = null)
+{
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'query');
+  if ($month_start) {
+    $efquery->fieldCondition('field_month', 'value', $month_start);
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('query', array_keys($result['query']));
+    drupal_set_message('Заявки удалены.');
+  }
+
+  // вычистить технические работы
+  $efquery = new EntityFieldQuery();
+  $efquery->entityCondition('entity_type', 'load');
+  if ($month_start) {
+    $next_month_start = gmmktime(0,0,0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
+    $efquery->fieldCondition('field_produce_date', 'value', $month_start, '>=')
+            ->fieldCondition('field_produce_date', 'value', $next_month_start, '<');
+  }
+  $result = $efquery->execute();
+  if ($result) {
+    entity_delete_multiple('load', array_keys($result['load']));
+    drupal_set_message('Загрузка удалена.');
+  }
+}
+
+function query_produce_busy_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     // удалить занятость месяца
@@ -238,8 +167,7 @@ function query_produce_buzy_import($array)
 
 function query_produce_plan_import($array)
 {
-  if (is_array($array)) {
-
+  if (is_array($array) && !empty($array['load'])) {
     // подготовить массив с Планом для внесения в базу
     // определить Заявки и посчитать общее производимое количество
     $plan = [];
@@ -306,6 +234,7 @@ function query_produce_plan_import($array)
     query_plan_delete($month_start);
 
     // создание Заявок на месяц
+    $user_mails = [];
     foreach ($plan as $plan_item) {
       $query = entity_create('query', [
         'type' => 'query',
@@ -324,7 +253,25 @@ function query_produce_plan_import($array)
       $query_wr->save();
 
       query_query_load_update($query->id, $plan_item['field_load']);
+
+      if (empty($user_mails[$plan_item['uid']])) {
+        $user_mails[$plan_item['uid']] = [
+          'month' => $plan_item['field_month'],
+          'account' => user_load($plan_item['uid'])
+        ];
+      }
     }
+
+    // отправить письма об импорте плана
+    if ($user_mails) {
+      foreach ($user_mails as $user_id => $data) {
+        $params['month'] = t(date('F', $data['month']));
+        if ($data['account']->mail) {
+          drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
+        }
+      }
+    }
+
 
     watchdog('import', 'План производства импортирован.', [], WATCHDOG_INFO);
     return $plan;
@@ -336,7 +283,7 @@ function query_produce_plan_import($array)
 
 function query_davalec_import($array)
 {
-  if (is_array($array)) {
+  if (is_array($array) && !empty($array['load'])) {
     $got = [];
     foreach ($array['load'] as $key => $davalec) {
         if ($davalec['dav_id'] && $davalec['dav_name']) {
@@ -398,7 +345,7 @@ function query_davalec_import($array)
 
 function query_produce_units_import($array)
 {
-  if (is_array($array)) {
+  if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('produce_units')->vid;
 
     $punits_got = [];
@@ -453,7 +400,7 @@ function query_produce_units_import($array)
 
 function query_reasons_import($array)
 {
-  if (is_array($array)) {
+  if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('reasons')->vid;
 
     $got = [];
@@ -508,7 +455,7 @@ function query_reasons_import($array)
 
 function query_nomenklatura_import($array)
 {
-  if (is_array($array)) {
+  if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
 
     $got = [];

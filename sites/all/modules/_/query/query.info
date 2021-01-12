@@ -5,6 +5,8 @@ core = 7.x
 
 scripts[] = js/query.js
 
+files[] = includes/query.import.inc
+
 files[] = views/query_handler_field_produce_units_form.inc
 files[] = views/query_handler_field_actions.inc
 files[] = views/query_handler_field_produce_unit_load.inc
