@@ -516,16 +516,18 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
     $form_state["values"]["field_month"]["und"][0]["value2"] = $month_start;
 
     // проконтролировать, что период задан в рамках текущего месяца
-    $next_month_start = gmmktime(0, 0, 0, date('n', $month_value)+1, 1, date('Y', $month_value));
-    $period_start = $form_state["values"]["field_query_period"]["und"][0]["value"];
-    $period_end = $form_state["values"]["field_query_period"]["und"][0]["value2"];
-    if ($period_start < $month_start) {
-      form_set_error('field_query_period', 'Начальная дата выходит за рамки текущего месяца.');
-      return false;
-    }
-    if ($period_end >= $next_month_start) {
-      form_set_error('field_query_period', 'Конечная дата выходит за рамки текущего месяца.');
-      return false;
+    if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) {
+      $next_month_start = gmmktime(0, 0, 0, date('n', $month_value) + 1, 1, date('Y', $month_value));
+      $period_start = $form_state["values"]["field_query_period"]["und"][0]["value"];
+      $period_end = $form_state["values"]["field_query_period"]["und"][0]["value2"];
+      if ($period_start < $month_start) {
+        form_set_error('field_query_period', 'Начальная дата выходит за рамки текущего месяца.');
+        return false;
+      }
+      if ($period_end >= $next_month_start) {
+        form_set_error('field_query_period', 'Конечная дата выходит за рамки текущего месяца.');
+        return false;
+      }
     }
 
     // когда менеджер сохраняет заявку со статусом Утверждено И требуется согласование, поменять статус клиента на На рассмотрении
@@ -688,16 +690,16 @@ function query_entity_insert($entity, $type)
         }
       }
 
-      // todo экспорт новой заявки
+      // экспорт новой заявки
       query_query_export($entity);
 
     } else {
       if ($query_wr->field_query_type->value() == 'correction') {
         drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
       }
-      if ($query_wr->field_query_type->value() == 'cancel') {
-        drupal_mail('mailer', 'client_notify_query_cancel_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
-      }
+//      if ($query_wr->field_query_type->value() == 'cancel') {
+//        drupal_mail('mailer', 'client_notify_query_cancel_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
+//      }
     }
   }
 }
@@ -710,13 +712,12 @@ function query_query_export($query)
     'id_1c' => '',
     'created' => date('d.m.Y h:i:s', $query_wr->created->value()),
     'month' => date('d.m.Y', $query_wr->field_month->value()),
-    'type' => $query_wr->field_query_type->value(),
     'artikul_1c' => $query_wr->field_nomenklatura->field_oc_artikul->value(),
     'volume' => $query_wr->field_qty->value(),
     'status_manager' => $query_wr->field_query_status_manager->value(),
-    'comment' => $query_wr->field_comment->value(),
     'period_begin' => date('d.m.Y', $query_wr->field_query_period->value->value()),
     'period_end' => date('d.m.Y', $query_wr->field_query_period->value2->value()),
+    'comment' => $query_wr->field_comment->value(),
     'load' => [],
     'action' => '',
   ];
@@ -728,9 +729,12 @@ function query_query_export($query)
   $filename = 'query_export_' . $query_arr['id'] . '.json';
   $directory = 'private://exchange/';
   file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
-  $file = file_unmanaged_save_data($query_json, $directory . $filename, $replace = FILE_EXISTS_RENAME);
+  file_unmanaged_save_data($query_json, $directory . $filename, $replace = FILE_EXISTS_RENAME);
 }
 
+/**
+ * импорт Заявки
+ */
 function query_query_import($query_arr)
 {
   $query = null;
@@ -1720,13 +1724,13 @@ function query_process_incoming_queries()
 
   // -- Справочник Давальцев
   // получить список файлов по шаблону
-  $mask = '/Давальцы.csv/';
+  $mask = '/dav.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
-      $array = file($file->uri);
+      $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_davalec_import($array)) {
         file_unmanaged_delete($file->uri);
       }
@@ -1735,13 +1739,13 @@ function query_process_incoming_queries()
 
   // -- Справочник Установок
   // получить список файлов по шаблону
-  $mask = '/Установки.csv/';
+  $mask = '/ust.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
-      $array = file($file->uri);
+      $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_produce_units_import($array)) {
         file_unmanaged_delete($file->uri);
       }
@@ -1750,13 +1754,13 @@ function query_process_incoming_queries()
 
   // -- Справочник Причин
   // получить список файлов по шаблону
-  $mask = '/Причины.csv/';
+  $mask = '/cause.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
-      $array = file($file->uri);
+      $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_reasons_import($array)) {
         file_unmanaged_delete($file->uri);
       }
@@ -1765,13 +1769,13 @@ function query_process_incoming_queries()
 
   // -- Справочник Номенклатуры
   // получить список файлов по шаблону
-  $mask = '/Номенклатура.csv/';
+  $mask = '/nom.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
-      $array = file($file->uri);
+      $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_nomenklatura_import($array)) {
         file_unmanaged_delete($file->uri);
       }
@@ -1780,13 +1784,13 @@ function query_process_incoming_queries()
 
   // -- Справочник Занятости
   // получить список файлов по шаблону
-  $mask = '/ЗанятостьУстановок.csv/';
+  $mask = '/zan.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
-      $array = file($file->uri);
+      $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_produce_buzy_import($array)) {
         file_unmanaged_delete($file->uri);
       }
@@ -1795,16 +1799,35 @@ function query_process_incoming_queries()
 
   // -- План
   // получить список файлов по шаблону
-  $mask = '/ПланПроизводства.csv/';
+  $mask = '/plan.*\.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
+    $user_mails = [];
     foreach($files as $file) {
-      $array = file($file->uri);
-      if (query_produce_plan_import($array)) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if ($plan = query_produce_plan_import($array)) {
+        // внести в список пользователей, кому отправить email
+        foreach ($plan as $plan_item) {
+          $uid = $plan_item['uid'];
+          $user_mails[$uid] = [
+            'month' => $plan_item['field_month'],
+            'account' => user_load($uid)
+          ];
+        }
+
         file_unmanaged_delete($file->uri);
       }
     }
+
+    // отправить письма об импорте плана
+    if ($user_mails) {
+      foreach ($user_mails as $user_id => $data) {
+        $params['month'] = t(date('F', $data['month']));
+        drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
+      }
+    }
+
   }
 }
