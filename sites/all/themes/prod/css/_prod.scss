@@ -69,7 +69,7 @@ form {
     }
     .views-field-produce-units-form {
       flex: 100%;
-      padding: $grid-gutter-width/2 0;
+      padding: $grid-gutter-width/2 0 0 0;
       border-top: 1px solid $gray-lightest;
       .query-comment {
         width: 100%;
@@ -106,21 +106,20 @@ form {
       &.approved:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
-      &.changed { opacity: 0.5; }
-      &.changed:after,
+      &.archive { opacity: 0.5; }
+      &.archive:after,
       &.waiting:after,
-      &.produced:after,
       &.deal:after,
       &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
-        color: #c00; font-size: 26px;
+        color: $brand-danger; font-size: 26px;
         background: #fff;
-        border: solid 4px #c00; border-radius: 5px;
+        border: solid 4px $brand-danger; border-radius: 5px;
         padding: 5px;
         zoom: 1; filter: alpha(opacity=50); opacity: 0.5;
-        text-shadow: 0 0 2px #c00; -webkit-text-shadow: 0 0 2px #c00;
-        box-shadow: 0 0 2px #c00;
+        text-shadow: 0 0 2px $brand-danger;
+        box-shadow: 0 0 2px $brand-danger;
       }
       &.changed.no-load:after,
       &.produced.no-load:after,
@@ -128,20 +127,19 @@ form {
         //top: 8px;
       }
       &.deal:after {
-        content: "СОГЛАСОВАНА";
+        content: "КОРРЕКТИРОВКА";
+        color: $brand-success; border-color: $brand-success; text-shadow: 0 0 2px $brand-success; box-shadow: 0 0 2px $brand-success;
       }
-      &.changed:after {
+      &.archive:after {
         content: "АРХИВ";
         left: 45%;
+        color: $brand-warning; border-color: $brand-warning; text-shadow: 0 0 2px $brand-warning; box-shadow: 0 0 2px $brand-warning;
       }
       &.waiting:after {
         content: "НА СОГЛАСОВАНИИ";
       }
-      &.produced:after {
-        content: "ВЫПОЛНЕНО";
-      }
       &.cancelled:after {
-        content: "ОТМЕНЕНО";
+        content: "ОТМЕНЕНА";
       }
     }
   }
@@ -157,6 +155,7 @@ form {
 
 .produce-unit {
   display: flex;
+  margin-bottom: $grid-gutter-width/2;
   //margin-bottom: 0; // если установок две, то между ними нет интервала
   h3 { margin: 0 0 2px 0; }
   .produce-unit-name {

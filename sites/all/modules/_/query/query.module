@@ -105,7 +105,7 @@ function query_empty_front_page_callback()
  */
 function query_form_alter(&$form, &$form_state, $form_id)
 {
-  if ($form_id == 'eck__entity__form_add_query_query') {
+  if ($form_id == 'eck__entity__form_add_query_query' && !user_has_role(ROLE_ADMIN)) {
     if (!empty($_GET['type'])) {
       $form_state['data']['query']['type'] = $_GET['type'];
     }
@@ -135,15 +135,22 @@ function query_form_alter(&$form, &$form_state, $form_id)
       if ($eck_source = $dbr->execute()->fetchField()) {
         $source_query_wr = entity_metadata_wrapper('query', $eck_source);
         $load = [];
+        $date_start = $date_end = 0;
         foreach ($source_query_wr->field_load->getIterator() as $load_wr) {
           if ($load_wr->value()) {
             $load[$load_wr->field_produce_date->value()] = $load_wr->field_produce_output->value();
+            if ($load_wr->field_produce_output->value()) {
+              if (!$date_start || $date_start > $load_wr->field_produce_date->value()) $date_start = $load_wr->field_produce_date->value();
+              if ($date_end < $load_wr->field_produce_date->value()) $date_end = $load_wr->field_produce_date->value();
+            }
           }
         }
         $form_state['data']['source_query'] = [
           'id' => $source_query_wr->getIdentifier(),
           'type' => $source_query_wr->field_query_type->value(),
           'volume' => $source_query_wr->field_qty->value(),
+          'date_start' => $date_start,
+          'date_end' => $date_end,
           'load' => $load,
         ];
       }
@@ -179,15 +186,21 @@ function query_form_alter(&$form, &$form_state, $form_id)
         '#weight' => 2,
       ];
       $form["field_qty"]["und"][0]["value"]["#title"] = 'Новое количество';
-      $form["field_qty"]["und"][0]["value"]["#default_value"] = 0;
+      $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['last_query']['volume'];
     }
     if (!empty($form_state['data']['month_start'])) {
-//      $form["field_month"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
-//      $form["field_month"]["und"][0]["#default_value"]["value2"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value2"] = $form_state['data']['month_start'];
-      $form["field_query_period"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
-      $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $form_state['data']['month_start']+10*24*3600;
+
+      if (empty($form_state['data']['source_query']['date_start']) || empty($form_state['data']['source_query']['date_end'])) {
+        $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+        $next_month_start = gmmktime(0, 0, 0, date('n', $today_start) + 1, 1, date('Y', $today_start));
+        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $today_start;
+        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $next_month_start-24*3600;
+      } else {
+        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $form_state['data']['source_query']['date_start'];
+        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $form_state['data']['source_query']['date_end'];
+      }
     }
     if (!empty($form_state['data']['nom_tid'])) {
       $form["field_nomenklatura"]["und"]["#default_value"] = [$form_state['data']['nom_tid']];
@@ -212,7 +225,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
   }
 
 
-  if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query'])) {
+  if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query']) && !user_has_role(ROLE_ADMIN)) {
     if (!isset($nomenklatura_from_queries)) $nomenklatura_from_queries = [];
 //    $month_start = empty($form_state['data']['source_query']['month_start']) ? 0 : $form_state['data']['source_query']['month_start'];
     $produce_units_list = query_get_produce_units_list();
@@ -515,13 +528,18 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
     $form_state["values"]["field_month"]["und"][0]["value"] = $month_start;
     $form_state["values"]["field_month"]["und"][0]["value2"] = $month_start;
 
-    // проконтролировать, что период задан в рамках текущего месяца
+    // проконтролировать, что период задан в рамках текущего месяца и не ранее сегодня
     if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) {
+      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
       $next_month_start = gmmktime(0, 0, 0, date('n', $month_value) + 1, 1, date('Y', $month_value));
       $period_start = $form_state["values"]["field_query_period"]["und"][0]["value"];
       $period_end = $form_state["values"]["field_query_period"]["und"][0]["value2"];
       if ($period_start < $month_start) {
         form_set_error('field_query_period', 'Начальная дата выходит за рамки текущего месяца.');
+        return false;
+      }
+      if ($period_start < $today_start) {
+        form_set_error('field_query_period', 'Начальная дата не может быть ранее текущего дня.');
         return false;
       }
       if ($period_end >= $next_month_start) {
@@ -735,22 +753,23 @@ function query_query_export($query)
 /**
  * импорт Заявки
  */
-function query_query_import($query_arr)
+function query_query_import($array)
 {
   $query = null;
-  $old_query_id = empty($query_arr['ID']) ? 0 : $query_arr['ID'];
-  $query_oc_id = empty($query_arr["ID_1c"]) ? '' : $query_arr["ID_1c"];
-  $month_value = empty($query_arr['month']) ? '' : $query_arr['month'];
+  $old_query_id = empty($array['ID']) ? 0 : $array['ID'];
+  $query_oc_id = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
+  $month_value = empty($array['month']) ? '' : $array['month'];
   if (!$month_value) {
     watchdog('import', 'Пустое поле меcяца в файле экспорта. (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
     return false;
   }
-  $articul = empty($query_arr['artikul_1c']) ? '' : $query_arr['artikul_1c'];
-  $query_nom = query_get_nomenklatura_by_artikul($articul);
-  if (!$query_nom) {
-    watchdog('import', 'Не найдена номенклатура по артикулу "' . $articul . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
+  $artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
+  $nom = query_get_nomenklatura_by_artikul($artikul);
+  if (!$nom) {
+    watchdog('import', 'Не найдена номенклатура по артикулу "' . $artikul . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
     return false;
   }
+
 //  $query_type = empty($query_arr['type']) ? '' : $query_arr['type'];
 //  if (!in_array($query_type, ['main', 'correction'])) {
 //    watchdog('import', 'Не найден тип заявки "' . $query_type . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
@@ -761,7 +780,7 @@ function query_query_import($query_arr)
 //    watchdog('import', 'Не найден статус клиента "' . $query_status_client . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
 //    return false;
 //  }
-  $query_status_manager = empty($query_arr['status_manager']) ? '' : $query_arr['status_manager'];
+  $query_status_manager = empty($array['status_manager']) ? '' : $array['status_manager'];
   if (!in_array($query_status_manager, ['processing', 'approved', 'deny'])) {
     watchdog('import', 'Не найден статус менеджера "' . $query_status_manager . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
     return false;
@@ -770,19 +789,19 @@ function query_query_import($query_arr)
   // получить Загрузку
   $load_arr = [];
   $query_qty = 0;
-  if (!empty($query_arr['load'])) {
-    foreach($query_arr['load'] as $l_item) {
-      if ($produce_unit = query_get_produce_unit_by_1cID($l_item['unit_id_1c'])) {
-        $date_arr = explode('.', $l_item['date']);
+  if (!empty($array['load'])) {
+    foreach($array['load'] as $item) {
+      if ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+        $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         $load_arr[] = [
           'field_produce_unit' => $produce_unit->tid,
           'field_produce_date' => $day_start,
-          'field_produce_output' => $l_item['output'],
+          'field_produce_output' => $item['output'],
         ];
-        $query_qty += $l_item['output'];
+        $query_qty += $item['output'];
       } else {
-        watchdog('import', 'Не найдена установка "' . $l_item['unit_id_1c'] . '". (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+        watchdog('import', 'Импорт заявки. Не найдена установка "' . $item['unit_id_1c'] . '". (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
         return false;
       }
     }
@@ -791,8 +810,14 @@ function query_query_import($query_arr)
   // проверить наличие исходной Заявки по id и сменить статус менеджера
   if ($old_query_id) {
     try {
-      if ($old_query = entity_load('query', $old_query_id)) {
-        $old_query_wr = entity_metadata_wrapper('query', $old_query);
+      $old_query_wr = entity_metadata_wrapper('query', $old_query_id);
+      if ($old_query_wr->value()) {
+        // проверить, совпадает ли арт из новой заявки со старой (просили одинэсники)
+        $old_artikul_1c = $old_query_wr->field_nomenklatura->field_oc_artikul->value();
+        if ($old_artikul_1c != $artikul) {
+          watchdog('import', 'Артикул из старой Заявки: ' . $old_artikul_1c . ' не совпадает с артикулом из ответа: ' . $artikul . '. (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+          return false;
+        }
         $old_query_wr->field_query_status_manager = 'approved';
         $old_query_wr->save();
       }
@@ -810,18 +835,19 @@ function query_query_import($query_arr)
   if (!$query) {
     $query = entity_create('query', [
       'type' => 'query',
+      'created' => REQUEST_TIME,
       'uid' => 0,
     ]);
     entity_save('query', $query);
   }
 
   // подготовить поля
-  $query_comment = empty($query_arr['comment']) ? true : $query_arr['comment'];
-  $query_period_value = empty($query_arr['period_begin']) ? 0 : strtotime($query_arr['period_begin']);
-  $query_period_value2 = empty($query_arr['period_end']) ? 0 : strtotime($query_arr['period_end']);
+  $query_comment = empty($array['comment']) ? '' : $array['comment'];
+  $query_period_value = empty($array['period_begin']) ? 0 : strtotime($array['period_begin']);
+  $query_period_value2 = empty($array['period_end']) ? 0 : strtotime($array['period_end']);
 
   $query_reason_tid = 0;
-  $query_reason_1c = empty($query_arr['reason_1с']) ? '' : $query_arr['reason_1с'];
+  $query_reason_1c = empty($array['reason_1с']) ? '' : $array['reason_1с'];
   if ($query_reason_1c && $query_reason = query_get_reason_by_oc_id($query_reason_1c)) {
     $query_reason_tid = $query_reason->tid;
   }
@@ -830,7 +856,7 @@ function query_query_import($query_arr)
   try {
     $query_wr = entity_metadata_wrapper('query', $query);
     $query_wr->field_month = $month_start;
-    $query_wr->field_nomenklatura = $query_nom->tid;
+    $query_wr->field_nomenklatura = $nom->tid;
     $query_wr->field_qty = $query_qty;
     $query_wr->field_query_type = 'correction';
     $query_wr->field_query_status_client = 'approved';
@@ -845,8 +871,44 @@ function query_query_import($query_arr)
     }
 
   } catch (Exception $e) {
-    watchdog('import', 'Ошибка при сохранении. ' . $e->getMessage(), [],WATCHDOG_ERROR);
+    watchdog('import', 'Ошибка при сохранении заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
     return false;
+  }
+
+  // если пришла Занятость
+  if (!empty($array['service'])) {
+    $zan_load_arr = [];
+    foreach($array['service'] as $item) {
+      if ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+        $date_arr = explode('.', $item['date']);
+        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        $zan_load_arr[] = [
+          'field_produce_unit' => $produce_unit->tid,
+          'field_produce_date' => $day_start,
+          'field_produce_output' => 0,
+        ];
+      } else {
+        watchdog('import', 'Импорт занятости. Не найдена установка "' . $item['unit_id_1c'] . '". (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+        //return false;
+      }
+    }
+
+    if ($zan_load_arr) {
+      $query_zan = entity_create('query', [
+        'type' => 'query',
+        'created' => REQUEST_TIME,
+        'uid' => 0,
+      ]);
+      entity_save('query', $query_zan);
+
+      $query_zan_wr = entity_metadata_wrapper('query', $query_zan);
+      $query_zan_wr->field_month = $month_start;
+      $query_zan_wr->field_nomenklatura = 583; // tid Технических работ
+      $query_zan_wr->field_query_type = 'service';
+      $query_zan_wr->save();
+
+      query_query_load_update($query_zan->id, $zan_load_arr);
+    }
   }
 
   return true;
@@ -1109,7 +1171,7 @@ function query_preprocess_views_view_unformatted(&$vars)
         {
           $vars["classes_array"][$key] .= ' deal';
         } else {
-          $vars["classes_array"][$key] .= ' changed';
+          $vars["classes_array"][$key] .= ' archive';
         }
 
       } else {
@@ -1117,7 +1179,7 @@ function query_preprocess_views_view_unformatted(&$vars)
         if (query_check_query_produce_finished($vars["view"]->result[$key]->id)
           && $status_manager == 'approved'
           && $status_client == 'approved') {
-            $vars["classes_array"][$key] .= ' produced';
+            $vars["classes_array"][$key] .= ' archive';
         }
 
         // утверждённая заявка
@@ -1231,15 +1293,13 @@ function query_query_load_update($query_id, $load_array)
 
     // создать новые
     foreach ($load_array as $load_item) {
-      if ($load_item['field_produce_output']) {
-        $load = entity_create('load', ['type' => 'load']);
-        $load_wr = entity_metadata_wrapper('load', $load);
-        $load_wr->field_produce_unit = $load_item['field_produce_unit'];
-        $load_wr->field_produce_date = $load_item['field_produce_date'];
-        $load_wr->field_produce_output = $load_item['field_produce_output'];
-        $load_wr->save();
-        $query_wr->field_load[] = $load_wr->getIdentifier();
-      }
+      $load = entity_create('load', ['type' => 'load']);
+      $load_wr = entity_metadata_wrapper('load', $load);
+      $load_wr->field_produce_unit = $load_item['field_produce_unit'];
+      $load_wr->field_produce_date = $load_item['field_produce_date'];
+      $load_wr->field_produce_output = $load_item['field_produce_output'];
+      $load_wr->save();
+      $query_wr->field_load[] = $load_wr->getIdentifier();
     }
 
     $query_wr->save();
@@ -1345,6 +1405,239 @@ function query_get_produce_units_from_query($query)
  * get_produce_unit_load
  */
 function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = null, $current_query = null)
+{
+  // Вернуть список Загрузки заданной установки на заданный месяц
+  // учитывать нужно только утверждённые заявки
+  // Загрузку нужно возвращать с привязкой к Номенклатуре,
+  //  например,
+  //  чтобы в корректирующих Заявке не выводить Загрузку из основной Заявки,
+  //  т.к нужна возможность распределить её на эти даты снова
+  // Для Плановых Заявок берём загрузку только из самой Заявки, она содержит и Сервисную Загрузку
+  // Для промежуточных Заявок на изменения загрузку, в том числе сервисную собираем на дату Заявки
+  // Для итоговых утверждённых Заявок и итоговой Загрузки установок собирается вся загрузка на месяц и выводится пересечение,
+  //  поверх добавляется загрузка из последней сервисной Заявки
+
+  $load_array = [];
+
+  $ids = [];
+  $is_current_query_main = false;
+  $current_query_nom_tid = 0;
+
+  // добавить id текущей Загрузки
+  if ($current_query) {
+    $current_query_wr = entity_metadata_wrapper('query', $current_query);
+    $is_current_query_main = $current_query_wr->field_query_type->value() == 'main';
+    $current_query_nom_tid = $current_query_wr->field_nomenklatura->tid->value();
+    if ($current_query_wr->value()) {
+      $ids = array_merge($ids, [$current_query_wr->getIdentifier()]);
+    } else {
+      $current_query = null;
+    }
+  }
+
+  // план месяца
+  $efquery = new EntityFieldQuery();
+  $result_main = $efquery
+    ->entityCondition('entity_type', 'query')
+    ->fieldCondition('field_month', 'value', $month_start)
+    ->fieldCondition('field_query_status_client', 'value', ['approved', 'processing'], 'IN')
+    ->fieldCondition('field_query_status_manager', 'value', 'approved')
+    ->fieldCondition('field_query_type', 'value', 'main')
+    ->execute();
+  if ($result_main) {
+    $ids = array_keys($result_main['query']);
+  }
+
+  // является ли текущая Заявка последней утверждённой
+  $is_last_approved_query = false;
+  if ($current_query) {
+    $dbr = db_select('eck_query', 'q');
+    $dbr->addField('q', 'id');
+    $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+    $dbr->condition('fm.field_month_value', $month_start);
+    $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
+    $dbr->condition('fn.field_nomenklatura_target_id', $current_query_nom_tid);
+    $dbr->innerJoin('field_data_field_query_status_client', 'fsc', 'fsc.entity_id = q.id');
+    $dbr->condition('fsc.field_query_status_client_value', 'approved');
+    $dbr->innerJoin('field_data_field_query_status_manager', 'fsm', 'fsm.entity_id = q.id');
+    $dbr->condition('fsm.field_query_status_manager_value', 'approved');
+    $dbr->orderBy('q.id', 'DESC');
+    $dbr->range(0, 1);
+    if ($result = $dbr->execute()->fetchField()) {
+      $is_last_approved_query = $result == $current_query_wr->getIdentifier();
+    }
+  }
+
+  // если Заявка не Плановая, то дополнительно собираем все утверждённые Изменения
+  // если задана дата и это не последняя утверждённая Заявка с Загрузкой, то до этой даты
+  if (!$current_query || !$is_current_query_main || $is_last_approved_query) {
+
+    // утверждённые Корректировки
+    // если задана дата и текущая Заявка - это не последняя утверждённая Заявка, то до этой даты
+    $efquery = new EntityFieldQuery();
+    $efquery
+      ->entityCondition('entity_type', 'query')
+      ->fieldCondition('field_query_type', 'value', 'correction')
+      ->fieldCondition('field_month', 'value', $month_start)
+      ->fieldCondition('field_query_status_client', 'value', 'approved')
+      ->fieldCondition('field_query_status_manager', 'value', 'approved');
+    if ($date && !$is_last_approved_query) {
+      $efquery->propertyCondition('created', $date, '<=');
+    }
+    if ($result = $efquery->execute()) {
+      $ids = array_merge($ids, array_keys($result['query']));
+    }
+
+    // последняя Сервисная Заявка по установке
+    // если задана дата и текущая Заявка - это не последняя утверждённая Заявка, то до этой даты
+    $dbr = db_select('eck_query', 'q');
+    $dbr->addField('q', 'id');
+    $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+    $dbr->condition('fm.field_month_value', $month_start);
+    $dbr->innerJoin('field_data_field_load', 'fl', 'fl.entity_id = q.id');
+    $dbr->innerJoin('field_data_field_produce_unit', 'fpu', 'fpu.entity_id = fl.field_load_target_id');
+    $dbr->condition('fpu.field_produce_unit_tid', $produce_unit_tid);
+    if ($date && !$is_last_approved_query) {
+      $dbr->condition('q.created', $date, '<=');
+    }
+    $dbr->orderBy('q.id','DESC');
+    $dbr->range(0,1);
+    if ($result = $dbr->execute()->fetchField()) {
+      $ids = array_merge($ids, [$result]);
+    }
+  }
+
+  if ($ids) {
+    $load_nomenklatura = [];
+    $queries = entity_load('query', $ids);
+
+    // исключить неактуальные Заявки (для которых есть корректировки)
+    // (оставляем последнюю утверждённую для Номенклатуры)
+    // Заявка на отмену не должна содержать загрузку, так как отсутствие Загрузки и будет отменой
+    // массив Номенклатура - Заявки
+    foreach ($queries as $query) {
+      $query_wr = entity_metadata_wrapper('query', $query);
+      $nom_tid = $query_wr->field_nomenklatura->tid->value();
+      if (empty($nom_query[$nom_tid]['created']) || $nom_query[$nom_tid]['created'] < $query_wr->created->value()) {
+        $nom_query[$nom_tid] = [
+          'query_id' => $query_wr->getIdentifier(),
+          'created' => $query_wr->created->value(),
+        ];
+      }
+    }
+
+    // массив Загрузка - Номенклатура
+    foreach ($queries as $query) {
+      $query_wr = entity_metadata_wrapper('query', $query);
+      $nom_tid = $query_wr->field_nomenklatura->tid->value();
+      if ($nom_query[$nom_tid]['query_id'] == $query->id) {
+        foreach ($query_wr->field_load->getIterator() as $load_wr) {
+          $load_nomenklatura[$load_wr->getIdentifier()] = [
+            'tid' => $nom_tid,
+            'name' => $query_wr->field_nomenklatura->name->value(),
+            'client_id' => $load_wr->field_produce_output->value() ? $query_wr->field_nomenklatura->field_user->uid->value() : 0,
+          ];
+        }
+      }
+    }
+
+    // пустая Загрузка (ремонт, ТО)
+//    $next_month_start = gmmktime(0,0,0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
+
+//    $efquery = new EntityFieldQuery();
+//    $result = $efquery
+//      ->entityCondition('entity_type', 'load')
+//      ->fieldCondition('field_produce_date', 'value', $month_start, '>=')
+//      ->fieldCondition('field_produce_date', 'value', $next_month_start, '<')
+//      ->fieldCondition('field_produce_output', 'value', 0)
+//      ->execute();
+//    if ($result) {
+//      $load = entity_load('load', array_keys($result['load']));
+//      foreach ($load as $load_item) {
+//        if ($load_item->field_produce_unit["und"][0]["tid"] == $produce_unit_tid) {
+//          $load_array[$load_item->field_produce_date["und"][0]["value"]] = [
+//            'output' => 0,
+//            'nomenklatura' => ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'],
+//          ];
+//        }
+//      }
+//    }
+
+
+    if ($load_nomenklatura) {
+      $load = entity_load('load', array_keys($load_nomenklatura));
+      // Загрузка для заданной Установки
+      // массив Загрузка - Данные
+      foreach ($load as $load_item) {
+        if ($load_item->field_produce_unit["und"][0]["tid"] == $produce_unit_tid) {
+          $day_start = $load_item->field_produce_date["und"][0]["value"];
+          $load_array[$day_start] = [
+            'output' => $load_item->field_produce_output["und"][0]["value"],
+            'nomenklatura' =>  $load_item->field_produce_output["und"][0]["value"] ? $load_nomenklatura[$load_item->id] : ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'],
+          ];
+        }
+      }
+
+      // если задана текущая Заявка, добавить дополнительные данные
+      if ($current_query) {
+        if ($current_nom_tid = $current_query_wr->field_nomenklatura->tid->value()) {
+          $current_client_id = $current_query_wr->field_nomenklatura->field_user->uid->value();
+          $current_query_type = $current_query_wr->field_query_type->value();
+
+          // is_current_load
+          foreach ($current_query_wr->field_load->getIterator() as $current_load_wr) {
+            if (empty($load_array[$current_load_wr->field_produce_date->value()]) && !empty($load_nomenklatura[$current_load_wr->getIdentifier()])) {
+              $load_array[$current_load_wr->field_produce_date->value()] = [
+                'output' => $current_load_wr->field_produce_output->value(),
+                'nomenklatura' => $load_nomenklatura[$current_load_wr->getIdentifier()],
+              ];
+            }
+            if ($current_load_wr->field_produce_output->value()) {
+              $load_array[$current_load_wr->field_produce_date->value()]['is_current_load'] = true;
+            }
+          }
+        }
+      }
+
+      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+      foreach ($load_array as $day_start => $load_array_item) {
+        // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
+        $load_array[$day_start]['is_busy'] = !empty($load_array[$day_start]['nomenklatura']) && isset($current_nom_tid) && $load_array[$day_start]['nomenklatura']['tid'] != $current_nom_tid;
+        // дозаполним текущую Загрузку для которой значение false
+        $load_array[$day_start]['is_current_load'] = !empty($load_array[$day_start]['is_current_load']);
+
+        // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя DAYS_UNAVAILABLE дней
+        // данные могут быть получены из начальной и корректирующей Заявок
+        $load_array[$day_start]['is_unavailable'] =
+          !user_has_role(ROLE_MANAGER)
+          && ($day_start < $today_start + DAYS_UNAVAILABLE * 24 * 60 * 60)
+          && in_array($current_query_type, ['main', 'correction']);
+
+        // загрузка установки этим же клиентом
+        $load_array[$day_start]['is_busy_same_company'] = !empty($load_array[$day_start]['nomenklatura']) && isset($current_client_id) && $load_array[$day_start]['nomenklatura']['client_id'] == $current_client_id;
+
+        $classes = [];
+        if ($load_array[$day_start]['is_busy_same_company'] && !$load_array[$day_start]['is_current_load']) {
+          $classes[] = 'company-loaded';
+        } else {
+          if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
+        }
+
+//              if ($load_array[$day_start]['is_busy'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'loaded';
+        if ($load_array[$day_start]['is_current_load']) $classes[] = 'selected';
+        if ($load_array[$day_start]['is_unavailable'] && !$load_array[$day_start]['is_current_load']) $classes[] = 'unavailable';
+        $load_array[$day_start]['classes'] = $classes;
+      }
+    }
+
+  }
+
+  return $load_array;
+}
+/**
+ * get_produce_unit_load
+ */
+function query_get_produce_unit_load_old($produce_unit_tid, $month_start, $date = null, $current_query = null)
 {
   // todo добавить учёт даты в месяце, до которой нужно вернуть загрузку,
   // todo так как:
@@ -1705,22 +1998,22 @@ function query_process_incoming_queries()
 
   $directory = 'private://exchange/';
 
-  // -- Заявки
-  // получить список файлов по шаблону
-  $mask = '/query_import_.*.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
 
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $query_arr = drupal_json_decode(file_get_contents($file->uri));
-      if (is_array($query_arr) && in_array('month', array_keys($query_arr))) {
-        if (query_query_import($query_arr)) {
-          file_unmanaged_delete($file->uri);
-        }
-      }
-    }
-  }
+  // -- Занятость Плана грузится в плане
+  // Оперативная Занятость загружается с заявками
+//  //  получить список файлов по шаблону
+//  $mask = '/zan-plan.*\.json/';
+//  $files = file_scan_directory($directory, $mask, [], 0);
+//
+//  // импортировать
+//  if ($files) {
+//    foreach($files as $file) {
+//      $array = drupal_json_decode(file_get_contents($file->uri));
+//      if (query_produce_busy_import($array)) {
+//        file_unmanaged_delete($file->uri);
+//      }
+//    }
+//  }
 
   // -- Справочник Давальцев
   // получить список файлов по шаблону
@@ -1797,17 +2090,16 @@ function query_process_incoming_queries()
     }
   }
 
-  // -- Справочник Занятости
-  // Занятость после Плана, так как импорт плана затирает занятость
+  // -- Заявки
   // получить список файлов по шаблону
-  $mask = '/zan.*\.json/';
+  $mask = '/query_import_.*.json/';
   $files = file_scan_directory($directory, $mask, [], 0);
 
   // импортировать
   if ($files) {
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
-      if (query_produce_busy_import($array)) {
+      if (query_query_import($array)) {
         file_unmanaged_delete($file->uri);
       }
     }
