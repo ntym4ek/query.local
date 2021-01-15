@@ -123,10 +123,12 @@ function query_form_alter(&$form, &$form_state, $form_id)
       ];
     }
 
-    if (!empty($form_state['data']['nom_tid'])) {
+    if (!empty($form_state['data']['nom_tid']) && !empty($form_state['data']['month_start'])) {
       // получить Запрос, в котором есть Загрузка
       $dbr = db_select('eck_query', 'q');
       $dbr->addField('q', 'id');
+      $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+      $dbr->condition('fm.field_month_value', $form_state['data']['month_start']);
       $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
       $dbr->condition('fn.field_nomenklatura_target_id', $form_state['data']['nom_tid']);
       $dbr->innerJoin('field_data_field_load', 'fl', 'fl.entity_id = q.id');
@@ -660,6 +662,33 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
       $last_query_wr->save();
     }
   }
+
+  $query_wr = entity_metadata_wrapper('query', $form_state["values"]["entity"]->id);
+
+  // экспорт новой заявки
+  query_query_export($query_wr);
+
+  // отправить email менеджерам
+  $params = [
+    'qid' => $query_wr->getIdentifier(),
+    'month' => date('F', $query_wr->field_month->value()),
+    'product' => $query_wr->field_nomenklatura->name->value(),
+    'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
+    'status_client' => $query_wr->field_query_status_client->label(),
+    'status_manager' => $query_wr->field_query_status_manager->label(),
+    'client_approve' => $query_wr->field_query_client_approve->value(),
+    'type' => $query_wr->field_query_type->value(),
+    'comment' => $query_wr->field_comment->value(),
+  ];
+  if ($query_wr->field_query_reason->value()) {
+    $params['reason'] = $query_wr->field_query_reason->name->value();
+  }
+
+  if ($managers = query_get_managers_to_notify()) {
+    foreach ($managers as $manager) {
+      drupal_mail('mailer', 'manager_notify_query_correction_new', $manager->mail, user_preferred_language($manager), $params);
+    }
+  }
 }
 
 function query_form_redirect_submit(&$form, &$form_state)
@@ -669,62 +698,10 @@ function query_form_redirect_submit(&$form, &$form_state)
   }
 }
 
-/**
- * Implements hook_entity_insert().
- * @param $entity
- * @param $type
- */
-function query_entity_insert($entity, $type)
+
+function query_query_export($query_wr)
 {
-  if ($type == 'query'
-    && strpos($_GET["q"], 'import') === false
-    && $entity->uid != 0) { // 0 - для импорта
-    // отправка уведомлений при создании новой Заявки
-    $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
-    $query_wr = entity_metadata_wrapper('query', $entity);
-    $params = [
-      'qid' => $query_wr->getIdentifier(),
-      'month' => date('F', $query_wr->field_month->value()),
-      'product' => $query_wr->field_nomenklatura->name->value(),
-      'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
-      'status_client' => $query_wr->field_query_status_client->label(),
-      'status_manager' => $query_wr->field_query_status_manager->label(),
-      'client_approve' => $query_wr->field_query_client_approve->value(),
-      'type' => $query_wr->field_query_type->value(),
-      'comment' => $query_wr->field_comment->value(),
-    ];
-    if ($query_wr->field_query_reason->value()) {
-      $params['reason'] = $query_wr->field_query_reason->name->value();
-    }
-    if ($changed_by == 'client') {
-      if ($managers = query_get_managers_to_notify()) {
-        foreach ($managers as $manager) {
-          if ($query_wr->field_query_type->value() == 'correction') {
-            drupal_mail('mailer', 'manager_notify_query_correction_new', $manager->mail, user_preferred_language($manager), $params);
-          }
-          if ($query_wr->field_query_type->value() == 'cancel') {
-            drupal_mail('mailer', 'manager_notify_query_cancel_new', $manager->mail, user_preferred_language($manager), $params);
-          }
-        }
-      }
-
-      // экспорт новой заявки
-      query_query_export($entity);
-
-    } else {
-      if ($query_wr->field_query_type->value() == 'correction') {
-        drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
-      }
-//      if ($query_wr->field_query_type->value() == 'cancel') {
-//        drupal_mail('mailer', 'client_notify_query_cancel_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
-//      }
-    }
-  }
-}
-
-function query_query_export($query)
-{
-  $query_wr = entity_metadata_wrapper('query', $query);
+  return false;
   $query_arr = [
     'id' => $query_wr->getIdentifier(),
     'id_1c' => '',
@@ -911,6 +888,23 @@ function query_query_import($array)
     }
   }
 
+  // уведомить клиента о новой заявке
+  $params = [
+    'qid' => $query_wr->getIdentifier(),
+    'month' => date('F', $query_wr->field_month->value()),
+    'product' => $query_wr->field_nomenklatura->name->value(),
+    'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
+    'status_client' => $query_wr->field_query_status_client->label(),
+    'status_manager' => $query_wr->field_query_status_manager->label(),
+    'client_approve' => $query_wr->field_query_client_approve->value(),
+    'type' => $query_wr->field_query_type->value(),
+    'comment' => $query_wr->field_comment->value(),
+  ];
+  if ($query_wr->field_query_reason->value()) {
+    $params['reason'] = $query_wr->field_query_reason->name->value();
+  }
+  drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
+
   return true;
 }
 
@@ -942,51 +936,6 @@ function query_get_reason_by_oc_id($oc_id)
   }
   return empty($entities) ? false: current($entities);
 }
-
-/**
- * Implements hook_entity_update().
- * @param $entity
- * @param $type
- */
-function query_entity_update($entity, $type)
-{
-  if ($type == 'query'
-    && $entity->uid != 0) { // 0 - для импорта) {
-    // отправка уведомлений при наличии изменений в Заявке
-    $changed_by = user_has_role(ROLE_MANAGER) ? 'manager' : 'client';
-    $query_wr = entity_metadata_wrapper('query', $entity);
-    $params = [
-      'qid' => $query_wr->getIdentifier(),
-      'month' => date('F', $query_wr->field_month->value()),
-      'product' => $query_wr->field_nomenklatura->name->value(),
-      'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
-      'status_client' => $query_wr->field_query_status_client->label(),
-      'status_manager' => $query_wr->field_query_status_manager->label(),
-      'client_approve' => $query_wr->field_query_client_approve->value(),
-      'type' => $query_wr->field_query_type->value(),
-      'comment' => $query_wr->field_comment->value(),
-    ];
-    if ($query_wr->field_query_reason->value()) {
-      $params['reason'] = $query_wr->field_query_reason->name->value();
-    }
-
-    if ($changed_by == 'client') {
-      if ($entity->original->field_query_status_client["und"][0]["value"] != $entity->field_query_status_client["und"][0]["value"]) {
-        // отправить письма менеджерам, за исключением, когда клиент согласует весь план разом
-        if ($entity->field_query_type["und"][0]["value"] != 'main' || $entity->field_query_status_client["und"][0]["value"] != 'approved') {
-          if ($managers = query_get_managers_to_notify()) {
-            foreach ($managers as $manager) {
-              drupal_mail('mailer', 'manager_notify_query_handling', $manager->mail, user_preferred_language($manager), $params);
-            }
-          }
-        }
-      }
-    } else {
-      drupal_mail('mailer', 'client_notify_query_handling', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
-    }
-  }
-}
-
 
 function query_get_managers_to_notify()
 {
@@ -1080,10 +1029,8 @@ function query_views_pre_render(&$view)
 //      }
     }
 
-    // добавить кнопку Новая заявка (Торговый Дом)
-//    if (in_array($GLOBALS['user']->uid,[91, 80])) {
+    // добавить кнопку Новая заявка
     $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-primary">Новая заявка</a>';
-//    }
   }
 
   // дополнительная сортировка по важности Заявки
