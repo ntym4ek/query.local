@@ -106,10 +106,11 @@ form {
       &.approved:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
-      &.archive { opacity: 0.5; }
+      //&.archive { opacity: 0.5; }
       &.archive:after,
       &.waiting:after,
       &.deal:after,
+      &.deny:after,
       &.cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
@@ -140,6 +141,13 @@ form {
       }
       &.cancelled:after {
         content: "ОТМЕНЕНА";
+      }
+      &.deny:after {
+        content: "ОТКЛОНЕНА";
+      }
+      .query-comment { text-align: right; }
+      &.from-client {
+        .query-comment { text-align: left; }
       }
     }
   }

@@ -22,8 +22,6 @@ class query_handler_field_produce_units_form extends views_handler_field
 
     $query_wr = entity_metadata_wrapper('query', $query_id);
     $month_start = $query_wr->field_month->value();
-    $nom_tid = $query_wr->field_nomenklatura->tid->value();
-    $nom_client_id = $query_wr->field_nomenklatura->field_user->uid->value();
 
     // вывести комментарий, если заявка от клиента
     // вывести установки, если есть

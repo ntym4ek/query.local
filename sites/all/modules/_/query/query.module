@@ -701,7 +701,6 @@ function query_form_redirect_submit(&$form, &$form_state)
 
 function query_query_export($query_wr)
 {
-  return false;
   $query_arr = [
     'id' => $query_wr->getIdentifier(),
     'id_1c' => '',
@@ -784,18 +783,24 @@ function query_query_import($array)
     }
   }
 
+  // в Отказе должно быть количество, так как Загрузка отсутствует
+  if (!$query_qty && $query_status_manager == 'deny' && !empty($array['volume'])) {
+    $query_qty = $array['volume'];
+  }
+
   // проверить наличие исходной Заявки по id и сменить статус менеджера
   if ($old_query_id) {
     try {
       $old_query_wr = entity_metadata_wrapper('query', $old_query_id);
       if ($old_query_wr->value()) {
-        // проверить, совпадает ли арт из новой заявки со старой (просили одинэсники)
+        // проверить, совпадает ли артикул из новой заявки со старой (просили одинэсники)
         $old_artikul_1c = $old_query_wr->field_nomenklatura->field_oc_artikul->value();
         if ($old_artikul_1c != $artikul) {
           watchdog('import', 'Артикул из старой Заявки: ' . $old_artikul_1c . ' не совпадает с артикулом из ответа: ' . $artikul . '. (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
           return false;
         }
-        $old_query_wr->field_query_status_manager = 'approved';
+        // может быть approved или deny
+        $old_query_wr->field_query_status_manager = $query_status_manager;
         $old_query_wr->save();
       }
     } catch (Exception $e) {}
@@ -832,10 +837,11 @@ function query_query_import($array)
   // заполнить поля
   try {
     $query_wr = entity_metadata_wrapper('query', $query);
+    $query_wr->created = REQUEST_TIME;
     $query_wr->field_month = $month_start;
     $query_wr->field_nomenklatura = $nom->tid;
-    $query_wr->field_qty = $query_qty;
     $query_wr->field_query_type = 'correction';
+    $query_wr->field_qty = $query_qty;
     $query_wr->field_query_status_client = 'approved';
     $query_wr->field_query_status_manager = $query_status_manager;
     if ($query_reason_tid) $query_wr->field_query_reason = $query_reason_tid;
@@ -850,6 +856,24 @@ function query_query_import($array)
   } catch (Exception $e) {
     watchdog('import', 'Ошибка при сохранении заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
     return false;
+  }
+
+  // todo если пришёл отказ, сделать копию последней актуальной заявки (созданной до отказа)
+  // тк актуальная заявка должна быть всегда сверху
+  if ($query_status_manager == 'deny') {
+    $efquery = new EntityFieldQuery();
+    $efquery
+      ->entityCondition('entity_type', 'query')
+      ->propertyCondition('created', $query_wr->created->value(), '<')
+      ->fieldCondition('field_month', 'value', $month_start)
+      ->fieldCondition('field_nomenklatura', 'target_id', $nom->tid)
+      ->fieldCondition('field_query_status_client', 'value', 'approved')
+      ->fieldCondition('field_query_status_manager', 'value', 'approved')
+      ->propertyOrderBy('id', 'DESC');
+    $result = $efquery->execute();
+    if ($result) {
+      query_query_make_copy(current($result['query']));
+    }
   }
 
   // если пришла Занятость
@@ -906,6 +930,46 @@ function query_query_import($array)
   drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
 
   return true;
+}
+
+function query_query_make_copy($source_query)
+{
+  $query_new = entity_create('query', [
+    'type' => 'query',
+    'created' => REQUEST_TIME,
+    'uid' => 0,
+  ]);
+  entity_save('query', $query_new);
+
+  $source_query_wr = entity_metadata_wrapper('query', $source_query->id);
+
+  $query_new_wr = entity_metadata_wrapper('query', $query_new);
+  $query_new_wr->field_month = $source_query_wr->field_month->value();
+  $query_new_wr->field_nomenklatura = $source_query_wr->field_nomenklatura->value();
+  $query_new_wr->field_query_type = 'correction';
+  $query_new_wr->field_query_status_client = 'approved';
+  $query_new_wr->field_query_status_manager = 'approved';
+  $query_new_wr->field_qty = $source_query_wr->field_qty->value();
+  $query_new_wr->field_query_reason = $source_query_wr->field_query_reason->value();
+  $query_new_wr->field_comment = $source_query_wr->field_comment->value();
+  $query_new_wr->field_oc_id = $source_query_wr->field_oc_id->value();
+  $query_new_wr->field_query_period = ['value' => $source_query_wr->field_query_period->value->value(), 'value2' => $source_query_wr->field_query_period->value2->value()];
+  $query_new_wr->save();
+
+  // Загрузка
+  foreach ($source_query_wr->field_load->getIterator() as $source_load_wr) {
+    if ($source_load_wr->value()) {
+      $load = entity_create('load', ['type' => 'load']);
+      entity_save('load', $load);
+      $load_wr = entity_metadata_wrapper('load', $load);
+      $load_wr->field_produce_unit = $source_load_wr->field_produce_unit->value();
+      $load_wr->field_produce_date = $source_load_wr->field_produce_date->value();
+      $load_wr->field_produce_output = $source_load_wr->field_produce_output->value();
+      $load_wr->save();
+      $query_new_wr->field_load[] = $load_wr->getIdentifier();
+    }
+  }
+  $query_new_wr->save();
 }
 
 function query_get_query_by_oc_id($oc_id, $month_start)
@@ -1034,26 +1098,26 @@ function query_views_pre_render(&$view)
   }
 
   // дополнительная сортировка по важности Заявки
-  if (in_array($view->name, ['queries', 'manager_queries']) && $view->current_display == 'page_1') {
-    $result = $view->result;
-    for ($i = count($view->result)-1;  $i >= 0; $i--) {
-      $vr_item = $view->result[$i];
-      if (($view->name == 'manager_queries' && $vr_item->field_field_query_status_manager[0]["raw"]["value"] == 'processing')
-        || ($view->name == 'queries' && $vr_item->field_field_query_status_client[0]["raw"]["value"] == 'processing')) {
-        $index = -1;
-        foreach($result as $i2 => $r_item) {
-          if ($r_item->id == $vr_item->id) {
-            $index = $i2;
-          }
-        }
-        if ($index != -1) {
-          $item = array_splice($result, $index, 1);
-          array_unshift($result, $item[0]);
-        }
-      }
-    }
-    $view->result = $result;
-  }
+//  if (in_array($view->name, ['queries', 'manager_queries']) && $view->current_display == 'page_1') {
+//    $result = $view->result;
+//    for ($i = count($view->result)-1;  $i >= 0; $i--) {
+//      $vr_item = $view->result[$i];
+//      if (($view->name == 'manager_queries' && $vr_item->field_field_query_status_manager[0]["raw"]["value"] == 'processing')
+//        || ($view->name == 'queries' && $vr_item->field_field_query_status_client[0]["raw"]["value"] == 'processing')) {
+//        $index = -1;
+//        foreach($result as $i2 => $r_item) {
+//          if ($r_item->id == $vr_item->id) {
+//            $index = $i2;
+//          }
+//        }
+//        if ($index != -1) {
+//          $item = array_splice($result, $index, 1);
+//          array_unshift($result, $item[0]);
+//        }
+//      }
+//    }
+//    $view->result = $result;
+//  }
 
   if ($view->name == 'produced_nomenklatura' && $view->current_display == 'page') {
     // определяем последнюю Заявку по Номенклатуре
@@ -1096,36 +1160,44 @@ function query_preprocess_views_view_unformatted(&$vars)
         ->execute();
       if ($result) {
         $queries = entity_load('query', array_keys($result['query']));
-        krsort($queries);
+//        krsort($queries);
         $last_query = current($queries);
         if ($last_query->field_qty["und"][0]["value"] == 0
           && $last_query->field_query_status_client["und"][0]["value"] == 'approved'
           && $last_query->field_query_status_manager["und"][0]["value"] == 'approved') {
           $vars["classes_array"][$key] .= ' cancelled';
-        } elseif (query_check_query_produce_finished($vars["view"]->result[$key]->id)
+        } elseif ($last_query->field_query_status_manager["und"][0]["value"] == 'deny') {
+          $vars["classes_array"][$key] .= ' deny';
+        }
+        elseif (query_check_query_produce_finished($vars["view"]->result[$key]->id)
                 && $status_manager == 'approved'
                 && $status_client == 'approved')
         {
-          $vars["classes_array"][$key] .= ' produced';
-        } elseif (($last_query->field_query_status_client["und"][0]["value"] != 'approved'
+          $vars["classes_array"][$key] .= ' archive';
+        }
+        elseif (($last_query->field_query_status_client["und"][0]["value"] != 'approved'
                || $last_query->field_query_status_manager["und"][0]["value"] != 'approved')
                && count($queries) == 1) // если над Заявкой только одна
         {
           $vars["classes_array"][$key] .= ' waiting';
-        } elseif (($last_query->field_query_status_client["und"][0]["value"] == 'approved'
+        }
+        elseif (($last_query->field_query_status_client["und"][0]["value"] == 'approved'
                || $last_query->field_query_status_manager["und"][0]["value"] == 'approved')
-               && count($queries) == 1) // если над Заявкой только одна
+//               && count($queries) == 1
+        ) // если над Заявкой только одна
         {
           $vars["classes_array"][$key] .= ' deal';
-        } else {
+        }
+        else {
           $vars["classes_array"][$key] .= ' archive';
         }
 
       } else {
-        // если дата конца производства наступила - наложить штамп "ВЫПОЛНЕНО"
+        // если дата конца производства наступила - наложить штамп "АРХИВ"
         if (query_check_query_produce_finished($vars["view"]->result[$key]->id)
-          && $status_manager == 'approved'
-          && $status_client == 'approved') {
+//          && $status_manager == 'approved'
+//          && $status_client == 'approved'
+        ) {
             $vars["classes_array"][$key] .= ' archive';
         }
 
@@ -1154,6 +1226,12 @@ function query_preprocess_views_view_unformatted(&$vars)
 
       if (empty($vars["view"]->result[$key]->field_data_field_load_field_load_target_id)) {
         $vars["classes_array"][$key] .= ' no-load';
+      }
+
+
+      // добавить класс, если заявка от Клиента
+      if (!empty($vars["view"]->result[$key]->eck_query_uid)) {
+        $vars["classes_array"][$key] .= ' from-client';
       }
     }
 
@@ -1402,6 +1480,8 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
     $dbr->addField('q', 'id');
     $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
     $dbr->condition('fm.field_month_value', $month_start);
+    $dbr->innerJoin('field_data_field_query_type', 'ft', 'ft.entity_id = q.id');
+    $dbr->condition('ft.field_query_type_value', 'service', '!=');
     $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
     $dbr->condition('fn.field_nomenklatura_target_id', $current_query_nom_tid);
     $dbr->innerJoin('field_data_field_query_status_client', 'fsc', 'fsc.entity_id = q.id');
