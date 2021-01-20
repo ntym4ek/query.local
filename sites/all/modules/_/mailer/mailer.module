@@ -33,7 +33,7 @@ function mailer_mail($key, &$message, $params)
 
       break;
 
-      case 'client_notify_query_correction_new':
+    case 'client_notify_query_correction_new':
       $message['subject'] = 'Новая корректировка по вашей заявке';
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
@@ -109,5 +109,7 @@ function mailer_mail_alter(&$message)
   if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE) {
     $message['send'] = false;
     watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
+  } else {
+    watchdog('mailer', 'Отправка E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
   }
 }

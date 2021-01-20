@@ -63,10 +63,15 @@ form {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
     position: relative;
-    > div { }
     .views-field-id {
+      flex: 0 0 140px;
       margin-bottom: $grid-gutter-width/2;
     }
+    .views-field-created { flex: 0 0 150px; }
+    .views-field-field-qty { flex: 150px; }
+    .views-field-field-query-status-manager { flex: 0 0 180px; }
+    .views-field-field-query-type { flex-basis: 100px; }
+
     .views-field-produce-units-form {
       flex: 100%;
       padding: $grid-gutter-width/2 0 0 0;
@@ -76,7 +81,6 @@ form {
       }
     }
     .views-field-produce-unit-load { flex: 100%; }
-    .views-field-field-query-type { flex-basis: 15%; }
   }
   .views-field-nothing a {
     font-size: $font-size-small;
@@ -100,8 +104,9 @@ form {
       .collapsing { padding-top: 15px; }
     }
     .view-item {
+      justify-content: flex-start;
       border: 1px solid $gray-lightest;
-      border-top: 5px solid $gray-lightest;
+      border-top: 8px solid $gray-lightest;
       padding: 20px 20px 0;
       &.actual:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
@@ -112,7 +117,7 @@ form {
       &.stamp-approved:after,
       &.stamp-deny:after,
       &.stamp-cancelled:after {
-        position: absolute; top: 50px; left: 40%; z-index: 1;
+        position: absolute; top: 50px; left: 42%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
         color: $brand-danger; font-size: 26px;
         background: #fff;
@@ -140,7 +145,7 @@ form {
       }
       &.stamp-processing:after {
         content: "НА СОГЛАСОВАНИИ";
-        left: 38%;
+        left: 40%;
         color: $brand-warning; border-color: $brand-warning; text-shadow: 0 0 2px $brand-warning; box-shadow: 0 0 2px $brand-warning;
       }
       &.stamp-cancelled:after {
@@ -150,6 +155,7 @@ form {
       &.from-client {
         .query-comment { text-align: left; }
       }
+
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
