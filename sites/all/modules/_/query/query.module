@@ -110,6 +110,10 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form_state['data']['query']['type'] = $_GET['type'];
     }
 
+    if (!empty($_SESSION["views"]["queries"]["default"]["field_month_value"]["value"]["month"])) {
+      $form_state['data']['month_start'] = gmmktime(0, 0, 0, $_SESSION["views"]["queries"]["default"]["field_month_value"]["value"]["month"], 1, $_SESSION["views"]["queries"]["default"]["field_month_value"]["value"]["year"]);
+    }
+
     // получить Запрос с которого сделана Корректировка
     if (!empty($_GET['last_query_id'])) {
       $last_query_wr = entity_metadata_wrapper('query', $_GET['last_query_id']);
@@ -191,6 +195,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['last_query']['volume'];
     }
     if (!empty($form_state['data']['month_start'])) {
+      $form["field_month"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
+      $form["field_month"]["und"][0]["#default_value"]["value2"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value2"] = $form_state['data']['month_start'];
 
@@ -1164,6 +1170,17 @@ function query_preprocess_views_view_unformatted(&$vars)
       $query_author_id = empty($vars["view"]->result[$key]->eck_query_uid) ? 0 : $vars["view"]->result[$key]->eck_query_uid;
       $query_month_start = $vars["view"]->result[$key]->field_field_month[0]["raw"]["value"];
       $query_created = $vars["view"]->result[$key]->eck_query_created;
+      $query_nom_tid = $vars["view"]->result[$key]->field_field_nomenklatura[0]["raw"]["target_id"];
+
+    // есть ли утверждённый план
+    $efquery = new EntityFieldQuery();
+    $has_approved_plan = $efquery
+      ->entityCondition('entity_type', 'query')
+      ->fieldCondition('field_month', 'value', $query_month_start)
+      ->fieldCondition('field_query_type', 'value', 'main')
+      ->fieldCondition('field_query_status_client', 'value', 'approved')
+      ->fieldCondition('field_query_status_manager', 'value', 'approved')
+      ->execute();
 
     // есть ли утверждённый план после
     $efquery = new EntityFieldQuery();
@@ -1171,6 +1188,7 @@ function query_preprocess_views_view_unformatted(&$vars)
       ->entityCondition('entity_type', 'query')
       ->propertyCondition('created', $query_created, '>')
       ->fieldCondition('field_month', 'value', $query_month_start)
+      ->fieldCondition('field_nomenklatura', 'target_id', $query_nom_tid)
       ->fieldCondition('field_query_type', 'value', 'main')
       ->fieldCondition('field_query_status_client', 'value', 'approved')
       ->fieldCondition('field_query_status_manager', 'value', 'approved')
@@ -1184,7 +1202,7 @@ function query_preprocess_views_view_unformatted(&$vars)
         ->propertyCondition('created', $query_created, '>=')
         ->propertyCondition('uid', $GLOBALS['user']->uid)
         ->fieldCondition('field_month', 'value', $query_month_start)
-        ->fieldCondition('field_nomenklatura', 'target_id', $vars["view"]->result[$key]->field_field_nomenklatura[0]["raw"]["target_id"])
+        ->fieldCondition('field_nomenklatura', 'target_id', $query_nom_tid)
         ->execute();
 
       // есть ли актуальные Корректировки после
@@ -1194,56 +1212,41 @@ function query_preprocess_views_view_unformatted(&$vars)
         ->propertyCondition('id', $vars["view"]->result[$key]->eck_query_id, '>')
         ->propertyCondition('created', $query_created, '>=')
         ->fieldCondition('field_month', 'value', $query_month_start)
-        ->fieldCondition('field_nomenklatura', 'target_id', $vars["view"]->result[$key]->field_field_nomenklatura[0]["raw"]["target_id"])
+        ->fieldCondition('field_nomenklatura', 'target_id', $query_nom_tid)
         ->fieldCondition('field_query_status_client', 'value', 'approved')
         ->fieldCondition('field_query_status_manager', 'value', 'processing', '!=')
         ->execute();
-      if ($has_approved_plan_after) {
-        if (($has_client_query && $actual_queries) || ($actual_queries && count($actual_queries['query']) > 1)) {
-          $vars["classes_array"][$key] .= ' stamp-archive';
-        } else {
-          if ($actual_queries) {
-
-            if ($query_author_id) {
-              $vars["classes_array"][$key] .= ' stamp-' . $query_status_manager;
-            } else {
-              $vars["classes_array"][$key] .= ' stamp-archive';
-            }
+      if (!$has_approved_plan_after) {
+        if ($has_approved_plan) {
+          if (($has_client_query && $actual_queries) || ($actual_queries && count($actual_queries['query']) > 1)) {
+            $vars["classes_array"][$key] .= ' stamp-archive';
           } else {
-            // если дата конца производства наступила - наложить штамп "АРХИВ"
-//          if (query_check_query_produce_finished($vars["view"]->result[$key]->id)
-//            && $query_status_manager == 'approved'
-//            && $query_status_client == 'approved'
-//          ) {
-//              $vars["classes_array"][$key] .= ' archive';
-//          }
+            if ($actual_queries) {
 
-            if ($query_status_manager == 'processing') {
-              $vars["classes_array"][$key] .= ' stamp-processing';
+              if ($query_author_id) {
+                $vars["classes_array"][$key] .= ' stamp-' . $query_status_manager;
+              } else {
+                $vars["classes_array"][$key] .= ' stamp-archive';
+              }
+            } else {
+              if ($query_status_manager == 'processing') {
+                $vars["classes_array"][$key] .= ' stamp-processing';
+              }
             }
           }
         }
       } else {
-        $vars["classes_array"][$key] .= ' processing';
+        $vars["classes_array"][$key] .= ' stamp-archive';
       }
 
       // утверждённая заявка
-      if ($query_status_manager != 'processing'
+      if (!$actual_queries
+        && $query_status_manager != 'processing'
         && $query_status_client == 'approved') {
         $vars["classes_array"][$key] .= ' actual';
-      } else {
+      } elseif ($query_status_manager == 'processing' || $query_status_client == 'processing') {
         $vars["classes_array"][$key] .= ' processing';
       }
-
-//      if (user_has_role(ROLE_MANAGER)) {
-//        if ($query_status_manager == 'processing') {
-//          $vars["classes_array"][$key] .= ' attention';
-//        }
-//        if ($query_status_client == 'processing') {
-//          $vars["classes_array"][$key] .= ' processing';
-//        }
-//      } else {
-//      }
 
       if (empty($vars["view"]->result[$key]->field_data_field_load_field_load_target_id)) {
         $vars["classes_array"][$key] .= ' no-load';
@@ -1293,12 +1296,18 @@ function query_preprocess_views_view_field(&$vars)
       }
     }
 
-    if ($vars["field"]->field_info["field_name"] == 'field_query_status_client') {
-      // если Заявка без согласования с клиентом, то есго статус помениять с Согласовано на Уведомление
-      if ($vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
-        && isset($vars["row"]->field_field_query_client_approve[0]["raw"]["value"]) && $vars["row"]->field_field_query_client_approve[0]["raw"]["value"] == 0
-       ) {
-        $vars["output"] = 'Уведомление';
+    if ($vars["field"]->field_info["field_name"] == 'field_query_status_manager') {
+      if ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved') {
+        $vars["output"] = 'Утверждён';
+      }
+      elseif (!empty($vars["row"]->eck_query_uid)) {
+        if ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'correction' && $vars["row"]->field_field_query_status_manager[0]["raw"]["value"] == 'approved') {
+          $vars["output"] = 'Утверждена';
+        }
+      } elseif ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
+          $vars["output"] = 'На согласовании';
+      } else {
+        $vars["output"] = '';
       }
     }
   }
