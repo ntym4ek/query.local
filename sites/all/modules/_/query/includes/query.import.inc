@@ -167,141 +167,6 @@ function query_queries_delete($month_start = null)
 //  }
 //}
 
-function query_produce_plan_import($array)
-{
-  if (is_array($array) && !empty($array['load'])) {
-    // подготовить массив с Планом для внесения в базу
-    // определить Заявки и посчитать общее производимое количество
-    $plan = [];
-    $month_arr = explode('.', $array['month']);
-    $month_start = gmmktime(0, 0, 0, $month_arr[1], 1, $month_arr[2]);
-
-    //  если есть утверждённый план, импорт запретить
-    $efquery = new EntityFieldQuery();
-    $efquery
-      ->entityCondition('entity_type', 'query')
-      ->fieldCondition('field_month', 'value', $month_start)
-      ->fieldCondition('field_query_type', 'value', 'main')
-      ->fieldCondition('field_query_status_client', 'value', 'approved')
-      ->fieldCondition('field_query_status_manager', 'value', 'approved');
-    $result = $efquery->execute();
-    if ($result) {
-      watchdog('import', 'Утверждённый план уже загружен. Импорт плана не выполнен.', [], WATCHDOG_ERROR);
-      return false;
-    }
-
-    $produce_unit_id_arr = [];
-    foreach ($array['load'] as $key => $item) {
-      if ($item['artikul_1c'] && $item['unit_id_1c'] && $item['date']) {
-        if (($nom = query_get_nomenklatura_by_artikul($item['artikul_1c']))
-          && ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c']))) {
-          $date_arr = explode('.', $item['date']);
-          $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-
-          if (!isset($plan[$nom->tid])) {
-            $plan[$nom->tid] = [
-              'field_month' => $month_start,
-              'field_nomenklatura' => $nom->tid,
-              'uid' => $nom->field_user['und'][0]['target_id'],
-              'field_qty' => 0,
-              'field_load' => [],
-            ];
-          }
-          $plan[$nom->tid]['field_qty'] += $item['output'];
-          $plan[$nom->tid]['field_load'][] = [
-            'field_produce_unit' => $produce_unit->tid,
-            'field_produce_date' => $day_start,
-            'field_produce_output' => $item['output'],
-          ];
-
-          $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
-          $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
-
-        } else {
-          if (empty($nom)) {
-            watchdog('import', 'Импорт плана. Не найдена номенклатура с 1с ID: ' . $item['artikul_1c'], [], WATCHDOG_ERROR);
-          }
-          if (empty($produce_unit)) {
-            watchdog('import', 'Импорт плана. Не найдена установка с 1с ID: ' . $item['unit_id_1c'], [], WATCHDOG_ERROR);
-          }
-//          return false; продолжаем импорт
-        }
-      }
-    }
-
-    // массив с техработами на установках
-    $service_arr = [];
-    if ($array['service']) {
-      foreach ($array['service'] as $key => $item) {
-        $date_arr = explode('.', $item['date']);
-        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-        if (!empty($produce_unit_id_arr[$item['unit_id_1c']])) {
-          $pu_tid = $produce_unit_id_arr[$item['unit_id_1c']];
-          $service_arr[$pu_tid][] = [
-            'field_produce_unit' => $pu_tid,
-            'field_produce_date' => $day_start,
-            'field_produce_output' => 0,
-          ];
-        }
-      }
-    }
-
-      // удалить старый план на месяц
-    query_plan_delete($month_start);
-
-    // создание Заявок на месяц
-    $user_mails = [];
-    foreach ($plan as $plan_item) {
-      // добавить в массив Загрузки сервисную Загрузку
-      foreach ($plan_item['produce_units'] as $pu_tid) {
-        if (!empty($service_arr[$pu_tid])) {
-          $plan_item['field_load'] = array_merge($plan_item['field_load'], $service_arr[$pu_tid]);
-        }
-      }
-
-      $query = entity_create('query', [
-        'type' => 'query',
-        'uid' => 0,
-      ]);
-      entity_save('query', $query);
-
-      $query_wr = entity_metadata_wrapper('query', $query);
-      $query_wr->field_month = $plan_item['field_month'];
-      $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
-      $query_wr->field_qty = $plan_item['field_qty'];
-      $query_wr->field_query_type = 'main';
-      $query_wr->field_query_status_client = ($array['type'] == 'main' ? 'approved' : 'processing');
-      $query_wr->field_query_status_manager = 'approved';
-      $query_wr->field_query_period = ['value' => 0, 'value2' => 0];
-      $query_wr->save();
-
-      query_query_load_update($query->id, $plan_item['field_load']);
-
-      if (empty($user_mails[$plan_item['uid']])) {
-        $user_mails[$plan_item['uid']] = [
-          'month' => $plan_item['field_month'],
-          'account' => user_load($plan_item['uid'])
-        ];
-      }
-    }
-
-    // отправить письма об импорте плана
-    if ($user_mails) {
-      foreach ($user_mails as $user_id => $data) {
-        $params['month'] = t(date('F', $data['month']));
-        if ($data['account']->mail) {
-          drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
-        }
-      }
-    }
-
-    watchdog('import', 'План производства импортирован.', [], WATCHDOG_INFO);
-    return $plan;
-  } else {
-    watchdog('import', 'Импорт плана не выполнен.', [], WATCHDOG_ERROR);
-    return false;
-  }
-}
 
 function query_davalec_import($array)
 {
@@ -556,3 +421,138 @@ function query_nomenklatura_import($array)
   }
 }
 
+function query_produce_plan_import($array)
+{
+  if (is_array($array) && !empty($array['load'])) {
+    // подготовить массив с Планом для внесения в базу
+    // определить Заявки и посчитать общее производимое количество
+    $plan = [];
+    $month_arr = explode('.', $array['month']);
+    $month_start = gmmktime(0, 0, 0, $month_arr[1], 1, $month_arr[2]);
+
+    //  если есть утверждённый план, импорт запретить
+    $efquery = new EntityFieldQuery();
+    $efquery
+      ->entityCondition('entity_type', 'query')
+      ->fieldCondition('field_month', 'value', $month_start)
+      ->fieldCondition('field_query_type', 'value', 'main')
+      ->fieldCondition('field_query_status_client', 'value', 'approved')
+      ->fieldCondition('field_query_status_manager', 'value', 'approved');
+    $result = $efquery->execute();
+    if ($result) {
+      watchdog('import', 'Утверждённый план уже загружен. Импорт плана не выполнен.', [], WATCHDOG_ERROR);
+      return false;
+    }
+
+    $produce_unit_id_arr = [];
+    foreach ($array['load'] as $key => $item) {
+      if ($item['artikul_1c'] && $item['unit_id_1c'] && $item['date']) {
+        if (($nom = query_get_nomenklatura_by_artikul($item['artikul_1c']))
+          && ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c']))) {
+          $date_arr = explode('.', $item['date']);
+          $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+
+          if (!isset($plan[$nom->tid])) {
+            $plan[$nom->tid] = [
+              'field_month' => $month_start,
+              'field_nomenklatura' => $nom->tid,
+              'uid' => $nom->field_user['und'][0]['target_id'],
+              'field_qty' => 0,
+              'field_load' => [],
+            ];
+          }
+          $plan[$nom->tid]['field_qty'] += $item['output'];
+          $plan[$nom->tid]['field_load'][] = [
+            'field_produce_unit' => $produce_unit->tid,
+            'field_produce_date' => $day_start,
+            'field_produce_output' => $item['output'],
+          ];
+
+          $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
+          $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
+
+        } else {
+          if (empty($nom)) {
+            watchdog('import', 'Импорт плана. Не найдена номенклатура с 1с ID: ' . $item['artikul_1c'], [], WATCHDOG_ERROR);
+          }
+          if (empty($produce_unit)) {
+            watchdog('import', 'Импорт плана. Не найдена установка с 1с ID: ' . $item['unit_id_1c'], [], WATCHDOG_ERROR);
+          }
+//          return false; продолжаем импорт
+        }
+      }
+    }
+
+    // массив с техработами на установках
+    $service_arr = [];
+    if ($array['service']) {
+      foreach ($array['service'] as $key => $item) {
+        $date_arr = explode('.', $item['date']);
+        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        if (!empty($produce_unit_id_arr[$item['unit_id_1c']])) {
+          $pu_tid = $produce_unit_id_arr[$item['unit_id_1c']];
+          $service_arr[$pu_tid][] = [
+            'field_produce_unit' => $pu_tid,
+            'field_produce_date' => $day_start,
+            'field_produce_output' => 0,
+          ];
+        }
+      }
+    }
+
+    // удалить старый план на месяц
+    query_plan_delete($month_start);
+
+    // создание Заявок на месяц
+    $user_mails = [];
+    foreach ($plan as $plan_item) {
+      // добавить в массив Загрузки сервисную Загрузку
+      foreach ($plan_item['produce_units'] as $pu_tid) {
+        if (!empty($service_arr[$pu_tid])) {
+          $plan_item['field_load'] = array_merge($plan_item['field_load'], $service_arr[$pu_tid]);
+        }
+      }
+
+      $query = entity_create('query', [
+        'type' => 'query',
+        'uid' => 0,
+      ]);
+      entity_save('query', $query);
+
+      $query_wr = entity_metadata_wrapper('query', $query);
+      $query_wr->field_month = $plan_item['field_month'];
+      $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
+      $query_wr->field_qty = $plan_item['field_qty'];
+      $query_wr->field_query_type = 'main';
+      $query_wr->field_query_status_client = ($array['type'] == 'main' ? 'approved' : 'processing');
+      $query_wr->field_query_status_manager = 'approved';
+      $query_wr->field_query_period = ['value' => 0, 'value2' => 0];
+      $query_wr->save();
+
+      query_query_load_update($query->id, $plan_item['field_load']);
+
+      if (empty($user_mails[$plan_item['uid']])) {
+        $user_mails[$plan_item['uid']] = [
+          'month' => $plan_item['field_month'],
+          'account' => user_load($plan_item['uid'])
+        ];
+      }
+    }
+
+    // отправить письма об импорте плана
+    if ($user_mails) {
+      foreach ($user_mails as $user_id => $data) {
+        $params['month'] = t(date('F', $data['month']));
+        if ($data['account']->mail) {
+          drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
+        }
+      }
+    }
+
+    watchdog('import', 'План производства импортирован.', [], WATCHDOG_INFO);
+    return $plan;
+  } else {
+    watchdog('import', 'Импорт плана не выполнен.', [], WATCHDOG_ERROR);
+    return false;
+  }
+}

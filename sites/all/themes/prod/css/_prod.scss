@@ -103,47 +103,48 @@ form {
       border: 1px solid $gray-lightest;
       border-top: 5px solid $gray-lightest;
       padding: 20px 20px 0;
-      &.approved:not(.produced) { border-color: $brand-success; }
+      &.actual:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
-      //&.archive { opacity: 0.5; }
-      &.archive:after,
-      &.waiting:after,
-      &.deal:after,
-      &.deny:after,
-      &.cancelled:after {
+
+      &.stamp-archive:after,
+      &.stamp-processing:after,
+      &.stamp-approved:after,
+      &.stamp-deny:after,
+      &.stamp-cancelled:after {
         position: absolute; top: 50px; left: 40%; z-index: 1;
         transform: rotate(-12deg); -webkit-transform: rotate(-12deg); -moz-transform: rotate(-12deg); -ms-transform: rotate(-12deg); -o-transform: rotate(-12deg);
         color: $brand-danger; font-size: 26px;
         background: #fff;
         border: solid 4px $brand-danger; border-radius: 5px;
         padding: 5px;
-        zoom: 1; filter: alpha(opacity=50); opacity: 0.5;
+        zoom: 1;
+        filter: alpha(opacity=50); opacity: 0.5;
         text-shadow: 0 0 2px $brand-danger;
         box-shadow: 0 0 2px $brand-danger;
       }
-      &.changed.no-load:after,
-      &.produced.no-load:after,
-      &.cancelled.no-load:after {
+      &.stamp-cancelled.no-load:after {
         //top: 8px;
       }
-      &.deal:after {
-        content: "КОРРЕКТИРОВКА";
+      &.stamp-approved:after {
+        content: "УТВЕРЖДЕНА";
         color: $brand-success; border-color: $brand-success; text-shadow: 0 0 2px $brand-success; box-shadow: 0 0 2px $brand-success;
       }
-      &.archive:after {
+      &.stamp-deny:after {
+        content: "ОТКЛОНЕНА";
+      }
+      &.stamp-archive:after {
         content: "АРХИВ";
-        left: 45%;
+        left: 46%;
         color: $brand-warning; border-color: $brand-warning; text-shadow: 0 0 2px $brand-warning; box-shadow: 0 0 2px $brand-warning;
       }
-      &.waiting:after {
+      &.stamp-processing:after {
         content: "НА СОГЛАСОВАНИИ";
+        left: 38%;
+        color: $brand-warning; border-color: $brand-warning; text-shadow: 0 0 2px $brand-warning; box-shadow: 0 0 2px $brand-warning;
       }
-      &.cancelled:after {
+      &.stamp-cancelled:after {
         content: "ОТМЕНЕНА";
-      }
-      &.deny:after {
-        content: "ОТКЛОНЕНА";
       }
       .query-comment { text-align: right; }
       &.from-client {
