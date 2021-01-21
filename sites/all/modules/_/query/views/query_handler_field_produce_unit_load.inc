@@ -43,9 +43,11 @@ class query_handler_field_produce_unit_load extends views_handler_field
       $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
       $class = '';
       if (!empty($load[$day_start])) {
-        $class = $load[$day_start]['output'] ? ' loaded' : ' service';
+        $class = empty($load[$day_start]['is_busy_same_company']) ? ' loaded' : ' selected';
+//        $class = $load[$day_start]['output'] ? ' loaded' : ' service';
       };
-      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
+//      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
+      $tooltip = empty($load[$day_start]) || (empty($load[$day_start]['is_busy_same_company'])) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
       $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
     }
     $output .=
