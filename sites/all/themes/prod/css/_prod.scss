@@ -1,3 +1,10 @@
+.page-header {
+  margin-top: 30px;
+}
+.breadcrumb {
+  display: none;
+}
+
 .date-form-element-content {
   border: none;
   padding: 0;
@@ -58,6 +65,13 @@ form {
   .view-header {
     margin-bottom: $grid-gutter-width/2;
     a.btn { margin: 0  5px $grid-gutter-width/2 0; }
+  }
+  .views-widget {
+    display: flex;
+    .control-label { display: none; }
+    .form-item-month-min { margin-right: 15px; }
+    .form-item-month-min-month,
+    .form-item-month-max-month { margin-right: 5px; }
   }
   .form-item-field-month-value-value-month,
   .form-item-field-produce-date-value-value-month,
@@ -162,6 +176,9 @@ form {
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
+  &.view-nomenklatura .table {
+    font-size: 16px;
+  }
 }
 
 .views-exposed-widget label,

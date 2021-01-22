@@ -16,6 +16,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
    */
   function render($values)
   {
+    $output = '';
     // вывести список дат с загрузкой для каждой установки
     $produce_unit_tid = $values->tid;
 
@@ -25,39 +26,41 @@ class query_handler_field_produce_unit_load extends views_handler_field
     list($year, $month) = explode('-', $date);
     $month_start = gmmktime(0,0,0, $month, 1, $year);
     $load = query_get_produce_unit_load($produce_unit_tid, $month_start);
-    $volume = 0;
-    foreach($load as $load_item) {
-      $volume += $load_item['output'];
-    }
+    if ($load) {
+      $volume = 0;
+      foreach ($load as $load_item) {
+        $volume += $load_item['output'];
+      }
 
-    $output =
-    '<div class="produce-unit">' .
-      '<div class="produce-unit-name">' .
+      $output =
+        '<div class="produce-unit">' .
+        '<div class="produce-unit-name">' .
         '<label class="views-label" for="edit-name--2">Установка</label>' .
         '<h3>' . $values->taxonomy_term_data_name . '</h3>' .
-      '</div>' .
-      '<div class="produce-unit-dates">' .
+        '</div>' .
+        '<div class="produce-unit-dates">' .
         '<label class="views-label">Даты</label>' .
         '<div class="form-checkboxes">';
-    for ($i = 1; $i <= date("t", $month_start); $i++) {
-      $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
-      $class = '';
-      if (!empty($load[$day_start])) {
-        $class = empty($load[$day_start]['is_busy_same_company']) ? ' loaded' : ' selected';
+      for ($i = 1; $i <= date("t", $month_start); $i++) {
+        $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
+        $class = '';
+        if (!empty($load[$day_start])) {
+          $class = empty($load[$day_start]['is_busy_same_company']) ? ' loaded' : ' selected';
 //        $class = $load[$day_start]['output'] ? ' loaded' : ' service';
-      };
+        };
 //      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
-      $tooltip = empty($load[$day_start]) || (empty($load[$day_start]['is_busy_same_company'])) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
-      $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
-    }
-    $output .=
-      '</div>' .
-      '</div>' .
-      '<div class="produce-unit-aux">' .
+        $tooltip = empty($load[$day_start]) || (empty($load[$day_start]['is_busy_same_company'])) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
+        $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
+      }
+      $output .=
+        '</div>' .
+        '</div>' .
+        '<div class="produce-unit-aux">' .
         '<label class="views-label">Общий объём</label>' .
         '<h3>' . number_format($volume, 0, ',', ' ') . '</h3>' .
-      '</div>' .
-    '</div>';
+        '</div>' .
+        '</div>';
+    }
 
     return $output;
   }
