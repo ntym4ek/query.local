@@ -198,6 +198,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_qty"]["und"][0]["value"]["#title"] = 'Новое количество';
       $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['last_query']['volume'];
     }
+    // Даты
     if (!empty($form_state['data']['month_start'])) {
       $form["field_month"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#default_value"]["value2"] = $form_state['data']['month_start'];
@@ -205,7 +206,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_month"]["und"][0]["#value"]["value2"] = $form_state['data']['month_start'];
 
       if (empty($form_state['data']['source_query']['date_start']) || empty($form_state['data']['source_query']['date_end'])) {
-        if ($filter && $filter['month']) {
+        if ($filter && $filter['month'] && $filter['month'] != date('n')) {
           $day_start = gmmktime(0, 0, 0, $filter['month'], 1, $filter['year']);
           $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
         } else {
@@ -215,8 +216,16 @@ function query_form_alter(&$form, &$form_state, $form_id)
         $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start;
         $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $next_month_start-24*3600;
       } else {
-        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $form_state['data']['source_query']['date_start'];
-        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $form_state['data']['source_query']['date_end'];
+        $day_start_start = $form_state['data']['source_query']['date_start'];
+        $day_end_start = $form_state['data']['source_query']['date_end'];
+        if (date('j', $day_start_start) < date('j')) {
+          $day_start_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+          if (date('j', $day_end_start) < date('j')) {
+            $day_end_start = gmmktime(0, 0, 0, date('n'), 31, date('Y'));
+          }
+        }
+        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start_start;
+        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $day_end_start;
       }
     }
     if (!empty($form_state['data']['nom_tid'])) {
@@ -422,7 +431,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
         // цикл по количеству дней в месяце
         for ($i = 1; $i <= date("t", $month_start); $i++) {
 
-          $day_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+//          $day_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
           $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
           // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
@@ -1254,19 +1263,22 @@ function query_preprocess_views_view_unformatted(&$vars)
       }
     }
 
-    // обернуть Заявки до Основной в Архив
-    $start_row_key = -1;
-    foreach ($vars["rows"] as $key => $row) {
-      if ($vars["view"]->result[$key]->field_field_query_type[0]["raw"]["value"] == 'main' && !empty($vars["rows"][$key + 1])) {
-        $start_row_key = $key + 1;
+    // обернуть Заявки до Актуальной в Архив
+    if (count($vars["rows"]) > 1) {
+      $start_row_key = -1;
+      foreach ($vars["rows"] as $key => $row) {
+        if ($vars["view"]->result[$key]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
+          && in_array($vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"], ['approved', 'deny'])
+          && $start_row_key == -1) {
+          $start_row_key = $key + 1;
+        }
+      }
+      if ($start_row_key != -1) {
+        $end_row_key = array_key_last($vars["rows"]);
+        $vars["prefix_row_key"] = $start_row_key;
+        $vars["suffix_row_key"] = $end_row_key;
       }
     }
-    if ($start_row_key != -1) {
-      $end_row_key = array_key_last($vars["rows"]);
-      $vars["prefix_row_key"] = $start_row_key;
-      $vars["suffix_row_key"] = $end_row_key;
-    }
-
   }
 
   if ($vars['view']->name == 'produce_units_load_client' && $vars['view']->current_display == 'page') {
@@ -1290,15 +1302,15 @@ function query_preprocess_views_view_table(&$vars)
   if ($vars['view']->name == 'nomenklatura' && $vars['view']->current_display == 'page') {
     $rows = [];
     foreach ($vars["rows"] as $key => $row) {
-      if ($row['produce_unit_load_amount']) $rows[] = $row;
-
       // заменить на артикул и название давальца
       $name_arr[0] = $vars["view"]->result[$key]->field_field_oc_artikul_davalec[0]["raw"]["value"];
       $name_arr[1] = $vars["view"]->result[$key]->field_field_oc_name_davalec[0]["raw"]["value"];
       $name = implode(' ', $name_arr);
       if (trim($name)) {
-        $vars["rows"][$key]["name"] = $name;
+        $row["name"] = $name;
       }
+
+      if ($row['produce_unit_load_amount']) $rows[] = $row;
     }
     $vars["rows"] = $rows;
   }
@@ -1329,9 +1341,16 @@ function query_preprocess_views_view_field(&$vars)
         if ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'correction' && $vars["row"]->field_field_query_status_manager[0]["raw"]["value"] == 'approved') {
           $vars["output"] = 'Утверждена';
         }
-      } elseif ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
+      }
+      elseif ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
           $vars["output"] = 'На согласовании';
-      } else {
+      }
+      elseif ($vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
+        && $vars["row"]->field_field_query_status_manager[0]["raw"]["value"] == 'approved'
+        && $vars["row"]->field_field_qty[0]["raw"]["value"] == 0) {
+          $vars["output"] = 'Производство отменено';
+      }
+      else {
         $vars["output"] = '';
       }
     }

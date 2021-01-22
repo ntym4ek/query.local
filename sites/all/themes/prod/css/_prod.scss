@@ -1,3 +1,6 @@
+a:focus {
+  outline: 0;
+}
 .page-header {
   margin-top: 30px;
 }
@@ -86,7 +89,7 @@ form {
     }
     .views-field-created { flex: 0 0 150px; }
     .views-field-field-qty { flex: 150px; }
-    .views-field-field-query-status-manager { flex: 0 0 180px; }
+    .views-field-field-query-status-manager { flex: 0 0 220px; }
     .views-field-field-query-type { flex-basis: 100px; }
 
     .views-field-produce-units-form {
@@ -172,11 +175,10 @@ form {
       &.from-client {
         .query-comment { text-align: left; }
       }
-
     }
   }
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
-  &.view-nomenklatura .table {
+  &.view-nomenklatura .table td {
     font-size: 16px;
   }
 }
@@ -194,7 +196,7 @@ form {
   //margin-bottom: 0; // если установок две, то между ними нет интервала
   h3 { margin: 0 0 2px 0; }
   .produce-unit-name {
-    flex: 0 1 145px;
+    flex: 0 1 155px;
     border-right: 1px solid $gray-lightest;
     padding-right: $grid-gutter-width/2; margin: 0;
   }

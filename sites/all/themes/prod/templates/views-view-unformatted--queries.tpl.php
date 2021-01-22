@@ -13,8 +13,8 @@
 <?php foreach ($rows as $id => $row): ?>
 
   <?php if (isset($prefix_row_key) && $id == $prefix_row_key): ?>
-    <button class="btn btn-primary btn-xs" type="button" data-toggle="collapse" data-target="#collapse-<? print $id; ?>" aria-expanded="false" aria-controls="collapse-<? print $id; ?>">
-      Архив
+    <button class="btn btn-default btn-xs btn-archive" type="button" data-toggle="collapse" data-target="#collapse-<? print $id; ?>" aria-expanded="false" aria-controls="collapse-<? print $id; ?>">
+      Архив<?php print '';?>
     </button>
     <div class="collapse" id="collapse-<? print $id; ?>">
   <?php endif; ?>
@@ -24,7 +24,7 @@
   </div>
 
   <?php if (isset($suffix_row_key) && $id == $suffix_row_key): ?>
-    </div>
+    </div><?php print '';?>
   <?php endif; ?>
 
 <?php endforeach; ?>
