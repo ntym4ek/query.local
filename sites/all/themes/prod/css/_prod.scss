@@ -63,6 +63,7 @@ form {
 }
 
 .view {
+  position: relative;
   .attachment-before,
   .view-filters,
   .view-header {
@@ -118,6 +119,10 @@ form {
   }
   &.view-queries,
   &.view-manager-queries {
+    .attachment-before {
+      text-align: right;
+      position: absolute; right: 0; top: 33px;
+    }
     .view-content {
       > h3 { margin-top: 40px; }
       .collapse.in,
