@@ -1,8 +1,14 @@
+
 a:focus {
   outline: 0;
 }
 .page-header {
   margin-top: 30px;
+}
+.navbar .logo {
+  display: block;
+  width: 45px;
+  img { display: block; width: 100%; }
 }
 .breadcrumb {
   display: none;

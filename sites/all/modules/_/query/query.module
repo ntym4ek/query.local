@@ -105,14 +105,16 @@ function query_empty_front_page_callback()
  */
 function query_form_alter(&$form, &$form_state, $form_id)
 {
-  if ($form_id == 'views_exposed_form' && !user_has_role(ROLE_ADMIN)) {
+  if (!user_has_role(ROLE_ADMIN) && $form_id == 'views_exposed_form' && !empty($form["field_nomenklatura_target_id_selective"])) {
     $tids = array_keys($form["field_nomenklatura_target_id_selective"]["#options"]);
     array_shift($tids);
     if ($terms = entity_load('taxonomy_term', $tids)) {
       foreach($form["field_nomenklatura_target_id_selective"]["#options"] as $tid => &$name) {
         if (!empty($terms[$tid])) {
           $name_arr = [];
-          if ($terms[$tid]->field_oc_artikul_davalec["und"][0]["value"]) $name_arr[] = $terms[$tid]->field_oc_artikul_davalec["und"][0]["value"];
+          if (!empty($terms[$tid]->field_oc_artikul_davalec["und"][0]["value"])) {
+            $name_arr[] = $terms[$tid]->field_oc_artikul_davalec["und"][0]["value"];
+          }
           $name_arr[] = !empty($terms[$tid]->field_oc_name_davalec["und"][0]["value"]) ? $terms[$tid]->field_oc_name_davalec["und"][0]["value"] : $name;
           $name = implode(' ', $name_arr);
         }
@@ -130,9 +132,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
     $filter = [];
     if (!empty($_SESSION["views"]["queries"]["default"]["field_month_value"]["value"]["month"])) {
       $filter = $_SESSION["views"]["queries"]["default"]["field_month_value"]["value"];
-      $form_state['data']['month_start'] = gmmktime(0, 0, 0, $filter["month"], 1, $filter["year"]);
-    } elseif (!empty($form["field_month"]["und"][0]["#default_value"]["value"])) {
-      $form_state['data']['month_start'] = gmmktime(0, 0, 0, date('n', $form["field_month"]["und"][0]["#default_value"]["value"]), 1, date('Y', $form["field_month"]["und"][0]["#default_value"]["value"]));
+      $form_state['data']['filter'] = $filter;
     }
 
     // получить Запрос с которого сделана Корректировка
@@ -140,7 +140,6 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $last_query_wr = entity_metadata_wrapper('query', $_GET['last_query_id']);
       $form_state['data']['month_start'] = $last_query_wr->field_month->value();
       $form_state['data']['nom_tid'] = $last_query_wr->field_nomenklatura->tid->value();
-      $form_state['data']['davalec_uid'] = $last_query_wr->field_nomenklatura->field_user->uid->value();
       $form_state['data']['last_query'] = [
         'id' => $last_query_wr->getIdentifier(),
         'type' => $last_query_wr->field_query_type->value(),
@@ -148,8 +147,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
       ];
     }
 
-    if (!empty($form_state['data']['nom_tid']) && !empty($form_state['data']['month_start'])) {
-      // получить Запрос, в котором есть Загрузка
+    // получить Запрос, в котором есть Загрузка
+    if (!empty($form_state['data']['last_query']['volume']) && !empty($form_state['data']['nom_tid']) && !empty($form_state['data']['month_start'])) {
       $dbr = db_select('eck_query', 'q');
       $dbr->addField('q', 'id');
       $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
@@ -215,62 +214,46 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_qty"]["und"][0]["value"]["#title"] = 'Новое количество';
       $form["field_qty"]["und"][0]["value"]["#default_value"] = $form_state['data']['last_query']['volume'];
     }
+
     // Даты
     if (!empty($form_state['data']['month_start'])) {
       $form["field_month"]["und"][0]["#default_value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#default_value"]["value2"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value2"] = $form_state['data']['month_start'];
-
-      if (empty($form_state['data']['source_query']['date_start']) || empty($form_state['data']['source_query']['date_end'])) {
-        if ($filter && $filter['month'] && $filter['month'] != date('n')) {
-          $day_start = gmmktime(0, 0, 0, $filter['month'], 1, $filter['year']);
-          $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
-        } else {
-          $day_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-          $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
-        }
-        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start;
-        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $next_month_start-24*3600;
-      } else {
-        $day_start_start = $form_state['data']['source_query']['date_start'];
-        $day_end_start = $form_state['data']['source_query']['date_end'];
-        if (date('j', $day_start_start) < date('j')) {
-          $day_start_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-          if (date('j', $day_end_start) < date('j')) {
-            $day_end_start = gmmktime(0, 0, 0, date('n'), 31, date('Y'));
-          }
-        }
-        $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start_start;
-        $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $day_end_start;
-      }
     }
+    if (empty($form_state['data']['source_query']['date_start']) || empty($form_state['data']['source_query']['date_end'])) {
+      if ($filter && $filter['month'] && $filter['month'] != date('n')) {
+        $day_start = gmmktime(0, 0, 0, $filter['month'], 1, $filter['year']);
+        $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
+      } else {
+        $day_start = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
+        $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
+      }
+      $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start;
+      $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $next_month_start-24*3600;
+    } else {
+      $day_start_start = $form_state['data']['source_query']['date_start'];
+      $day_end_start = $form_state['data']['source_query']['date_end'];
+      if (date('j', $day_start_start) <= date('j')) {
+        $day_start_start = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
+        if (date('j', $day_end_start) <= date('j')) {
+          $day_end_start = gmmktime(0, 0, 0, date('n'), 31, date('Y'));
+        }
+      }
+      $form["field_query_period"]["und"][0]["#default_value"]["value"] = $day_start_start;
+      $form["field_query_period"]["und"][0]["#default_value"]["value2"] = $day_end_start;
+    }
+
     if (!empty($form_state['data']['nom_tid'])) {
       $form["field_nomenklatura"]["und"]["#default_value"] = [$form_state['data']['nom_tid']];
     }
 
-    // Номенклатура Пользователя из Заявок текущего Месяца
-    // чтобы исколючить выбор Номенклатуры по которой есть Заявки
-    $nomenklatura_from_queries = [];
-    if (!empty($form_state['data']['month_start']) && !empty($form_state['data']['davalec_uid'])) {
-      $dbr = db_select('taxonomy_term_data', 'n');
-      $dbr->condition('n.vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid);
-      $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.field_nomenklatura_target_id = n.tid');
-      $dbr->innerJoin('field_data_field_user', 'fu', 'fu.entity_id = n.tid');
-      $dbr->condition('fu.field_user_target_id', $form_state['data']['davalec_uid']);
-      $dbr->innerJoin('eck_query', 'q', 'q.id = fn.entity_id');
-      $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
-      $dbr->condition('fm.field_month_value', $form_state['data']['month_start']);
-      $dbr->addField('n', 'tid');
-      $dbr->distinct();
-      $nomenklatura_from_queries = $dbr->execute()->fetchCol();
-    }
   }
 
 
   if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query']) && !user_has_role(ROLE_ADMIN)) {
     if (!isset($nomenklatura_from_queries)) $nomenklatura_from_queries = [];
-//    $month_start = empty($form_state['data']['source_query']['month_start']) ? 0 : $form_state['data']['source_query']['month_start'];
     $produce_units_list = query_get_produce_units_list();
 
     // обработать кнопку добавления Установки
@@ -296,7 +279,11 @@ function query_form_alter(&$form, &$form_state, $form_id)
       if (!empty($form_state['data']['last_query']['id'])) {
         $form["field_nomenklatura"]['#disabled'] = true;
         $form["field_month"]['#disabled'] = true;
+      } else {
+        $form["field_month"]['#access'] = false;
+        $form["field_query_period"]["#weight"] = 0;
       }
+
       if ($form["field_query_type"]["und"]["#default_value"][0] == 'cancel') {
         $form["field_qty"]['#disabled'] = true;
         $form["actions"]["submit"]["#attributes"]['class'][] = 'btn-danger';
@@ -338,7 +325,9 @@ function query_form_alter(&$form, &$form_state, $form_id)
               if (empty($form_state['data']['last_query']) && in_array($nomenklatura_term->tid, $nomenklatura_from_queries)) continue;
               // у клиентов своё наименование
               $name_arr = [];
-              if ($nomenklatura_term->field_oc_artikul_davalec["und"][0]["value"]) $name_arr[] = $nomenklatura_term->field_oc_artikul_davalec["und"][0]["value"];
+              if (!empty($nomenklatura_term->field_oc_artikul_davalec["und"][0]["value"])) {
+                $name_arr[] = $nomenklatura_term->field_oc_artikul_davalec["und"][0]["value"];
+              }
               $name_arr[] = !empty($nomenklatura_term->field_oc_name_davalec["und"][0]["value"]) ? $nomenklatura_term->field_oc_name_davalec["und"][0]["value"] : $form["field_nomenklatura"]["und"]["#options"][$nomenklatura_term->tid];
               $options[$nomenklatura_term->tid] = implode(' ', $name_arr);
             }
@@ -532,39 +521,45 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
 {
   if ($form_state["triggering_element"]["#name"] == 'eck_submit') {
     // обычно месяц задан и не доступен для смены
-    $month_value = empty($form_state['data']['month_start']) ? $form_state["values"]["field_month"]["und"][0]["value"] : $form_state['data']['month_start'];
+    if (empty($form_state['data']['month_start'])) {
+      $month_value = $form_state["values"]["field_query_period"]["und"][0]["value"];
+    } else {
+      $month_value = $form_state['data']['month_start'];
+    }
     $month_start = gmmktime(0, 0, 0, date('n', $month_value), 1, date('Y', $month_value));
     $form_state["values"]["field_month"]["und"][0]["value"] = $month_start;
     $form_state["values"]["field_month"]["und"][0]["value2"] = $month_start;
 
     // проконтролировать, что период задан в рамках текущего месяца и не ранее сегодня
     if (!user_has_role(ROLE_MANAGER) && !user_has_role(ROLE_ADMIN)) {
-      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-      $next_month_start = gmmktime(0, 0, 0, date('n', $month_value) + 1, 1, date('Y', $month_value));
+      $next_day_start = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
       $period_start = $form_state["values"]["field_query_period"]["und"][0]["value"];
       $period_end = $form_state["values"]["field_query_period"]["und"][0]["value2"];
-      if ($period_start < $month_start) {
-        form_set_error('field_query_period', 'Начальная дата выходит за рамки текущего месяца.');
+      $next_month_period_start = gmmktime(0, 0, 0, date('n', $period_start) + 1, 1, date('Y', $period_start));
+      if ($period_start < $next_day_start) {
+        form_set_error('field_query_period', 'Дата не может быть задана ранее, чем завтра.');
         return false;
       }
-      if ($period_start < $today_start) {
-        form_set_error('field_query_period', 'Начальная дата не может быть ранее текущего дня.');
-        return false;
-      }
-      if ($period_end >= $next_month_start) {
-        form_set_error('field_query_period', 'Конечная дата выходит за рамки текущего месяца.');
+      if ($period_end >= $next_month_period_start) {
+        form_set_error('field_query_period', 'Конечная дата выходит за рамки одного месяца.');
         return false;
       }
     }
 
-    // когда менеджер сохраняет заявку со статусом Утверждено И требуется согласование, поменять статус клиента на На рассмотрении
-//    if ($form_state["values"]["field_query_status_manager"]["und"][0]["value"] == 'approved') {
-//      if (!empty($form_state["query"]->is_new) && $form_state["values"]["field_query_client_approve"]["und"][0]["value"]) {
-//        $form_state["values"]["field_query_status_client"]["und"][0]["value"] = 'processing';
-//      } else {
-//        $form_state["values"]["field_query_status_client"]["und"][0]["value"] = 'approved';
-//      }
-//    }
+    // Номенклатура Пользователя из Заявок текущего Месяца
+    // чтобы исколючить выбор Номенклатуры по которой есть Заявки
+    if (empty($form_state["data"]["nom_tid"]) && !empty($form_state['data']['davalec_uid'])) {
+      $dbr = db_select('eck_query', 'q');
+      $dbr->addField('q', 'id');
+      $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
+      $dbr->condition('fn.field_nomenklatura_target_id', $form_state["values"]["field_nomenklatura"]["und"][0]["target_id"]);
+      $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+      $dbr->condition('fm.field_month_value', $month_start);
+      if ($dbr->execute()->fetchCol()) {
+        form_set_error('field_nomenklatura', 'По данному наименованию уже есть заявки на заданный месяц. Для внесения правок воспользуйтесь кнопкой "Создать корректировку".');
+        return false;
+      }
+    }
 
     // если заданы даты для Установки, сохранить их и проверить наличие Производительности
     if (isset($form_state["data"]["produce_units"])) {
@@ -1250,10 +1245,14 @@ function query_preprocess_views_view_table(&$vars)
     $rows = [];
     foreach ($vars["rows"] as $key => $row) {
       // заменить на артикул и название давальца
-      $name_arr[0] = $vars["view"]->result[$key]->field_field_oc_artikul_davalec[0]["raw"]["value"];
-      $name_arr[1] = $vars["view"]->result[$key]->field_field_oc_name_davalec[0]["raw"]["value"];
-      $name = implode(' ', $name_arr);
-      if (trim($name)) {
+      $name_arr = [];
+      if (!empty($vars["view"]->result[$key]->field_field_oc_artikul_davalec[0]["raw"]["value"])) {
+        $name_arr[] = $vars["view"]->result[$key]->field_field_oc_artikul_davalec[0]["raw"]["value"];
+      }
+      if (!empty($vars["view"]->result[$key]->field_field_oc_name_davalec[0]["raw"]["value"])) {
+        $name_arr[] = $vars["view"]->result[$key]->field_field_oc_name_davalec[0]["raw"]["value"];
+      }
+      if ($name = trim(implode(' ', $name_arr))) {
         $row["name"] = $name;
       }
 
@@ -1289,7 +1288,7 @@ function query_preprocess_views_view_field(&$vars)
           $vars["output"] = 'Утверждена';
         }
       }
-      elseif ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
+      elseif ($vars["row"]->field_field_query_type[0]["raw"]["value"] != 'deny' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'processing') {
           $vars["output"] = 'На согласовании';
       }
       elseif ($vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved'

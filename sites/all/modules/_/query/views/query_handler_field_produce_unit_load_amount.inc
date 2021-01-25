@@ -25,13 +25,16 @@ class query_handler_field_produce_unit_load_amount extends views_handler_field
     $begin_month_start = gmmktime(0,0,0, $month_begin, 1, $year_begin);
     $end_month_start = gmmktime(0,0,0, $month_end, 1, $year_end);
     $current_month_start = $begin_month_start;
+    $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
     $stop = false;
     $output = 0;
     do {
       $load_arr = query_get_produce_unit_load($values->taxonomy_term_data_field_data_field_produce_unit_tid, $current_month_start);
-      foreach($load_arr as $load) {
-        if ($load['nomenklatura']['tid'] == $values->tid)
-        $output += $load['output'];
+
+      foreach($load_arr as $day_start => $load) {
+        if (($load['nomenklatura']['tid'] == $values->tid) && $day_start > $today_start) {
+          $output += $load['output'];
+        }
       }
 
       if ($current_month_start == $end_month_start) $stop = true;
