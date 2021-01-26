@@ -1209,9 +1209,10 @@ function query_preprocess_views_view_unformatted(&$vars)
     if (count($vars["rows"]) > 1) {
       $start_row_key = -1;
       foreach ($vars["rows"] as $key => $row) {
-        if ($vars["view"]->result[$key]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
-          && in_array($vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"], ['approved', 'deny'])
-          && $start_row_key == -1) {
+        if (
+//          $vars["view"]->result[$key]->field_field_query_status_client[0]["raw"]["value"] == 'approved'
+//          && in_array($vars["view"]->result[$key]->field_field_query_status_manager[0]["raw"]["value"], ['approved', 'deny']) &&
+          $start_row_key == -1) {
           $start_row_key = $key + 1;
         }
       }
