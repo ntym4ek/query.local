@@ -222,7 +222,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
       $form["field_month"]["und"][0]["#value"]["value"] = $form_state['data']['month_start'];
       $form["field_month"]["und"][0]["#value"]["value2"] = $form_state['data']['month_start'];
     }
-    if (empty($form_state['data']['source_query']['date_start']) || empty($form_state['data']['source_query']['date_end'])) {
+    if (empty($form_state["data"]["source_query"]["date_start"]) || empty($form_state["data"]["source_query"]["date_end"])) {
       if ($filter && $filter['month'] && $filter['month'] != date('n')) {
         $day_start = gmmktime(0, 0, 0, $filter['month'], 1, $filter['year']);
         $next_month_start = gmmktime(0, 0, 0, date('n', $day_start) + 1, 1, date('Y', $day_start));
@@ -235,7 +235,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
     } else {
       $day_start_start = $form_state['data']['source_query']['date_start'];
       $day_end_start = $form_state['data']['source_query']['date_end'];
-      if (date('j', $day_start_start) <= date('j')) {
+      $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+      if ($day_start_start <= $today_start) {
         $day_start_start = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
         if (date('j', $day_end_start) <= date('j')) {
           $day_end_start = gmmktime(0, 0, 0, date('n'), 31, date('Y'));
@@ -657,10 +658,6 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
     $last_query_wr = entity_metadata_wrapper('query', $form_state['data']['last_query']['id']);
     if ($last_query_wr->field_query_status_manager->value() == 'processing') {
       $last_query_wr->field_query_status_manager = 'deny';
-      $last_query_wr->save();
-    }
-    if ($last_query_wr->field_query_status_client->value() == 'processing') {
-      $last_query_wr->field_query_status_client = 'deny';
       $last_query_wr->save();
     }
   }
@@ -1472,12 +1469,12 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
     $result_main = $efquery
       ->entityCondition('entity_type', 'query')
       ->fieldCondition('field_month', 'value', $month_start)
-      ->fieldCondition('field_query_status_client', 'value', ['approved', 'processing'], 'IN')
+//      ->fieldCondition('field_query_status_client', 'value', ['approved', 'processing'], 'IN')
       ->fieldCondition('field_query_status_manager', 'value', 'approved')
       ->fieldCondition('field_query_type', 'value', 'main')
       ->execute();
     if ($result_main) {
-      $ids = array_keys($result_main['query']);
+      $ids = array_merge($ids, array_keys($result_main['query']));
     }
 
     // является ли текущая Заявка последней утверждённой
@@ -1914,9 +1911,8 @@ function query_process_incoming_files()
   if ($files) {
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
-      if ($plan = query_produce_plan_import($array)) {
-        file_unmanaged_delete($file->uri);
-      }
+      query_produce_plan_import($array);
+      file_unmanaged_delete($file->uri);
     }
   }
 

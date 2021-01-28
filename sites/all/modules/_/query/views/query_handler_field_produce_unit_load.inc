@@ -60,7 +60,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
               $name_arr[] = $load[$day_start]["nomenklatura"]["artikul_d"];
               $name_arr[] = $load[$day_start]["nomenklatura"]["name_d"];
             }
-            $name = trim(implode(' ', $name_arr)) ? implode(' ', $name_arr) : $name;
+            $name = str_replace('"', "'", trim(implode(' ', $name_arr)) ? implode(' ', $name_arr) : $name);
             $tooltip = ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $name . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
           }
           $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';
