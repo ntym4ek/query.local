@@ -41,23 +41,7 @@ function mailer_mail($key, &$message, $params)
         'Номер заявки: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
-        'Причина: ' . $params["reason"] .  '<br />' .
-        'Требуется согласование: ' . ($params["client_approve"] ? 'да' : 'нет')  .  '<br />' .
-        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
-        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
-
-      break;
-
-    case 'client_notify_query_cancel_new':
-      $message['subject'] = 'Отмена вашей заявки на производство';
-      $message['body'][] =
-        '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> отменено производство препарата</p>' .
-        'Номер заявки на отмену: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
-        'Продукт: ' . $params["product"] .  '<br />' .
-        'Причина: ' . $params["reason"] .  '<br />' .
-        'Требуется согласование: ' . ($params["client_approve"] ? 'да' : 'нет')  .  '<br />' .
+        'Количество: ' . $params["volume"] .  '<br />' .
         ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 

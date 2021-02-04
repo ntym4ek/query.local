@@ -926,8 +926,9 @@ function query_query_import($array)
   // уведомить клиента о новой заявке
   $params = [
     'qid' => $query_wr->getIdentifier(),
-    'month' => date('F', $query_wr->field_month->value()),
+    'month' => t(date('F', $query_wr->field_month->value())),
     'product' => $query_wr->field_nomenklatura->name->value(),
+    'volume' => $query_wr->field_qty->value(),
     'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
     'status_client' => $query_wr->field_query_status_client->label(),
     'status_manager' => $query_wr->field_query_status_manager->label(),
