@@ -1828,7 +1828,7 @@ function query_process_incoming_files()
   // -- Справочник Давальцев
   // получить список файлов по шаблону
   $mask = '/dav.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1836,6 +1836,8 @@ function query_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_davalec_import($array)) {
         file_unmanaged_delete($file->uri);
+      } else {
+        file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
       }
     }
   }
@@ -1843,7 +1845,7 @@ function query_process_incoming_files()
   // -- Справочник Установок
   // получить список файлов по шаблону
   $mask = '/ust.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1851,6 +1853,8 @@ function query_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_produce_units_import($array)) {
         file_unmanaged_delete($file->uri);
+      } else {
+        file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
       }
     }
   }
@@ -1858,7 +1862,7 @@ function query_process_incoming_files()
   // -- Справочник Причин
   // получить список файлов по шаблону
   $mask = '/cause.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1866,6 +1870,8 @@ function query_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_reasons_import($array)) {
         file_unmanaged_delete($file->uri);
+      } else {
+        file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
       }
     }
   }
@@ -1873,7 +1879,7 @@ function query_process_incoming_files()
   // -- Справочник Номенклатуры
   // получить список файлов по шаблону
   $mask = '/nom.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1881,6 +1887,8 @@ function query_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_nomenklatura_import($array)) {
         file_unmanaged_delete($file->uri);
+      } else {
+        file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
       }
     }
   }
@@ -1889,7 +1897,7 @@ function query_process_incoming_files()
   // -- здесь грузим для предварительного плана, только с type: 'pred'
   // получить список файлов по шаблону
   $mask = '/query_import_.*.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1898,6 +1906,8 @@ function query_process_incoming_files()
       if ($array['type'] == 'pred') {
         if (query_query_import($array)) {
           file_unmanaged_delete($file->uri);
+        } else {
+          file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
         }
       }
     }
@@ -1906,7 +1916,7 @@ function query_process_incoming_files()
   // -- План
   // получить список файлов по шаблону
   $mask = '/plan.*\.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1921,7 +1931,7 @@ function query_process_incoming_files()
   // -- здесь грузим для утверждённого плана, только с type: 'main'
   // получить список файлов по шаблону
   $mask = '/query_import_.*.json/';
-  $files = file_scan_directory($directory, $mask, [], 0);
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
   if ($files) {
@@ -1930,6 +1940,8 @@ function query_process_incoming_files()
       if ($array['type'] == 'main') {
         if (query_query_import($array)) {
           file_unmanaged_delete($file->uri);
+        } else {
+          file_unmanaged_move($file->uri, $directory . 'fail/' . $file->filename);
         }
       }
     }
