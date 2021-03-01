@@ -923,23 +923,30 @@ function query_query_import($array)
     }
   }
 
-  // уведомить клиента о новой заявке
-  $params = [
-    'qid' => $query_wr->getIdentifier(),
-    'month' => t(date('F', $query_wr->field_month->value())),
-    'product' => $query_wr->field_nomenklatura->name->value(),
-    'volume' => $query_wr->field_qty->value(),
-    'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
-    'status_client' => $query_wr->field_query_status_client->label(),
-    'status_manager' => $query_wr->field_query_status_manager->label(),
-    'client_approve' => $query_wr->field_query_client_approve->value(),
-    'type' => $query_wr->field_query_type->value(),
-    'comment' => $query_wr->field_comment->value(),
-  ];
-  if ($query_wr->field_query_reason->value()) {
-    $params['reason'] = $query_wr->field_query_reason->name->value();
+  // сразу уведомить клиента о новой заявке, если не усановлена отправка раз в сутки
+  try {
+    if (!$query_wr->field_nomenklatura->field_user->field_notify_once_a_day->value()) {
+      $params = [
+        'qid' => $query_wr->getIdentifier(),
+        'month' => t(date('F', $query_wr->field_month->value())),
+        'product' => $query_wr->field_nomenklatura->name->value(),
+        'volume' => $query_wr->field_qty->value(),
+        'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
+        'status_client' => $query_wr->field_query_status_client->label(),
+        'status_manager' => $query_wr->field_query_status_manager->label(),
+        'client_approve' => $query_wr->field_query_client_approve->value(),
+        'type' => $query_wr->field_query_type->value(),
+        'comment' => $query_wr->field_comment->value(),
+      ];
+      if ($query_wr->field_query_reason->value()) {
+        $params['reason'] = $query_wr->field_query_reason->name->value();
+      }
+      drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
+    }
+  } catch (Exception $e) {
+    watchdog('mail', 'Ошибка при отправке письма заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
+    return false;
   }
-  drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
 
   return true;
 }
@@ -1814,9 +1821,19 @@ function query_date_select_process_alter(&$element, $form_state, $context)
   }
 }
 
+/**
+ * Implements hook_cron()
+ */
 function query_cron()
 {
+  // выполнить импорт заявок
   query_process_incoming_files();
+
+  // однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
+  // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
+  if (REQUEST_TIME >= strtotime('07:30') && REQUEST_TIME < strtotime('07:35')) {
+    mailer_batch_mail();
+  }
 }
 
 function query_process_incoming_files()

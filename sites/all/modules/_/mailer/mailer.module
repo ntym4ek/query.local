@@ -1,4 +1,23 @@
 <?
+/**
+ * Implements hook_cron_queue_info().
+ */
+function mailer_cron_queue_info()
+{
+  $queues['daily_mails_queue'] = array(
+    'worker callback' => 'mailer_send_daily_mails',
+  );
+
+  return $queues;
+}
+
+/**
+ * queue callback
+ */
+function mailer_send_daily_mails($params)
+{
+  drupal_mail('mailer', 'client_notify_daily_changes', $params['mail'], 'ru', $params);
+}
 
 /**
  * Implements hook_mail
@@ -7,7 +26,17 @@ function mailer_mail($key, &$message, $params)
 {
   $front_url = url('<front>', ['absolute' => true]);
   switch($key) {
-    case 'manager_notify_query_correction_new':
+    case 'client_notify_daily_changes':
+      $message['subject'] = 'Изменения за прошедшие сутки';
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>Сводка с изменениями за последние сутки на сайте "Управление заказами":</p>' .
+        $params['text'] .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
+      case 'manager_notify_query_correction_new':
       $message['subject'] = 'Новая корректировка';
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
@@ -95,5 +124,77 @@ function mailer_mail_alter(&$message)
     watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
   } else {
     watchdog('mailer', 'Отправка E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
+  }
+}
+
+
+/**
+ * Собрать все изменения за день в одно письмо
+ */
+function mailer_batch_mail()
+{
+  // извлечь все пришедшие заявки за прошедние сутки
+  $efquery = new EntityFieldQuery();
+  $efquery
+    ->entityCondition('entity_type', 'query')
+    ->propertyCondition('uid', 0)
+    ->propertyCondition('created', time(), '<')
+    ->propertyCondition('created', time() - 60*60*24, '>=')
+    ->propertyOrderBy('id', 'ASC');
+  $result = $efquery->execute();
+  if ($result['query']) {
+
+    // разбить по пользователям
+    $queries_by_users = [];
+    foreach ($result['query'] as $query) {
+      $query_wr = entity_metadata_wrapper('query', $query->id);
+      if ($query_wr->field_nomenklatura->field_user->value()) {
+        $user_id = $query_wr->field_nomenklatura->field_user->uid->value();
+        if ($user_id && $query_wr->field_nomenklatura->field_user->value() && $query_wr->field_nomenklatura->field_user->field_notify_once_a_day->value()) {
+          if (empty($queries_by_users[$user_id])) {
+            $queries_by_users[$user_id] = [
+              'queries' => [],
+              'mail' => $query_wr->field_nomenklatura->field_user->mail->value(),
+            ];
+          }
+          $queries_by_users[$user_id]['queries'][] = $query;
+        }
+      }
+    }
+
+    // для каждого пользователя составить текст письма и поставить в очередь
+    $mail_queue = DrupalQueue::get('daily_mails_queue');
+    foreach ($queries_by_users as $user_id => $value) {
+
+      $main_plan_flag = false;
+      $pred_plan_flag = false;
+      $params['mail'] = $value['mail'];
+      $params['text'] = '';
+      foreach ($value['queries'] as $query) {
+        $query_wr = entity_metadata_wrapper('query', $query->id);
+
+        if ($query_wr->field_query_type->value() == 'correction') {
+          $params['text'] .= 'Номер заявки: ' . $query_wr->getIdentifier() . '<br />' .
+            'Месяц: ' . date('F', $query_wr->field_month->value()) . '<br />' .
+            'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
+            ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
+            '<br />';
+        } elseif ($query_wr->field_query_type->value() == 'main') {
+          if ($query_wr->field_query_status_client->value() == 'approved' && !$main_plan_flag) {
+            // основной план
+            $params['text'] .= 'Внесён основной план на ' . date('F', $query_wr->field_month->value()) . ' месяц.' . '<br />' .
+              '<br />';
+            $main_plan_flag = true;
+          } elseif ($query_wr->field_query_status_client->value() == 'processing' && !$pred_plan_flag) {
+            // предварительный план
+            $params['text'] .= 'Внесён/изменён предварительный план на ' . date('F', $query_wr->field_month->value()) . ' месяц.' . '<br />' .
+              '<br />';
+            $pred_plan_flag = true;
+          }
+        }
+      }
+
+      $mail_queue->createItem($params);
+    }
   }
 }
