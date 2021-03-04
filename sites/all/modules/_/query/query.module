@@ -1278,6 +1278,10 @@ function query_preprocess_views_view_field(&$vars)
       }
     }
 
+    if ($vars["field"]->field_info["field_name"] == 'field_query_reason') {
+      if (empty($vars["row"]->field_field_query_reason[0]["raw"]["tid"])) $vars["output"] = '';
+    }
+
     if ($vars["field"]->field_info["field_name"] == 'field_query_status_manager') {
       if ($vars["row"]->field_field_query_type[0]["raw"]["value"] == 'main' && $vars["row"]->field_field_query_status_client[0]["raw"]["value"] == 'approved') {
         $vars["output"] = 'Утверждён';
