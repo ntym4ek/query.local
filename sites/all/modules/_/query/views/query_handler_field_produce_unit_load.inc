@@ -29,7 +29,8 @@ class query_handler_field_produce_unit_load extends views_handler_field
     if ($load) {
       $volume = 0;
       foreach ($load as $load_item) {
-        if (!empty($load_item['is_busy_same_company'])) {
+        // считаем производимый объём для клиента или весь для менеджера
+        if (!empty($load_item['is_busy_same_company']) || user_has_role(ROLE_MANAGER)|| user_has_role(ROLE_ADMIN)) {
           $volume += $load_item['output'];
         }
       }
@@ -49,11 +50,13 @@ class query_handler_field_produce_unit_load extends views_handler_field
           $class = '';
           if (!empty($load[$day_start])) {
             $class = empty($load[$day_start]['is_busy_same_company']) ? ' loaded' : ' selected';
-//        $class = $load[$day_start]['output'] ? ' loaded' : ' service';
+            if (user_has_role(ROLE_MANAGER)|| user_has_role(ROLE_ADMIN)) {
+              $class = $load[$day_start]['output'] ? ' loaded' : ' service';
+            }
           };
 //      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
           $tooltip = '';
-          if (!empty($load[$day_start]) && !empty($load[$day_start]['is_busy_same_company'])) {
+          if (!empty($load[$day_start]) && (!empty($load[$day_start]['is_busy_same_company']) || user_has_role(ROLE_MANAGER)|| user_has_role(ROLE_ADMIN))) {
             $name = $load[$day_start]['nomenklatura']['name'];
             $name_arr = [];
             if (!empty($load[$day_start]["nomenklatura"]["artikul_d"]) || !empty($load[$day_start]["nomenklatura"]["name_d"])) {
