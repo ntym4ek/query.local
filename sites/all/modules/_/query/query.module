@@ -1835,7 +1835,7 @@ function query_cron()
 
   // однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
   // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
-  if (REQUEST_TIME >= strtotime('07:30') && REQUEST_TIME < strtotime('07:35')) {
+  if (REQUEST_TIME >= strtotime('07:27') && REQUEST_TIME < strtotime('07:34')) {
     mailer_batch_mail();
   }
 }

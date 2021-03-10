@@ -177,6 +177,7 @@ function mailer_batch_mail()
           $params['text'] .= 'Номер заявки: ' . $query_wr->getIdentifier() . '<br />' .
             'Месяц: ' . date('F', $query_wr->field_month->value()) . '<br />' .
             'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
+            'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
             ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
             '<br />';
         } elseif ($query_wr->field_query_type->value() == 'main') {
