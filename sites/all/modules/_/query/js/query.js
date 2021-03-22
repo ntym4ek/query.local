@@ -6,7 +6,7 @@
     attach: function (context, settings) {
 
       // форма создания Заявки, сделать кнопку сабмита неактивной после нажатия
-      $(".query-form [name=eck_submit]").on("click", function() {
+      $(".query-form [name=eck_submit]").click(function() {
         // без таймаута не даст форме сработать событию сабмита
         setTimeout(function () {
           $(".query-form [name=eck_submit]").prop('disabled', true).text("Отправка...");

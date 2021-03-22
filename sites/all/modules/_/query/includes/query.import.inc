@@ -534,7 +534,7 @@ function query_produce_plan_import($array)
       if (empty($user_mails[$plan_item['uid']])) {
         $user_mails[$plan_item['uid']] = [
           'month' => $plan_item['field_month'],
-          'account' => user_load($plan_item['uid'])
+          'company_uid' => $plan_item['uid']
         ];
       }
     }
@@ -543,10 +543,13 @@ function query_produce_plan_import($array)
     if ($user_mails) {
       foreach ($user_mails as $user_id => $data) {
         $params['month'] = t(date('F', $data['month']));
-        $user_wr = entity_metadata_wrapper('user', $data['account']);
         try {
-          if ($data['account']->mail && !$user_wr->field_notify_once_a_day->value()) {
-            drupal_mail('mailer', 'user_notify_plan_import', $data['account']->mail, user_preferred_language($data['account']), $params);
+          if ($users = ext_user_get_managers_by_company_uid($data['company_uid'])) {
+            foreach ($users as $manager_account) {
+              if ($manager_account->mail && empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
+                drupal_mail('mailer', 'user_notify_plan_import', $manager_account->mail, user_preferred_language($manager_account), $params);
+              }
+            }
           }
         } catch (Exception $e) {
           watchdog('mail', 'Ошибка при отправке письма заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
@@ -562,3 +565,5 @@ function query_produce_plan_import($array)
     return false;
   }
 }
+
+

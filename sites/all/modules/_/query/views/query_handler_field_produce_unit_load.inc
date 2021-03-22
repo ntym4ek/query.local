@@ -23,6 +23,10 @@ class query_handler_field_produce_unit_load extends views_handler_field
     // определить месяц отчёта
     $date = empty($this->view->exposed_raw_input["field_produce_date_value"]["value"]) ? $this->view->query->where[2]["conditions"][0]["value"][":field_data_field_produce_date_field_produce_date_value"] : $this->view->exposed_raw_input["field_produce_date_value"]["value"];
 
+    // компания, для которой считаем
+//    $cid = $this->view->args[0];
+//    $company = user_load($cid);
+
     list($year, $month) = explode('-', $date);
     $month_start = gmmktime(0,0,0, $month, 1, $year);
     $load = query_get_produce_unit_load($produce_unit_tid, $month_start);

@@ -3,6 +3,24 @@
 define('ROLE_ADMIN', 3);
 define('ROLE_MANAGER', 4);
 
+/**
+ * hook_module_implements_alter
+ * change hook execution order, commerce_helper - last
+ */
+function ext_user_module_implements_alter(&$implementations, $hook)
+{
+  // Name of the hook.
+  if (in_array($hook, ['form_alter'])) {
+    // ext_user - last
+    $module = 'ext_user';
+    if (isset($implementations[$module])) {
+      $group = $implementations[$module];
+      unset($implementations[$module]);
+      $implementations[$module] = $group;
+    }
+  }
+}
+
 function ext_user_preprocess_menu_link(&$vars)
 {
   if ($vars["element"]["#href"] == 'user' && user_is_logged_in()) {
@@ -36,6 +54,22 @@ function ext_user_login_name_validate($form, &$form_state)
   return FALSE;
 }
 
+/**
+ * Implements hook_form_alter().
+ */
+function ext_user_form_user_profile_form_alter(&$form, &$form_state)
+{
+  if (!user_has_role(ROLE_ADMIN)) {
+    $form["field_company"]["#access"] = false;
+    $form["field_oc_davalec_id"]["#access"] = false;
+    $form["locale"]["#access"] = false;
+    $form["mimemail"]["#access"] = false;
+    $form["timezone"]["#access"] = false;
+    if (!user_has_role(ROLE_MANAGER)) {
+      $form["field_notify_query"]["#access"] = false;
+    }
+  }
+}
 
 /**
  * Загрузить пользователя по указанному логину
@@ -55,4 +89,21 @@ function ext_user_user_load_by_login($login)
     return $user;
   }
   return user_load(0);
+}
+
+function ext_user_get_managers_by_company_uid($company_uid)
+{
+  $users = [];
+  if (is_numeric($company_uid)) {
+    $query = db_select('users', 'u');
+    $query ->fields('u', ['uid']);
+    $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
+    $query ->condition('fc.field_company_target_id', $company_uid);
+    $uids = $query->execute()->fetchCol();
+    if ($uids) {
+      $users = user_load_multiple($uids);
+    }
+  }
+
+  return $users;
 }

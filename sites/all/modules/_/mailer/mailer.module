@@ -144,31 +144,29 @@ function mailer_batch_mail()
   $result = $efquery->execute();
   if ($result['query']) {
 
-    // разбить по пользователям
-    $queries_by_users = [];
+    // разбить по Компаниям
+    $queries_by_companies = [];
     foreach ($result['query'] as $query) {
       $query_wr = entity_metadata_wrapper('query', $query->id);
       if ($query_wr->field_nomenklatura->field_user->value()) {
-        $user_id = $query_wr->field_nomenklatura->field_user->uid->value();
-        if ($user_id && $query_wr->field_nomenklatura->field_user->value() && $query_wr->field_nomenklatura->field_user->field_notify_once_a_day->value()) {
-          if (empty($queries_by_users[$user_id])) {
-            $queries_by_users[$user_id] = [
+        if ($company_id = $query_wr->field_nomenklatura->field_user->uid->value()) {
+          if (empty($queries_by_companies[$company_id])) {
+            $queries_by_companies[$company_id] = [
               'queries' => [],
-              'mail' => $query_wr->field_nomenklatura->field_user->mail->value(),
+              'company_id' => $query_wr->field_nomenklatura->field_user->uid->value(),
             ];
           }
-          $queries_by_users[$user_id]['queries'][] = $query;
+          $queries_by_companies[$company_id]['queries'][] = $query;
         }
       }
     }
 
     // для каждого пользователя составить текст письма и поставить в очередь
     $mail_queue = DrupalQueue::get('daily_mails_queue');
-    foreach ($queries_by_users as $user_id => $value) {
+    foreach ($queries_by_companies as $company_id => $value) {
 
       $main_plan_flag = false;
       $pred_plan_flag = false;
-      $params['mail'] = $value['mail'];
       $params['text'] = '';
       foreach ($value['queries'] as $query) {
         $query_wr = entity_metadata_wrapper('query', $query->id);
@@ -195,7 +193,14 @@ function mailer_batch_mail()
         }
       }
 
-      $mail_queue->createItem($params);
+      if ($users = ext_user_get_managers_by_company_uid($value['uid'])) {
+        foreach ($users as $manager_account) {
+          if (!empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
+            $params['mail'] = $manager_account->mail;
+            $mail_queue->createItem($params);
+          }
+        }
+      }
     }
   }
 }

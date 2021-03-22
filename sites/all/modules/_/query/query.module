@@ -925,7 +925,6 @@ function query_query_import($array)
 
   // сразу уведомить клиента о новой заявке, если не усановлена отправка раз в сутки
   try {
-    if (!$query_wr->field_nomenklatura->field_user->field_notify_once_a_day->value()) {
       $params = [
         'qid' => $query_wr->getIdentifier(),
         'month' => t(date('F', $query_wr->field_month->value())),
@@ -941,8 +940,14 @@ function query_query_import($array)
       if ($query_wr->field_query_reason->value()) {
         $params['reason'] = $query_wr->field_query_reason->name->value();
       }
-      drupal_mail('mailer', 'client_notify_query_correction_new', $params['product_owner_account']->mail, user_preferred_language($params['product_owner_account']), $params);
-    }
+      if ($users = ext_user_get_managers_by_company_uid($params['product_owner_account']->uid)) {
+        foreach ($users as $manager_account) {
+          if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
+            drupal_mail('mailer', 'client_notify_query_correction_new', $manager_account->mail, user_preferred_language($manager_account), $params);
+          }
+        }
+      }
+
   } catch (Exception $e) {
     watchdog('mail', 'Ошибка при отправке письма заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
     return false;
@@ -1601,10 +1606,10 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
         }
 
         // если задана текущая Заявка, добавить дополнительные данные
-        $current_client_id = $GLOBALS['user']->uid;
+        $current_company_id = query_get_company_id_by_user($GLOBALS['user']);
         if ($current_query) {
           if ($current_nom_tid = $current_query_wr->field_nomenklatura->tid->value()) {
-            $current_client_id = $current_query_wr->field_nomenklatura->field_user->uid->value();
+            $current_company_id = $current_query_wr->field_nomenklatura->field_user->uid->value();
             $current_query_type = $current_query_wr->field_query_type->value();
 
             // is_current_load
@@ -1637,7 +1642,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
             && ($current_query && in_array($current_query_type, ['main', 'correction']));
 
           // загрузка установки этим же клиентом
-          $load_array[$day_start]['is_busy_same_company'] = !empty($load_array[$day_start]['nomenklatura']) && isset($current_client_id) && $load_array[$day_start]['nomenklatura']['client_id'] == $current_client_id;
+          $load_array[$day_start]['is_busy_same_company'] = !empty($load_array[$day_start]['nomenklatura']) && isset($current_company_id) && $load_array[$day_start]['nomenklatura']['client_id'] == $current_company_id;
 
           $classes = [];
           if ($load_array[$day_start]['is_busy_same_company'] && !$load_array[$day_start]['is_current_load']) {
@@ -1656,6 +1661,20 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
     }
   }
   return $load_array;
+}
+
+function query_get_company_id_by_user($user)
+{
+  if (is_numeric($user)) {
+    $user = user_load($user);
+  }
+
+  $cid = 0;
+  $user_wr = entity_metadata_wrapper('user', $user);
+  if ($user_wr->field_company->value()) {
+    $cid = $user_wr->field_company->uid->value();
+  }
+  return $cid;
 }
 
 /**
