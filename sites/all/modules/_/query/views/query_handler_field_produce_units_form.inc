@@ -43,7 +43,7 @@ class query_handler_field_produce_units_form extends views_handler_field
 
         $classes = empty($load[$day_start]['classes']) ? [] : $load[$day_start]['classes'];
 
-        $tooltip = empty($load[$day_start]['output']) || empty($load[$day_start]['is_busy_same_company']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $load[$day_start]['output'] . '"';
+        $tooltip = empty($load[$day_start]['output']) || empty($load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $load[$day_start]['output'] . '"';
 
         $output .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
       }

@@ -1582,6 +1582,8 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
           foreach ($query_wr->field_load->getIterator() as $load_wr) {
             $load_nomenklatura[$load_wr->getIdentifier()] = [
               'tid' => $nom_tid,
+              'produce_date' => $load_wr->field_produce_date->value(),
+              'produce_unit' => $load_wr->field_produce_unit->tid->value(),
               'name' => $query_wr->field_nomenklatura->name->value(),
               'artikul_d' => $query_wr->field_nomenklatura->field_oc_artikul_davalec->value(),
               'name_d' => $query_wr->field_nomenklatura->field_oc_name_davalec->value(),
@@ -1593,6 +1595,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
 
       if ($load_nomenklatura) {
         $load = entity_load('load', array_keys($load_nomenklatura));
+        ksort($load);
         // Загрузка для заданной Установки
         // массив Загрузка - Данные
         foreach ($load as $load_item) {
@@ -1605,6 +1608,8 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
           }
         }
 
+        ksort($load_array);
+
         // если задана текущая Заявка, добавить дополнительные данные
         $current_company_id = query_get_company_id_by_user($GLOBALS['user']);
         if ($current_query) {
@@ -1614,13 +1619,17 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
 
             // is_current_load
             foreach ($current_query_wr->field_load->getIterator() as $current_load_wr) {
-              if (empty($load_array[$current_load_wr->field_produce_date->value()]) && !empty($load_nomenklatura[$current_load_wr->getIdentifier()])) {
-                $load_array[$current_load_wr->field_produce_date->value()] = [
+              $produce_date = $current_load_wr->field_produce_date->value();
+              if (empty($load_array[$produce_date]) && !empty($load_nomenklatura[$current_load_wr->getIdentifier()])
+                // данное условие нужно, так как в Заявке может быть 2 и более установки
+                && $current_load_wr->field_produce_unit->tid->value() == $produce_unit_tid) {
+                $load_array[$produce_date] = [
                   'output' => $current_load_wr->field_produce_output->value(),
                   'nomenklatura' => $load_nomenklatura[$current_load_wr->getIdentifier()],
                 ];
               }
-              if ($current_load_wr->field_produce_output->value()) {
+              if ($current_load_wr->field_produce_output->value()
+                && isset($load_array[$produce_date]) && $load_array[$produce_date]["nomenklatura"]["tid"] == $current_query_wr->field_nomenklatura->tid->value()) {
                 $load_array[$current_load_wr->field_produce_date->value()]['is_current_load'] = true;
               }
             }
