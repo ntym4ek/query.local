@@ -153,7 +153,7 @@ function mailer_batch_mail()
           if (empty($queries_by_companies[$company_id])) {
             $queries_by_companies[$company_id] = [
               'queries' => [],
-              'company_id' => $query_wr->field_nomenklatura->field_user->uid->value(),
+              'company_uid' => $query_wr->field_nomenklatura->field_user->uid->value(),
             ];
           }
           $queries_by_companies[$company_id]['queries'][] = $query;
@@ -193,7 +193,7 @@ function mailer_batch_mail()
         }
       }
 
-      if ($users = ext_user_get_managers_by_company_uid($value['uid'])) {
+      if ($users = ext_user_get_managers_by_company_uid($value['company_uid'])) {
         foreach ($users as $manager_account) {
           if (!empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
             $params['mail'] = $manager_account->mail;
