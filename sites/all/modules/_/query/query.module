@@ -677,11 +677,10 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
     'status_manager' => $query_wr->field_query_status_manager->label(),
     'client_approve' => $query_wr->field_query_client_approve->value(),
     'type' => $query_wr->field_query_type->value(),
+    'reason' => $query_wr->field_query_reason->value() ? $query_wr->field_query_reason->name->value() : '',
     'comment' => $query_wr->field_comment->value(),
   ];
-  if ($query_wr->field_query_reason->value()) {
-    $params['reason'] = $query_wr->field_query_reason->name->value();
-  }
+
 
   if ($managers = query_get_managers_to_notify()) {
     foreach ($managers as $manager) {
@@ -935,11 +934,10 @@ function query_query_import($array)
         'status_manager' => $query_wr->field_query_status_manager->label(),
         'client_approve' => $query_wr->field_query_client_approve->value(),
         'type' => $query_wr->field_query_type->value(),
+        'reason' => $query_wr->field_query_reason->value() ? $query_wr->field_query_reason->name->value() : '',
         'comment' => $query_wr->field_comment->value(),
       ];
-      if ($query_wr->field_query_reason->value()) {
-        $params['reason'] = $query_wr->field_query_reason->name->value();
-      }
+
       if ($users = ext_user_get_managers_by_company_uid($params['product_owner_account']->uid)) {
         foreach ($users as $manager_account) {
           if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {

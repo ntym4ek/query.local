@@ -44,6 +44,7 @@ function mailer_mail($key, &$message, $params)
         'Номер: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
+        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
@@ -57,6 +58,7 @@ function mailer_mail($key, &$message, $params)
         'Номер заявки: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
+        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
@@ -71,7 +73,8 @@ function mailer_mail($key, &$message, $params)
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         'Количество: ' . $params["volume"] .  '<br />' .
-        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+        (!empty($params["comment"]) ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
@@ -85,6 +88,7 @@ function mailer_mail($key, &$message, $params)
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         'Новый статус: ' . $params["status_manager"] .  '<br />' .
+        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
@@ -98,6 +102,7 @@ function mailer_mail($key, &$message, $params)
         'Месяц: ' . $params["month"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         'Новый статус: ' . $params["status_client"] .  '<br />' .
+        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
@@ -176,6 +181,7 @@ function mailer_batch_mail()
             'Месяц: ' . date('F', $query_wr->field_month->value()) . '<br />' .
             'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
             'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
+            ($query_wr->field_query_reason->value() ? 'Причина: ' . $query_wr->field_query_reason->name->value() . '<br />' : '') .
             ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
             '<br />';
         } elseif ($query_wr->field_query_type->value() == 'main') {
