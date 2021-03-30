@@ -22,6 +22,10 @@ class query_handler_field_produce_units_form extends views_handler_field
 
     $query_wr = entity_metadata_wrapper('query', $query_id);
     $month_start = $query_wr->field_month->value();
+    $notif_arr = [];
+    foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
+      $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = $notif_wr->field_qn_notification->value();
+    }
 
     // вывести комментарий, если заявка от клиента
     // вывести установки, если есть
@@ -29,11 +33,14 @@ class query_handler_field_produce_units_form extends views_handler_field
     foreach ($produce_units as $pu_tid => $produce_unit) {
       $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
 
+
+
       $output .=
         '<div class="produce-unit">' .
         '<div class="produce-unit-name">' .
-        '<label class="views-label" for="edit-name--2">Установка</label>' .
-        '<h3>' . $produce_unit['name'] . '</h3>' .
+          '<label class="views-label" for="edit-name--2">Установка</label>' .
+          '<h3>' . $produce_unit['name'] . '</h3>' .
+          (empty($notif_arr[$pu_tid]) ? '' : '<div class="notification" data-toggle="popover" data-trigger="hover" title="Внимание!" data-content="' . $notif_arr[$pu_tid] . '"></div>') .
         '</div>' .
         '<div class="produce-unit-dates">' .
         '<label class="views-label">Даты</label>' .

@@ -832,6 +832,7 @@ function query_query_import($array)
     $query_reason_tid = $query_reason->tid;
   }
 
+
   // есть ли утверждённый план
   $efquery = new EntityFieldQuery();
   $has_approved_plan = $efquery
@@ -857,6 +858,29 @@ function query_query_import($array)
     $query_wr->field_oc_id = $query_oc_id;
     $query_wr->field_query_period = ['value' => $query_period_value, 'value2' => $query_period_value2 ];
     $query_wr->save();
+
+    // todo уведомления по Установкам
+    // удалить старые, на случай, если правим существующую
+    foreach($query_wr->field_query_notifications->getIterator() as $old_notif_wr) {
+      $old_notif_wr->delete();
+    }
+    $query_wr->field_query_notifications->set([]);
+
+    // зададим новые
+    if ($array['notification']) {
+      foreach ($array['notification'] as $notification) {
+        if ($produce_unit = query_get_produce_unit_by_1cID($notification['unit_id_1c'])) {
+          $notification_field = entity_create('field_collection_item', ['field_name' => 'field_query_notifications']);
+          $notification_field_wr = entity_metadata_wrapper('field_collection_item', $notification_field);
+          $notification_field->setHostEntity('query', $query);
+          $notification_field_wr->field_qn_produce_unit->set($produce_unit->tid);
+          $notification_field_wr->field_qn_notification->set($notification['message']);
+          $notification_field_wr->save();
+        }
+      }
+    }
+
+
     // Загрузка импортируется только для Заявок, пришедших после утверждения плана
     // в Заявках до утверждения берём только переписку, так как Загрузка отображается в предварительном плане
     if ($load_arr && $has_approved_plan) {

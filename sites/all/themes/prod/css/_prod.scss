@@ -211,6 +211,15 @@ form {
     flex: 0 1 155px;
     border-right: 1px solid $gray-lightest;
     padding-right: $grid-gutter-width/2; margin: 0;
+    position: relative;
+    .notification {
+      border-radius: 10px;
+      width: 20px; height: 20px;
+      background: #f5af14;
+      position: absolute; right: 10px; top: 10px;
+      animation: blinker 2s cubic-bezier(.5, 0, 1, 1) infinite alternate;
+    }
+    @keyframes blinker { to { opacity: 0; } }
   }
   .produce-unit-aux {
     flex: 0 1 130px;
