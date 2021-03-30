@@ -33,8 +33,6 @@ class query_handler_field_produce_units_form extends views_handler_field
     foreach ($produce_units as $pu_tid => $produce_unit) {
       $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
 
-
-
       $output .=
         '<div class="produce-unit">' .
         '<div class="produce-unit-name">' .

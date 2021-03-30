@@ -859,7 +859,7 @@ function query_query_import($array)
     $query_wr->field_query_period = ['value' => $query_period_value, 'value2' => $query_period_value2 ];
     $query_wr->save();
 
-    // todo уведомления по Установкам
+    // уведомления по Установкам
     // удалить старые, на случай, если правим существующую
     foreach($query_wr->field_query_notifications->getIterator() as $old_notif_wr) {
       $old_notif_wr->delete();
@@ -879,7 +879,6 @@ function query_query_import($array)
         }
       }
     }
-
 
     // Загрузка импортируется только для Заявок, пришедших после утверждения плана
     // в Заявках до утверждения берём только переписку, так как Загрузка отображается в предварительном плане
@@ -961,6 +960,19 @@ function query_query_import($array)
         'reason' => $query_wr->field_query_reason->value() ? $query_wr->field_query_reason->name->value() : '',
         'comment' => $query_wr->field_comment->value(),
       ];
+
+    // Уведомления по Установкам
+    $params['notification'] =  '';
+    if ($query_wr->field_query_notifications->count()) {
+      $params['notification'] =  '<br />ВНИМАНИЕ!<br />';
+      foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
+        $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = [
+          'name' => $notif_wr->field_qn_produce_unit->name->value(),
+          'message' => $notif_wr->field_qn_notification->value(),
+        ];
+        $params['notification'] .=  '<strong>' . $notif_wr->field_qn_produce_unit->name->value() . '</strong>. ' . $notif_wr->field_qn_notification->value() . '<br />';
+      }
+    }
 
       if ($users = ext_user_get_managers_by_company_uid($params['product_owner_account']->uid)) {
         foreach ($users as $manager_account) {

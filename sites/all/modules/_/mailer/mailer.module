@@ -50,19 +50,19 @@ function mailer_mail($key, &$message, $params)
 
       break;
 
-    case 'manager_notify_query_cancel_new':
-      $message['subject'] = 'Отмена заявки на производство';
-      $message['body'][] =
-        '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте "Управление заказами" пользователь запросил отмену производства:</p>' .
-        'Номер заявки: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
-        'Продукт: ' . $params["product"] .  '<br />' .
-        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
-        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
-        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
-
-      break;
+//    case 'manager_notify_query_cancel_new':
+//      $message['subject'] = 'Отмена заявки на производство';
+//      $message['body'][] =
+//        '<h2>Здравствуйте!</h2>' .
+//        '<p>На сайте "Управление заказами" пользователь запросил отмену производства:</p>' .
+//        'Номер заявки: ' . $params["qid"] . '<br />' .
+//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Продукт: ' . $params["product"] .  '<br />' .
+//        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+//        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+//        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+//
+//      break;
 
     case 'client_notify_query_correction_new':
       $message['subject'] = 'Новая корректировка по вашей заявке';
@@ -75,37 +75,38 @@ function mailer_mail($key, &$message, $params)
         'Количество: ' . $params["volume"] .  '<br />' .
         (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         (!empty($params["comment"]) ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
+        $params['notification'] .
         '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
 
       break;
 
-    case 'client_notify_query_handling':
-      $message['subject'] = 'Статус заявки на производство изменился';
-      $message['body'][] =
-        '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> изменился статус заявки.</p>' .
-        'Номер заявки: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
-        'Продукт: ' . $params["product"] .  '<br />' .
-        'Новый статус: ' . $params["status_manager"] .  '<br />' .
-        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
-        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+//    case 'client_notify_query_handling':
+//      $message['subject'] = 'Статус заявки на производство изменился';
+//      $message['body'][] =
+//        '<h2>Здравствуйте!</h2>' .
+//        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> изменился статус заявки.</p>' .
+//        'Номер заявки: ' . $params["qid"] . '<br />' .
+//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Продукт: ' . $params["product"] .  '<br />' .
+//        'Новый статус: ' . $params["status_manager"] .  '<br />' .
+//        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+//        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+//
+//      break;
 
-      break;
-
-    case 'manager_notify_query_handling':
-      $message['subject'] = 'Статус заявки на производство изменился';
-      $message['body'][] =
-        '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте "Управление заказами" пользователь изменил статус заявки:</p>' .
-        'Номер заявки: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
-        'Продукт: ' . $params["product"] .  '<br />' .
-        'Новый статус: ' . $params["status_client"] .  '<br />' .
-        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
-        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
-
-      break;
+//    case 'manager_notify_query_handling':
+//      $message['subject'] = 'Статус заявки на производство изменился';
+//      $message['body'][] =
+//        '<h2>Здравствуйте!</h2>' .
+//        '<p>На сайте "Управление заказами" пользователь изменил статус заявки:</p>' .
+//        'Номер заявки: ' . $params["qid"] . '<br />' .
+//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Продукт: ' . $params["product"] .  '<br />' .
+//        'Новый статус: ' . $params["status_client"] .  '<br />' .
+//        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
+//        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+//
+//      break;
 
     case 'user_notify_plan_import':
       $message['subject'] = 'Импортирован план на ' . $params['month'];
@@ -176,6 +177,19 @@ function mailer_batch_mail()
       foreach ($value['queries'] as $query) {
         $query_wr = entity_metadata_wrapper('query', $query->id);
 
+        // Уведомления по Установкам
+        $notification =  '';
+        if ($query_wr->field_query_notifications->count()) {
+          $notification =  '<br />ВНИМАНИЕ!<br />';
+          foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
+            $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = [
+              'name' => $notif_wr->field_qn_produce_unit->name->value(),
+              'message' => $notif_wr->field_qn_notification->value(),
+            ];
+            $notification .=  '<strong>' . $notif_wr->field_qn_produce_unit->name->value() . '</strong>. ' . $notif_wr->field_qn_notification->value() . '<br />';
+          }
+        }
+
         if ($query_wr->field_query_type->value() == 'correction') {
           $params['text'] .= 'Номер заявки: ' . $query_wr->getIdentifier() . '<br />' .
             'Месяц: ' . date('F', $query_wr->field_month->value()) . '<br />' .
@@ -183,6 +197,7 @@ function mailer_batch_mail()
             'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
             ($query_wr->field_query_reason->value() ? 'Причина: ' . $query_wr->field_query_reason->name->value() . '<br />' : '') .
             ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
+            $notification .
             '<br />';
         } elseif ($query_wr->field_query_type->value() == 'main') {
           if ($query_wr->field_query_status_client->value() == 'approved' && !$main_plan_flag) {
