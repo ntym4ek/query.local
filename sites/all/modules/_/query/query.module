@@ -1474,63 +1474,39 @@ function query_get_produce_units_from_query($query)
       }
     }
   }
+  ksort($produce_units);
+
   return $produce_units;
 }
 
 
 /**
- * get_produce_unit_load
+ * Вернуть список Загрузки заданной Установки на заданный месяц
  */
 function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = null, $current_query = null)
 {
 //  $load_array = &drupal_static(__FUNCTION__);
 
   if (!isset($load_array)) {
-    // Вернуть список Загрузки заданной установки на заданный месяц
-    // учитывать нужно только утверждённые заявки
-    // Загрузку нужно возвращать с привязкой к Номенклатуре,
-    //  например,
-    //  чтобы в корректирующих Заявке не выводить Загрузку из основной Заявки,
-    //  т.к нужна возможность распределить её на эти даты снова
-    // Для Плановых Заявок берём загрузку только из самой Заявки, она содержит и Сервисную Загрузку
-    // Для промежуточных Заявок на изменения загрузку, в том числе сервисную собираем на дату Заявки
-    // Для итоговых утверждённых Заявок и итоговой Загрузки установок собирается вся загрузка на месяц и выводится пересечение,
-    //  поверх добавляется загрузка из последней сервисной Заявки
 
+    // Заявки до Плана не учитываются (статус клиента == "processing")
+
+    // Для последних утверждённых Заявок берём последнюю сервисную Заявку
+    // Для арххивных Заявок Загрузку, в том числе сервисную собираем на дату Заявки
+
+    // массив Загрузки по заданной Установке
     $load_array = [];
 
-    $ids = [];
-    $is_current_query_main = false;
-    $current_query_nom_tid = 0;
+    // массив Заявок из которых будем брать Загрузку
+    $queries = [];
 
-    // добавить id текущей Загрузки
+    $is_last_approved_query = false;
+
     if ($current_query) {
       $current_query_wr = entity_metadata_wrapper('query', $current_query);
-      $is_current_query_main = $current_query_wr->field_query_type->value() == 'main';
       $current_query_nom_tid = $current_query_wr->field_nomenklatura->tid->value();
-      if ($current_query_wr->value()) {
-        $ids = array_merge($ids, [$current_query_wr->getIdentifier()]);
-      } else {
-        $current_query = null;
-      }
-    }
 
-    // план месяца
-    $efquery = new EntityFieldQuery();
-    $result_main = $efquery
-      ->entityCondition('entity_type', 'query')
-      ->fieldCondition('field_month', 'value', $month_start)
-//      ->fieldCondition('field_query_status_client', 'value', ['approved', 'processing'], 'IN')
-      ->fieldCondition('field_query_status_manager', 'value', 'approved')
-      ->fieldCondition('field_query_type', 'value', 'main')
-      ->execute();
-    if ($result_main) {
-      $ids = array_merge($ids, array_keys($result_main['query']));
-    }
-
-    // является ли текущая Заявка последней утверждённой
-    $is_last_approved_query = false;
-    if ($current_query) {
+      // является ли текущая Заявка последней утверждённой
       $dbr = db_select('eck_query', 'q');
       $dbr->addField('q', 'id');
       $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
@@ -1550,99 +1526,115 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       }
     }
 
-    // если Заявка не Плановая, то дополнительно собираем все утверждённые Изменения
-    // если задана дата и это не последняя утверждённая Заявка с Загрузкой, то до этой даты
-    if (!$current_query || !$is_current_query_main || $is_last_approved_query) {
+    // Номенклатура на какой-либо Установке могла быть запланирована в первых Заявках
+    // и отменена или перенесена на другие в последующих.
+    // Поэтому выборка последних утверждённых Заявок только по установкам будет неактуальной,
+    // так как не учтёт последующие Заявки, где был такой перенос или отмена выпуска.
 
-      // утверждённые Корректировки
-      // если задана дата и текущая Заявка - это не последняя утверждённая Заявка, то до этой даты
-      $efquery = new EntityFieldQuery();
-      $efquery
-        ->entityCondition('entity_type', 'query')
-        ->fieldCondition('field_query_type', 'value', 'correction')
-        ->fieldCondition('field_month', 'value', $month_start)
-        ->fieldCondition('field_query_status_client', 'value', 'approved')
-        ->fieldCondition('field_query_status_manager', 'value', 'approved');
-      if ($date && !$is_last_approved_query) {
-        $efquery->propertyCondition('created', $date, '<=');
-      }
-      if ($result = $efquery->execute()) {
-        $ids = array_merge($ids, array_keys($result['query']));
-      }
+    // выбираем Номенклатуру, которая планировалась на Установке в заданном Месяце
+    // ислючим Номенклатуру сервисных Заявок, так как сервисных Заявок много и в другом запросе выберем одну актуальную
+    $dbr = db_select('eck_query', 'q');
+    $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+    $dbr->condition('fm.field_month_value', $month_start);
+    $dbr->innerJoin('field_data_field_query_status_manager', 'fsm', 'fsm.entity_id = q.id');
+    $dbr->condition('fsm.field_query_status_manager_value', 'approved');
+    $dbr->innerJoin('field_data_field_load', 'fl', 'fl.entity_id = q.id');
+    $dbr->innerJoin('field_data_field_produce_unit', 'fpu', 'fpu.entity_id = fl.field_load_target_id');
+    $dbr->condition('fpu.field_produce_unit_tid', $produce_unit_tid);
+    $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
+    $dbr->condition('fn.field_nomenklatura_target_id', 583, '!=');
+    $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
+    $dbr->distinct();
+    if ($date && !$is_last_approved_query) {
+      $dbr->condition('q.created', $date, '<=');
+    }
+    if ($nom_tids = $dbr->execute()->fetchCol()) {
 
-      // последняя Сервисная Заявка по установке
-      // если задана дата и текущая Заявка - это не последняя утверждённая Заявка, то до этой даты
+      // добавляем ВСЕ утверждённые Заявки (План и Корректировки) для найденной Номенклатуры в заданный Месяц
+      //   нужно найти последние (из всех или на дату), но вместо усложнения запроса, потом пройдёмся в цикле по полю created
+      // если задана дата и текущая Заявка не последняя утверждённая, то до заданной даты
       $dbr = db_select('eck_query', 'q');
-      $dbr->addField('q', 'id');
+      $dbr->fields('q', ['id', 'created']);
       $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
       $dbr->condition('fm.field_month_value', $month_start);
-      $dbr->innerJoin('field_data_field_load', 'fl', 'fl.entity_id = q.id');
-      $dbr->innerJoin('field_data_field_produce_unit', 'fpu', 'fpu.entity_id = fl.field_load_target_id');
-      $dbr->condition('fpu.field_produce_unit_tid', $produce_unit_tid);
+      $dbr->innerJoin('field_data_field_query_status_manager', 'fsm', 'fsm.entity_id = q.id');
+      $dbr->condition('fsm.field_query_status_manager_value', 'approved');
+      $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
+      $dbr->condition('fn.field_nomenklatura_target_id', $nom_tids, 'IN');
+      $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
       if ($date && !$is_last_approved_query) {
         $dbr->condition('q.created', $date, '<=');
       }
-      $dbr->orderBy('q.id', 'DESC');
-      $dbr->range(0, 1);
-      if ($result = $dbr->execute()->fetchField()) {
-        $ids = array_merge($ids, [$result]);
+      $queries = $dbr->execute()->fetchAllAssoc('id');
+
+      // добавляем последнюю (актуальную) сервисную Заявку
+      $dbr = db_select('eck_query', 'q');
+      $dbr->fields('q', ['id', 'created']);
+      $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
+      $dbr->condition('fm.field_month_value', $month_start);
+      $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
+      $dbr->condition('fn.field_nomenklatura_target_id', 583);
+      $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
+      if ($date && !$is_last_approved_query) {
+        $dbr->condition('q.created', $date, '<=');
       }
+      $dbr->orderBy('q.created', 'DESC');
+      $dbr->range(0,1);
+      if ($service_query = $dbr->execute()->fetchAllAssoc('id')) {
+        $service_query = array_shift($service_query);
+        $queries[$service_query->id] = $service_query;
+      }
+
+      ksort($queries);
     }
 
-    if ($ids) {
-      $load_nomenklatura = [];
-      $queries = entity_load('query', $ids);
+    if ($queries) {
+      $nom_queries = [];
 
       // исключить неактуальные Заявки (для которых есть корректировки)
       // (оставляем последнюю утверждённую для Номенклатуры)
       // Заявка на отмену не должна содержать загрузку, так как отсутствие Загрузки и будет отменой
+
       // массив Номенклатура - Заявки
-      foreach ($queries as $query) {
-        $query_wr = entity_metadata_wrapper('query', $query);
-        $nom_tid = $query_wr->field_nomenklatura->tid->value();
-        if (empty($nom_query[$nom_tid]['created']) || $nom_query[$nom_tid]['created'] < $query_wr->created->value()) {
-          $nom_query[$nom_tid] = [
-            'query_id' => $query_wr->getIdentifier(),
-            'created' => $query_wr->created->value(),
+      foreach ($queries as $qid => $query) {
+        if (empty($nom_queries[$qid]) || $nom_queries[$qid]['created'] < $query->created) {
+          $nom_queries[$query->nom_tid] = [
+            'query_id' => $qid,
+            'created' => $query->created,
           ];
         }
       }
 
-      // массив Загрузка - Номенклатура
-      foreach ($queries as $query) {
-        $query_wr = entity_metadata_wrapper('query', $query);
-        $nom_tid = $query_wr->field_nomenklatura->tid->value();
-        if ($nom_query[$nom_tid]['query_id'] == $query->id) {
-          foreach ($query_wr->field_load->getIterator() as $load_wr) {
-            $load_nomenklatura[$load_wr->getIdentifier()] = [
-              'tid' => $nom_tid,
-              'produce_date' => $load_wr->field_produce_date->value(),
-              'produce_unit' => $load_wr->field_produce_unit->tid->value(),
-              'name' => $query_wr->field_nomenklatura->name->value(),
-              'artikul_d' => $query_wr->field_nomenklatura->field_oc_artikul_davalec->value(),
-              'name_d' => $query_wr->field_nomenklatura->field_oc_name_davalec->value(),
-              'client_id' => $load_wr->field_produce_output->value() ? $query_wr->field_nomenklatura->field_user->uid->value() : 0,
+      foreach ($nom_queries as $nom_tid => $query) {
+        $query_wr = entity_metadata_wrapper('query', $query['query_id']);
+        foreach ($query_wr->field_load->getIterator() as $load_wr) {
+          // в одной Заявке может быть Загрузка с разных установок, отфильтровать
+          if ($load_wr->field_produce_unit->tid->value() == $produce_unit_tid) {
+            $day_start = $load_wr->field_produce_date->value();
+
+            $nom_arr = ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'];
+            if ($output = $load_wr->field_produce_output->value()) {
+              $nom_arr = [
+                'tid' => $nom_tid,
+                'produce_date' => $load_wr->field_produce_date->value(),
+                'produce_unit' => $load_wr->field_produce_unit->tid->value(),
+                'name' => $query_wr->field_nomenklatura->name->value(),
+                'artikul_d' => $query_wr->field_nomenklatura->field_oc_artikul_davalec->value(),
+                'name_d' => $query_wr->field_nomenklatura->field_oc_name_davalec->value(),
+                'client_id' => $load_wr->field_produce_output->value() ? $query_wr->field_nomenklatura->field_user->uid->value() : 0,
+              ];
+            }
+
+            $load_array[$day_start] = [
+              'output' => $output,
+              'nomenklatura' => $nom_arr,
             ];
           }
         }
       }
+      ksort($load_array);
 
-      if ($load_nomenklatura) {
-        $load = entity_load('load', array_keys($load_nomenklatura));
-        ksort($load);
-        // Загрузка для заданной Установки
-        // массив Загрузка - Данные
-        foreach ($load as $load_item) {
-          if ($load_item->field_produce_unit["und"][0]["tid"] == $produce_unit_tid) {
-            $day_start = $load_item->field_produce_date["und"][0]["value"];
-            $load_array[$day_start] = [
-              'output' => $load_item->field_produce_output["und"][0]["value"],
-              'nomenklatura' => $load_item->field_produce_output["und"][0]["value"] ? $load_nomenklatura[$load_item->id] : ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'],
-            ];
-          }
-        }
-
-        ksort($load_array);
+      if ($load_array) {
 
         // если задана текущая Заявка, добавить дополнительные данные
         $current_company_id = query_get_company_id_by_user($GLOBALS['user']);
@@ -1656,7 +1648,8 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
               $produce_date = $current_load_wr->field_produce_date->value();
               if (empty($load_array[$produce_date]) && !empty($load_nomenklatura[$current_load_wr->getIdentifier()])
                 // данное условие нужно, так как в Заявке может быть 2 и более установки
-                && $current_load_wr->field_produce_unit->tid->value() == $produce_unit_tid) {
+//                && $current_load_wr->field_produce_unit->tid->value() == $produce_unit_tid
+              ) {
                 $load_array[$produce_date] = [
                   'output' => $current_load_wr->field_produce_output->value(),
                   'nomenklatura' => $load_nomenklatura[$current_load_wr->getIdentifier()],
@@ -1703,6 +1696,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
 
     }
   }
+
   return $load_array;
 }
 
@@ -2015,7 +2009,6 @@ function query_process_incoming_files()
   if ($files) {
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
-//      query_produce_plan_import($array);
       if (query_produce_plan_import($array)) {
         $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {

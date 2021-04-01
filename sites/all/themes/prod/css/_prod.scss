@@ -217,7 +217,7 @@ form {
       width: 20px; height: 20px;
       background: #f5af14;
       position: absolute; right: 10px; top: 10px;
-      animation: blinker 2s cubic-bezier(.5, 0, 1, 1) infinite alternate;
+      animation: blinker 1.5s cubic-bezier(.5, 0, 1, 1) infinite alternate;
     }
     @keyframes blinker { to { opacity: 0; } }
   }
