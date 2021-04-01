@@ -439,28 +439,14 @@ function query_form_alter(&$form, &$form_state, $form_id)
 
         // цикл по количеству дней в месяце
         for ($i = 1; $i <= date("t", $month_start); $i++) {
-
-//          $day_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
           $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
-          // для текущей Номенклатуры занятость не выводим (в случае заполнения корректирующей Заявки)
-//                  $produce_unit_is_busy = !empty($produce_unit_load[$day_start]) && $produce_unit_load[$day_start]['nomenklatura']['tid'] != $nom_tid;
-//                  $produce_unit_has_current_load = (int)!empty($current_load[$pu_tid][$day_start]);
           $produce_unit_is_busy = !empty($produce_unit_load[$day_start]['is_busy']);
           $produce_unit_has_current_load = (int)!empty($produce_unit_load[$day_start]['is_current_load']);
           $produce_unit_is_unavailable = (int)!empty($produce_unit_load[$day_start]['is_unavailable']);
           $classes = empty($produce_unit_load[$day_start]['classes']) ? [] : $produce_unit_load[$day_start]['classes'];
-          // дата недоступна для выбора в корректирующей Заявке для Клиента до сегодня и ещё спустя три дня
-//                  $produce_unit_is_unavailable = !user_has_role(ROLE_ADMIN)
-//                    && !user_has_role(ROLE_MANAGER)
-//                    && ($day_start < $today_start + 3 * 24 * 60 * 60)
-//                    && in_array($load_query_wr->field_query_type->value(), ['main', 'correction']); // данные могут быть получены из начальной и корректирующей
 
           // вывести подсказку при наведении с выходом продукции в этот день
-//                  $classes = [];
-//                  if ($produce_unit_is_busy && !$produce_unit_has_current_load) $classes[] = 'loaded';
-//                  if ($produce_unit_has_current_load) $classes[] = 'selected';
-//                  if ($produce_unit_is_unavailable && !$produce_unit_has_current_load) $classes[] = 'unavailable';
           $tooltip = empty($produce_unit_load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $produce_unit_load[$day_start]['output'] . '"';
 
           // при создании заявки даты можно выбирать, при редактировании нет
@@ -618,23 +604,7 @@ function query_form_eck__entity__form_query_query_validate(&$form, &$form_state)
           }
         }
         $form_state["data"]["produce_units"][$produce_unit_tid]['load'] = $load;
-
-//        if ($output_total < $volume) {
-//          form_set_error('field_qty', 'Выбрано дат меньше, чем необходимо для заданного количества производимого продукта.');
-//          return false;
-//        }
       }
-
-      // если количество дней в Загрузке изменилось, а Кол-во нет - вывести ошибку
-//      if (!empty($form_state['data']['source_query']['load'])) {
-//        $load_old = $form_state['data']['source_query']['load'];
-//        $volume_old = $form_state['data']['source_query']['volume'];
-//        if ($volume == $volume_old
-//          && count($load) > count($load_old)) {
-//          form_set_error('field_qty', 'При выборе дополнительных дат производства необходимо увеличить количество продукта.');
-//          return false;
-//        }
-//      }
     }
   }
 }
@@ -714,7 +684,7 @@ function query_query_export($query_wr)
     'action' => '',
   ];
   if ($query_wr->field_query_reason->value()) {
-    $params['reason_1с'] = 'нужен словарь';
+    $params['reason_1c'] = 'нужен словарь';
   }
 
   $query_json = drupal_json_encode($query_arr);
@@ -744,16 +714,6 @@ function query_query_import($array)
     return false;
   }
 
-//  $query_type = empty($query_arr['type']) ? '' : $query_arr['type'];
-//  if (!in_array($query_type, ['main', 'correction'])) {
-//    watchdog('import', 'Не найден тип заявки "' . $query_type . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
-//    return false;
-//  }
-//  $query_status_client = empty($query_arr['status_client']) ? '' : $query_arr['status_client'];
-//  if (!in_array($query_status_client, ['processing', 'approved', 'deny'])) {
-//    watchdog('import', 'Не найден статус клиента "' . $query_status_client . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
-//    return false;
-//  }
   $query_status_manager = empty($array['status_manager']) ? '' : $array['status_manager'];
   if (!in_array($query_status_manager, ['processing', 'approved', 'deny'])) {
     watchdog('import', 'Не найден статус менеджера "' . $query_status_manager . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
@@ -827,7 +787,7 @@ function query_query_import($array)
   $query_period_value2 = empty($array['period_end']) ? 0 : strtotime($array['period_end']);
 
   $query_reason_tid = 0;
-  $query_reason_1c = empty($array['reason_1с']) ? '' : $array['reason_1с'];
+  $query_reason_1c = empty($array['reason_1c']) ? '' : $array['reason_1c'];
   if ($query_reason_1c && $query_reason = query_get_reason_by_oc_id($query_reason_1c)) {
     $query_reason_tid = $query_reason->tid;
   }
@@ -846,7 +806,7 @@ function query_query_import($array)
   // заполнить поля
   try {
     $query_wr = entity_metadata_wrapper('query', $query);
-    $query_wr->created = REQUEST_TIME;
+    $query_wr->changed = REQUEST_TIME;
     $query_wr->field_month = $month_start;
     $query_wr->field_nomenklatura = $nom->tid;
     $query_wr->field_query_type = 'correction';
@@ -1129,7 +1089,7 @@ function query_views_pre_render(&$view)
 {
   if ($view->name == 'queries' && $view->current_display == 'page_1') {
     // добавить кнопку Новая заявка
-    $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-primary">Новая заявка</a>';
+    $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-info">Новая заявка</a>';
   }
 }
 
@@ -1504,6 +1464,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
 
     if ($current_query) {
       $current_query_wr = entity_metadata_wrapper('query', $current_query);
+      $is_current_query_main = $current_query_wr->field_query_type->value() == 'main';
       $current_query_nom_tid = $current_query_wr->field_nomenklatura->tid->value();
 
       // является ли текущая Заявка последней утверждённой
@@ -1545,7 +1506,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
     $dbr->condition('fn.field_nomenklatura_target_id', 583, '!=');
     $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
     $dbr->distinct();
-    if ($date && !$is_last_approved_query) {
+    if ($date && !$is_last_approved_query && !$is_current_query_main) {
       $dbr->condition('q.created', $date, '<=');
     }
     if ($nom_tids = $dbr->execute()->fetchCol()) {
@@ -1562,7 +1523,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
       $dbr->condition('fn.field_nomenklatura_target_id', $nom_tids, 'IN');
       $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
-      if ($date && !$is_last_approved_query) {
+      if ($date && !$is_last_approved_query && !$is_current_query_main) {
         $dbr->condition('q.created', $date, '<=');
       }
       $queries = $dbr->execute()->fetchAllAssoc('id');
