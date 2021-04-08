@@ -125,7 +125,7 @@ function mailer_mail($key, &$message, $params)
  */
 function mailer_mail_alter(&$message)
 {
-  if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE) {
+  if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE || !variable_get('client_email_enable', 1)) {
     $message['send'] = false;
     watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
   } else {

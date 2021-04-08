@@ -429,6 +429,7 @@ function query_produce_plan_import($array)
     $plan = [];
     $month_arr = explode('.', $array['month']);
     $month_start = gmmktime(0, 0, 0, $month_arr[1], 1, $month_arr[2]);
+    $plan_import_time = time();
 
     //  если есть утверждённый план, импорт запретить
     $efquery = new EntityFieldQuery();
@@ -483,38 +484,16 @@ function query_produce_plan_import($array)
       }
     }
 
-    // массив с техработами на установках
-    $service_arr = [];
-    if ($array['service']) {
-      foreach ($array['service'] as $key => $item) {
-        $date_arr = explode('.', $item['date']);
-        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-        if (!empty($produce_unit_id_arr[$item['unit_id_1c']])) {
-          $pu_tid = $produce_unit_id_arr[$item['unit_id_1c']];
-          $service_arr[$pu_tid][] = [
-            'field_produce_unit' => $pu_tid,
-            'field_produce_date' => $day_start,
-            'field_produce_output' => 0,
-          ];
-        }
-      }
-    }
-
     // удалить старый план на месяц
     query_plan_delete($month_start);
 
     // создание Заявок на месяц
     $user_mails = [];
     foreach ($plan as $plan_item) {
-      // добавить в массив Загрузки сервисную Загрузку
-      foreach ($plan_item['produce_units'] as $pu_tid) {
-        if (!empty($service_arr[$pu_tid])) {
-          $plan_item['field_load'] = array_merge($plan_item['field_load'], $service_arr[$pu_tid]);
-        }
-      }
 
       $query = entity_create('query', [
         'type' => 'query',
+        'created' => $plan_import_time,
         'uid' => 0,
       ]);
       entity_save('query', $query);
@@ -536,6 +515,41 @@ function query_produce_plan_import($array)
           'month' => $plan_item['field_month'],
           'company_uid' => $plan_item['uid']
         ];
+      }
+    }
+
+    if (!empty($array['service'])) {
+      $service_arr = [];
+      foreach ($array['service'] as $item) {
+        if ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+          $date_arr = explode('.', $item['date']);
+          $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+          $service_arr[] = [
+            'field_produce_unit' => $produce_unit->tid,
+            'field_produce_date' => $day_start,
+            'field_produce_output' => 0,
+          ];
+        } else {
+          watchdog('import', 'Импорт занятости при импорте плана. Не найдена установка "' . $item['unit_id_1c'] . '". ', [], WATCHDOG_ERROR);
+          //return false;
+        }
+      }
+
+      if ($service_arr) {
+        $query_zan = entity_create('query', [
+          'type' => 'query',
+          'created' => $plan_import_time,
+          'uid' => 0,
+        ]);
+        entity_save('query', $query_zan);
+
+        $query_zan_wr = entity_metadata_wrapper('query', $query_zan);
+        $query_zan_wr->field_month = $month_start;
+        $query_zan_wr->field_nomenklatura = 583; // tid Технических работ
+        $query_zan_wr->field_query_type = 'service';
+        $query_zan_wr->save();
+
+        query_query_load_update($query_zan->id, $service_arr);
       }
     }
 

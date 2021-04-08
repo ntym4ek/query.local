@@ -54,13 +54,21 @@ function query_menu()
   $items['admin/config/query'] = array(
     'title' => 'Заявки',
     'page callback' => 'drupal_get_form',
+    'page arguments' => array('query_settings_form'),
+    'access arguments' => array('access manager settings'),
+    'file' => 'includes/query.admin.inc',
+  );
+  $items['admin/config/query/settings'] = array(
+    'title' => 'Настройки',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/query/exchange'] = array(
+    'title' => 'Импорт',
+    'page callback' => 'drupal_get_form',
     'page arguments' => array('query_import_form'),
     'access arguments' => array('access manager settings'),
     'file' => 'includes/query.import.inc',
-  );
-  $items['admin/config/query/import'] = array(
-    'title' => 'Импорт',
-    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'type' => MENU_LOCAL_TASK,
   );
   $items['admin/config/query/delete'] = array(
     'title' => 'Удаление заявок',
@@ -703,6 +711,8 @@ function query_query_import($array)
   $old_query_id = empty($array['ID']) ? 0 : $array['ID'];
   $query_oc_id = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
   $month_value = empty($array['month']) ? '' : $array['month'];
+  $query_import_time = time();
+
   if (!$month_value) {
     watchdog('import', 'Пустое поле меcяца в файле экспорта. (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
     return false;
@@ -775,7 +785,7 @@ function query_query_import($array)
   if (!$query) {
     $query = entity_create('query', [
       'type' => 'query',
-      'created' => REQUEST_TIME,
+      'created' => $query_import_time,
       'uid' => 0,
     ]);
     entity_save('query', $query);
@@ -806,7 +816,7 @@ function query_query_import($array)
   // заполнить поля
   try {
     $query_wr = entity_metadata_wrapper('query', $query);
-    $query_wr->changed = REQUEST_TIME;
+    $query_wr->changed = $query_import_time;
     $query_wr->field_month = $month_start;
     $query_wr->field_nomenklatura = $nom->tid;
     $query_wr->field_query_type = 'correction';
@@ -890,7 +900,7 @@ function query_query_import($array)
     if ($zan_load_arr) {
       $query_zan = entity_create('query', [
         'type' => 'query',
-        'created' => REQUEST_TIME,
+        'created' => $query_import_time,
         'uid' => 0,
       ]);
       entity_save('query', $query_zan);
@@ -1539,7 +1549,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       if ($date && !$is_last_approved_query) {
         $dbr->condition('q.created', $date, '<=');
       }
-      $dbr->orderBy('q.created', 'DESC');
+      $dbr->orderBy('q.id', 'DESC');
       $dbr->range(0,1);
       if ($service_query = $dbr->execute()->fetchAllAssoc('id')) {
         $service_query = array_shift($service_query);
@@ -1556,16 +1566,17 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       // (оставляем последнюю утверждённую для Номенклатуры)
       // Заявка на отмену не должна содержать загрузку, так как отсутствие Загрузки и будет отменой
 
-      // массив Номенклатура - Заявки
-      foreach ($queries as $qid => $query) {
-        if (empty($nom_queries[$qid]) || $nom_queries[$qid]['created'] < $query->created) {
+      // массив Номенклатура - Последняя актуальная Заявка
+      foreach ($queries as $query_id => $query) {
+        if (empty($nom_queries[$query->nom_tid]) || ($nom_queries[$query->nom_tid]['created'] <= $query->created && $nom_queries[$query->nom_tid]['query_id'] < $query_id)) {
           $nom_queries[$query->nom_tid] = [
-            'query_id' => $qid,
+            'query_id' => $query_id,
             'created' => $query->created,
           ];
         }
       }
 
+      // из актуальных Заявок собираем Загрузку
       foreach ($nom_queries as $nom_tid => $query) {
         $query_wr = entity_metadata_wrapper('query', $query['query_id']);
         foreach ($query_wr->field_load->getIterator() as $load_wr) {
@@ -1573,7 +1584,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
           if ($load_wr->field_produce_unit->tid->value() == $produce_unit_tid) {
             $day_start = $load_wr->field_produce_date->value();
 
-            $nom_arr = ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'];
+            $nom_arr = [];
             if ($output = $load_wr->field_produce_output->value()) {
               $nom_arr = [
                 'tid' => $nom_tid,
@@ -1584,12 +1595,16 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
                 'name_d' => $query_wr->field_nomenklatura->field_oc_name_davalec->value(),
                 'client_id' => $load_wr->field_produce_output->value() ? $query_wr->field_nomenklatura->field_user->uid->value() : 0,
               ];
+            } elseif ($nom_tid == 583) {
+              $nom_arr = ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'];
             }
 
-            $load_array[$day_start] = [
-              'output' => $output,
-              'nomenklatura' => $nom_arr,
-            ];
+            if ($nom_arr) {
+              $load_array[$day_start] = [
+                'output' => $output,
+                'nomenklatura' => $nom_arr,
+              ];
+            }
           }
         }
       }
@@ -1848,7 +1863,9 @@ function query_date_select_process_alter(&$element, $form_state, $context)
 function query_cron()
 {
   // выполнить импорт заявок
-  query_process_incoming_files();
+  if (variable_get('import_1с_enable', 1)) {
+    query_process_incoming_files();
+  }
 
   // однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
   // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
