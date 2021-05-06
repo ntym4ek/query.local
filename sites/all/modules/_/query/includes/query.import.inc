@@ -303,10 +303,15 @@ function query_reasons_import($array)
           taxonomy_term_save($reason);
         }
 
+        if (!is_numeric($item['cause_fault'])) {
+          $item['cause_fault'] = 0;
+        }
+
         // обновить значения полей
         $reason_wr = entity_metadata_wrapper('taxonomy_term', $reason);
         $reason_wr->name = $item['cause_name'];
         $reason_wr->field_reason_oc_id = $item['cause_id'];
+        $reason_wr->field_fault = $item['cause_fault'];
         $reason_wr->field_status = 1;
         $reason_wr->save();
 
@@ -545,7 +550,7 @@ function query_produce_plan_import($array)
 
         $query_zan_wr = entity_metadata_wrapper('query', $query_zan);
         $query_zan_wr->field_month = $month_start;
-        $query_zan_wr->field_nomenklatura = 583; // tid Технических работ
+        $query_zan_wr->field_nomenklatura = TID_SERVICE_WORK; // tid Технических работ
         $query_zan_wr->field_query_type = 'service';
         $query_zan_wr->save();
 

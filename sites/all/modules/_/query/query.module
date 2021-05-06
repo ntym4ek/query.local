@@ -6,6 +6,9 @@ define('DAYS_BEFORE_PRODUCE_START', 1);
 // Время нужно для согласования и подготовки установки к началу производства.
 define('DAYS_UNAVAILABLE', 3);
 
+// tid технических работ
+define('TID_SERVICE_WORK', 583);
+
 /**
  * Implementation of hook_menu().
  */
@@ -907,7 +910,7 @@ function query_query_import($array)
 
       $query_zan_wr = entity_metadata_wrapper('query', $query_zan);
       $query_zan_wr->field_month = $month_start;
-      $query_zan_wr->field_nomenklatura = 583; // tid Технических работ
+      $query_zan_wr->field_nomenklatura = TID_SERVICE_WORK; // tid Технических работ
       $query_zan_wr->field_query_type = 'service';
       $query_zan_wr->save();
 
@@ -1513,7 +1516,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
     $dbr->innerJoin('field_data_field_produce_unit', 'fpu', 'fpu.entity_id = fl.field_load_target_id');
     $dbr->condition('fpu.field_produce_unit_tid', $produce_unit_tid);
     $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
-    $dbr->condition('fn.field_nomenklatura_target_id', 583, '!=');
+    $dbr->condition('fn.field_nomenklatura_target_id', TID_SERVICE_WORK, '!=');
     $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
     $dbr->distinct();
     if ($date && !$is_last_approved_query && !$is_current_query_main) {
@@ -1544,7 +1547,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
       $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = q.id');
       $dbr->condition('fm.field_month_value', $month_start);
       $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
-      $dbr->condition('fn.field_nomenklatura_target_id', 583);
+      $dbr->condition('fn.field_nomenklatura_target_id', TID_SERVICE_WORK);
       $dbr->addField('fn', 'field_nomenklatura_target_id', 'nom_tid');
       if ($date && !$is_last_approved_query) {
         $dbr->condition('q.created', $date, '<=');
@@ -1595,7 +1598,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
                 'name_d' => $query_wr->field_nomenklatura->field_oc_name_davalec->value(),
                 'client_id' => $load_wr->field_produce_output->value() ? $query_wr->field_nomenklatura->field_user->uid->value() : 0,
               ];
-            } elseif ($nom_tid == 583) {
+            } elseif ($nom_tid == TID_SERVICE_WORK) {
               $nom_arr = ['tid' => 0, 'client_id' => 0, 'name' => 'Технические работы'];
             }
 
