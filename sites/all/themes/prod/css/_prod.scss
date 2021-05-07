@@ -202,6 +202,31 @@ form {
   margin-bottom: 5px;
 }
 
+
+.view-report {
+  caption {
+    color: $text-color; font-size: $font-size-h3;
+    margin-top: 10px;
+  }
+  table th { color: $text-muted; font-weight: 400; }
+  .views-field-created { width: 80px; }
+  .views-field-field-qty { width: 85px; text-align: right; }
+  .views-field-field-query-reason { width: 205px; }
+  .views-field-field-fault { width: 100px; }
+  .report-item {
+    display: flex;
+    table {
+      flex: auto;
+    }
+    .report-chart {
+      flex: 0 0 300px;
+      display: flex; align-items: center; justify-content: center;
+      padding-top: $grid-gutter-width/2;
+    }
+  }
+}
+
+
 .produce-unit {
   display: flex;
   margin-bottom: $grid-gutter-width/2;

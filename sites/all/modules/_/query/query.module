@@ -1106,6 +1106,7 @@ function query_views_pre_render(&$view)
   }
 }
 
+
 /**
  * hook_preprocess_views_view_unformatted()
  */
@@ -1278,6 +1279,39 @@ function query_preprocess_views_view_table(&$vars)
     }
     $vars["rows"] = $rows;
   }
+
+  if ($vars['view']->name == 'report' && in_array($vars['view']->current_display, ['client', 'manager'])) {
+
+    $client_count = $prod_count = $neutral_count = 0;
+    foreach($vars["result"] as $item) {
+      if ($item->field_field_fault[0]["raw"]["value"] == 1) $client_count++;
+      elseif ($item->field_field_fault[0]["raw"]["value"] == 2) $prod_count++;
+      else $neutral_count++;
+    }
+    $chart = array(
+      '#type' => 'chart',
+      '#title' => 'Инициатор изменений',
+      '#title_color' => '#999',
+      '#title_font_size' => 12, // Font size in pixels, e.g. 12.
+      '#title_position' => 'in', // Options: in, out.
+      '#colors' => user_has_role(ROLE_MANAGER) ? ['#5cb85c', '#d9534f', '#ccc'] : ['#d9534f', '#5cb85c', '#ccc'],
+      '#chart_type' => 'pie',
+      '#chart_library' => 'google',
+      '#legend' => false,
+      '#legend_position' => 'bottom',
+      '#data_labels' => TRUE,
+      '#width' => 300,
+      '#tooltips' => false,
+    );
+    $chart['pie_data'] = array(
+      '#type' => 'chart_data',
+      '#title' => t('Gender'),
+      '#labels' => ['Клиент', 'Агрохимикат', 'Нет'],
+      '#data' => [$client_count, $prod_count, $neutral_count],
+    );
+
+    $vars['chart'] = $chart;
+  }
 }
 
 /**
@@ -1338,6 +1372,19 @@ function query_preprocess_views_view_field(&$vars)
     }
     if (isset($vars["field"]->field_info["field_name"]) && $vars["field"]->field_info["field_name"] == 'field_produce_output') {
       $vars["output"] = number_format($vars["field"]->original_value, 0, ',', ' ');
+    }
+  }
+
+  if ($vars["view"]->name == 'report' && isset($vars["field"]->field_info["field_name"])) {
+    if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
+      $name = [];
+      $artikul = empty($vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"]) ? '' : $vars["row"]->field_field_oc_artikul_davalec[0]["raw"]["value"];
+      if ($artikul) $name[] = $artikul;
+      $title = empty($vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"]) ? $vars["output"] : $vars["row"]->field_field_oc_name_davalec[0]["raw"]["value"];
+      if ($title) $name[] = $title;
+      if ($name) {
+        $vars["output"] = implode(' ', $name);
+      }
     }
   }
 }
