@@ -1280,7 +1280,7 @@ function query_preprocess_views_view_table(&$vars)
     $vars["rows"] = $rows;
   }
 
-  if ($vars['view']->name == 'report' && in_array($vars['view']->current_display, ['client', 'manager'])) {
+  if (in_array($vars['view']->name, ['report', 'report_by_unit']) && in_array($vars['view']->current_display, ['client', 'manager'])) {
 
     $client_count = $prod_count = $neutral_count = 0;
     foreach($vars["result"] as $item) {
@@ -1306,7 +1306,7 @@ function query_preprocess_views_view_table(&$vars)
     $chart['pie_data'] = array(
       '#type' => 'chart_data',
       '#title' => t('Gender'),
-      '#labels' => ['Клиент', 'Агрохимикат', 'Нет'],
+      '#labels' => ['Клиент', 'Агрохимикат', ''],
       '#data' => [$client_count, $prod_count, $neutral_count],
     );
 

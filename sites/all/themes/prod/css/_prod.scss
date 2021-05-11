@@ -203,7 +203,8 @@ form {
 }
 
 
-.view-report {
+.view-report,
+.view-report-by-unit {
   caption {
     color: $text-color; font-size: $font-size-h3;
     margin-top: 10px;
@@ -212,6 +213,7 @@ form {
   .views-field-created { width: 80px; }
   .views-field-field-qty { width: 85px; text-align: right; }
   .views-field-field-query-reason { width: 205px; }
+  .views-field-field-nomenklatura { width: 265px; }
   .views-field-field-fault { width: 100px; }
   .report-item {
     display: flex;
