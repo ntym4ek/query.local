@@ -1306,7 +1306,7 @@ function query_preprocess_views_view_table(&$vars)
     $chart['pie_data'] = array(
       '#type' => 'chart_data',
       '#title' => t('Gender'),
-      '#labels' => ['Клиент', 'Агрохимикат', ''],
+      '#labels' => ['Клиент', 'Агрохимикат', 'Нет'],
       '#data' => [$client_count, $prod_count, $neutral_count],
     );
 

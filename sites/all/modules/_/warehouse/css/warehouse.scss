@@ -1,0 +1,197 @@
+// подключаем миксины и переменные темы
+@import "../../../../themes/prod/css/_include";
+
+.warehouse {
+  display: flex; flex-wrap: wrap;
+  margin-bottom: 120px;
+  h3 {
+    flex: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .calendar,
+  .schedule {
+    flex: 0 50%;
+    display: flex; flex-wrap: wrap; align-content: flex-start;
+    padding: 30px 30px 30px 0;
+  }
+
+  .calendar {
+    .days {
+      flex: 0 100%;
+      display: flex; flex-wrap: wrap; align-content: flex-start;
+      margin: 0; padding: 0; list-style: none;
+    }
+    .wday,
+    .day {
+      flex: 0 0 14.28%;
+      font-size: 20px; font-weight: 100; text-align: center;
+      padding: 10px;
+    }
+    .wday {
+      color: #ccc; font-size: 16px;
+    }
+    .day {
+      padding: 0 10px;
+      position: relative;
+      .day-content {
+        color: inherit;
+        text-decoration: none;
+        display:inline-block;
+        border: 1px solid transparent; border-radius: 4px;
+        line-height: 40px;
+        width: 40px; height: 40px; text-align: center;
+        margin-bottom: 3px;
+        @include transition(all .1s linear);
+      }
+      &.active {
+        .day-content {
+          background: #56a1ff;
+          border-color: #00336d;
+          color: #fff;
+        }
+      }
+      &:hover {
+        .day-content {
+          border-color: #00336d;
+        }
+      }
+      .busyness-same {
+        width: 30px; height: 3px;
+        margin: 0 auto 5px;
+        &.busy { background: #6ee76e; }
+      }
+      .busyness {
+        color: #ccc; font-size: $font-size-small; text-align: center;
+        min-height: 20px;
+      }
+    }
+
+  }
+
+  .schedule {
+    .halfs {
+      flex: 0 100%;
+      display: flex; flex-wrap: wrap;
+      position: relative;
+      padding: 15px;
+    }
+    .date {
+      flex: 0 100%;
+      color: #ccc; text-align: center;
+      padding: 10px;
+    }
+    .col { flex: 0 0 33.3%; }
+    .half {
+      font-size: 16px; text-align: right;
+      margin: 0 auto 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 130px;
+      &.free.active, &.busy-same.active,
+      &.free:hover,  &.busy-same:hover {
+        border-color: #009100;
+      }
+      &.free.active, &.busy-same.active, {
+        background: #6ee76e;
+      }
+      .half-content {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+        padding: 5px 10px 3px 5px;
+      }
+      @include transition(all .1s linear);
+    }
+
+  }
+  .schedule-legend {
+    font-size: $font-size-small;
+    color: $text-muted;
+    display: flex; flex-wrap: wrap;
+    padding: 0 35px;
+    div:nth-child(1),
+    div:nth-child(2),
+    div:nth-child(3) {
+      flex: 1 1 33%;
+      margin-bottom: 10px;
+    }
+    div:nth-child(4),
+    div:nth-child(5) {
+      flex: 0 50%;
+      margin-bottom: 10px;
+    }
+    span {
+      display: inline-block;
+      width: 30px; height: 20px;
+      border: 1px solid $gray-lightest;
+      margin-right: 5px;
+      vertical-align: middle;
+
+      &:not(:first-child) {
+        margin-left: 30px;
+      }
+
+    }
+  }
+
+  .description {
+    padding-left: 23px;
+    width: 100%;
+    h3 { text-align: left; }
+    .wwork-item {
+      display: flex; flex-wrap:wrap; justify-content: flex-start;
+      border: 1px solid $brand-success;
+      border-top: 8px solid $brand-success;
+      padding: 20px 20px 0;
+      width: 100%;
+      .field-item {
+        flex: 0 0 150px;
+        margin-bottom: 15px;
+        .field-label {
+          color: $text-muted; font-size: 12px;
+          margin-bottom: 5px;
+        }
+      }
+      .field-truck-driver { flex: 0 0 300px; }
+      .field-nomenklatura { flex: 0 0 300px; }
+      .field-actions {
+        flex: 100%;
+        border-top: 1px solid $gray-lightest;
+        padding: 4px 0 4px;
+        text-align: right;
+        a { margin-left: 10px; }
+      }
+    }
+  }
+
+  .selected {
+    background: #6ee76e;
+    border-color: $brand-success;
+  }
+
+  .busy {
+    background: #ffc29f;
+    border-color: #ff5d00;
+  }
+
+  .busy-same {
+    background: #caffca;
+    border-color: $brand-success;
+  }
+
+  .unavailable {
+    background: #dedede;
+    border-color: #888888;
+  }
+
+
+  .request {
+    flex: 100%;
+  }
+}
+
+.warehouse-form {
+  .field-name-field-wwork-time { display: none; }
+}

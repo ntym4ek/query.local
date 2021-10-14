@@ -1,0 +1,6 @@
+// этот файл подключается в файлы scss модулей
+// чтобы можно было использоваться переменные темы
+@import "_default-variables";
+
+// Bootstrap Framework.
+@import '../bootstrap/assets/stylesheets/bootstrap';
