@@ -47,7 +47,7 @@
       }
       &.active {
         .day-content {
-          background: #56a1ff;
+          background: $brand-primary;
           border-color: #00336d;
           color: #fff;
         }
@@ -60,7 +60,7 @@
       .busyness-same {
         width: 30px; height: 3px;
         margin: 0 auto 5px;
-        &.busy { background: #6ee76e; }
+        &.busy { background: #6bbe6b; }
       }
       .busyness {
         color: #ccc; font-size: $font-size-small; text-align: center;
@@ -94,7 +94,7 @@
         border-color: #009100;
       }
       &.free.active, &.busy-same.active, {
-        background: #6ee76e;
+        background: #6bbe6b;
       }
       .half-content {
         display: block;
@@ -104,8 +104,8 @@
       }
       @include transition(all .1s linear);
     }
-
   }
+
   .schedule-legend {
     font-size: $font-size-small;
     color: $text-muted;
@@ -139,7 +139,10 @@
   .description {
     padding-left: 23px;
     width: 100%;
-    h3 { text-align: left; }
+    h3 {
+      text-align: left;
+      margin-bottom: 15px;
+    }
     .wwork-item {
       display: flex; flex-wrap:wrap; justify-content: flex-start;
       border: 1px solid $brand-success;
@@ -167,7 +170,7 @@
   }
 
   .selected {
-    background: #6ee76e;
+    background: #6bbe6b;
     border-color: $brand-success;
   }
 
@@ -177,7 +180,7 @@
   }
 
   .busy-same {
-    background: #caffca;
+    background: #c3e5c3;
     border-color: $brand-success;
   }
 
@@ -192,6 +195,14 @@
   }
 }
 
+
 .warehouse-form {
   .field-name-field-wwork-time { display: none; }
+
+  .warehouse .schedule .half {
+    &.busy-same.active,
+    &.busy-same:hover {
+      border: 1px solid $gray-lightest;
+    }
+  }
 }
