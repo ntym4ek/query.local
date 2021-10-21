@@ -311,7 +311,13 @@ function warehouse_preprocess_page(&$vars)
 
 function warehouse_get_month_dates($month, $year)
 {
-  $days = [0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31];
+  $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+  // составить массив дней недели, 0 - пустая клетка
+  // формат [0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31] - октябрь 2021
+  $w = date('w', $month_start); // порядковый номер дня недели
+  if ($w == 0) $w = 7; // 0 - это вск
+  $days = array_merge(array_fill(0, $w-1, 0), range(1, date('t', $month_start)));
+
   $calendar = [];
   foreach($days as $key => $day) {
     $load = [];
@@ -364,8 +370,8 @@ function warehouse_get_day_schedule($month, $day, $year)
   $dbr->condition('ft.field_wwork_time_value', [$day_start, $day_finish], 'between');
   $dbr->leftJoin('field_data_field_truck_number', 'ftn', 'ftn.entity_id = w.id');
   $dbr->addField('ftn', 'field_truck_number_value', 'truck_number');
-  $dbr->leftJoin('field_data_field_truck_driver', 'ftd', 'ftd.entity_id = w.id');
-  $dbr->addField('ftd', 'field_truck_driver_value', 'truck_driver');
+  $dbr->leftJoin('field_data_field_truck_driver_surname', 'ftd', 'ftd.entity_id = w.id');
+  $dbr->addField('ftd', 'field_truck_driver_surname_value', 'truck_driver');
 
   $load = $dbr->execute()->fetchAllAssoc('time');
 
