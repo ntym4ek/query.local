@@ -43,7 +43,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
 {
   $time_set = gmmktime(0, 0, 0, $month, $day, $year);
 
-  $calendar = $halfs = '';
+  $calendar = $time_list = '';
   $calendar_arr = warehouse_get_month_dates($month, $year);
   foreach ($calendar_arr as $day_arr) {
     if ($day_arr['day'] > 0) {
@@ -63,20 +63,21 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   }
 
   $schedule = warehouse_get_day_schedule($month, $day, $year);
-  $shedule_current_load_key = null;
-  foreach($schedule as $key => $half) {
-    if (in_array($key, ['0700', '1300', '1600'])) {
-      $halfs .= '<div class="col">';
+  $shedule_current_offset = null;
+  foreach($schedule as $key => $time) {
+    if (in_array($key, [420, 780, 960])) {
+      $time_list .= '<div class="col">';
     }
-    $halfs .= '<div class="half ' . $half['status'] . ($half['offset'] == $offset ? ' active' : '') . '" data-start-offset="' . $half['offset'] . '">' .
-                (in_array($half['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $half['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="half-content">' . $half['text'] . '</div> ' : '<a href="/' . $_GET["q"] . '?month=10&day=' . $day . '&offset=' . $half['offset'] . '" class="half-content">' . $half['text'] . '</a>') .
+    $classes = $time['status'] . ($time['offset'] == $offset ? ' active' : '');
+    $time_list .= '<div class="time ' . (isset($time['duration']) && $time['duration'] == 15 ? 'quarter' : 'half') . '" data-start-offset="' . $time['offset'] . '">' .
+                (in_array($time['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $time['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="time-content ' . $classes . '">' . $time['text'] . '</div> ' : '<a href="/' . $_GET["q"] . '?month=10&day=' . $day . '&offset=' . $time['offset'] . '" class="time-content ' . $classes . '">' . $time['text'] . '</a>') .
               '</div>';
-    if (in_array($key, ['1130', '1530', '1830'])) {
-      $halfs .= '</div>';
+    if (in_array($key, [705, 945, 1080])) {
+      $time_list .= '</div>';
     }
 
-    if ($offset && $half['offset'] == $offset && $half['load']) {
-      $shedule_current_load_key = $key;
+    if ($offset && $time['offset'] == $offset && $time['load']) {
+      $shedule_current_offset = $time['offset'];
     }
   }
 
@@ -109,8 +110,8 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
               '</div>';
   $output .=  '<div class="schedule">' .
                 '<h3>Расписание</h3>' .
-                '<div class="halfs">' .
-                  $halfs .
+                '<div class="time-list">' .
+                  $time_list .
                 '</div>' .
                 '<div class="schedule-legend">' .
                   '<div><span class="free"></span>- время свободно</div>' .
@@ -122,29 +123,21 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
               '</div>';
 
   if (!$is_form) {
-    // проверить, возможно клиент уже выбрал квоту погрузок на день
-    $is_add_allowed = $calendar_arr[$day]['wwork_qty_own'] < 2;
+    // todo проверить, возможно клиент уже выбрал квоту погрузок на день
+    $is_add_allowed = $calendar_arr[$day]['wwork_qty_own'] < 24;
 
     $output .=  '<div class="description">' .
                   '<h3>Задание на погрузку</h3>';
-    if ($shedule_current_load_key) {
+    if ($shedule_current_offset) {
 
       $output .=  '<div class="wwork-item">' .
                       '<div class="field-item field-truck-number">' .
                         '<span class="field-label">№ автомобиля</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_load_key]['load']->truck_number . '</div>'.
+                        '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_number . '</div>'.
                       '</div>' .
                       '<div class="field-item field-truck-driver">' .
                         '<span class="field-label">Водитель</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_load_key]['load']->truck_driver . '</div>'.
-                      '</div>' .
-                      '<div class="field-item field-nomenklatura">' .
-                        '<span class="field-label">Наименование</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_load_key]['load']->nomenklatura . '</div>'.
-                      '</div>' .
-                      '<div class="field-item field-part-number">' .
-                        '<span class="field-label">Партия</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_load_key]['load']->part_number . '</div>'.
+                        '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_driver . '</div>'.
                       '</div>' .
                       '<div class="field-actions">' .
                         '<a class="btn btn-primary btn-xs">Редактировать</a>' .
@@ -171,8 +164,8 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
 function warehouse_form_eck__entity__form_add_warehouse_work_warehouse_work_alter(&$form, &$form_state)
 {
   if (!user_has_role(ROLE_ADMIN)) {
-    $month = isset($_GET['month']) ? $_GET['month'] : null;
-    $day = isset($_GET['day']) ? $_GET['day'] : null;
+    $month = isset($_GET['month']) ? $_GET['month'] : date('n');
+    $day = isset($_GET['day']) ? $_GET['day'] : date('j')+1;
     $offset = isset($_GET['offset']) ? $_GET['offset'] : null;
     $year = isset($_GET['year']) ? $_GET['year'] : 2021;
     $form_state['date'] = [
@@ -206,13 +199,22 @@ function warehouse_form_eck__entity__form_add_warehouse_work_warehouse_work_alte
     $form['#attached']['css'][] = drupal_get_path('module', 'warehouse') . '/css/warehouse.css';
     $form['#attached']['js'][] = drupal_get_path('module', 'warehouse') . '/js/warehouse.js';
 
+    $form["field_truck_driver_surname"]["#prefix"] = '<div class="row">';
+    $form["field_truck_driver_surname"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_driver_name"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_driver_name2"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_driver_license"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_dopog_license"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_dopog_license_validity"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_file_driver_proxy"]["#attributes"]["class"][] = 'col-sm-6';
+    $form["field_file_driver_proxy"]["#suffix"] = '</div>';
+
     $form["field_truck_number"]["#prefix"] = '<div class="row">';
-    $form["field_truck_number"]["#attributes"]["class"][] = 'col-sm-4';
-    $form["field_truck_driver"]["#attributes"]["class"][] = 'col-sm-8';
-    $form["field_nomenklatura"]["#attributes"]["class"][] = 'col-sm-8';
-    $form["field_part_number"]["#attributes"]["class"][] = 'col-sm-4';
-    $form["field_files"]["#attributes"]["class"][] = 'col-sm-12';
-    $form["field_files"]["#suffix"] = '</div>';
+    $form["field_truck_number"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_brand"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_trailer_number"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_trailer_type"]["#attributes"]["class"][] = 'col-sm-3';
+    $form["field_truck_trailer_type"]["#suffix"] = '</div>';
 
     drupal_set_title('Добавление погрузки');
   }
@@ -225,7 +227,17 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_validate(
     form_set_error('field_wwork_time', 'Выберите время погрузки');
     return false;
   } else {
-    // todo проверка на предмет занятости данного времени (заняли другие, пока заполняли форму)
+    // проверка на предмет занятости данного времени (заняли другие, пока заполняли форму)
+    $dbr = db_select('eck_warehouse_work', 'w');
+    $dbr->addField('w', 'id');
+    $dbr->innerJoin('field_data_field_wwork_time', 'ft', 'ft.entity_id = w.id');
+    $dbr->condition('ft.field_wwork_time_value', $form_state["input"]["time"]);
+    $load = $dbr->execute()->fetchCol();
+    if (count($load)) {
+      form_set_error('field_wwork_time', 'Время погрузки уже занято, выберите другое');
+      return false;
+    }
+
     $form_state["values"]["field_wwork_time"]["und"][0]["value"] = $form_state["input"]["time"];
     $form_state["values"]["field_wwork_time"]["und"][0]["value2"] = $form_state["input"]["time"];
   }
@@ -233,6 +245,8 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_validate(
 
 function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_submit($form, &$form_state)
 {
+  $wwork_wr = entity_metadata_wrapper('warehouse_work', $form_state["values"]["entity"]->id);
+  warehouse_wwork_export($wwork_wr);
 
   // редирект с параметрами
   $form_state['redirect'] = [
@@ -243,6 +257,45 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_submit($f
       'year' => $form_state['date']['year'],
     ]]
   ];
+}
+
+function warehouse_wwork_export($wwork_wr)
+{
+  $file_urls = [];
+  foreach ($wwork_wr->field_files->getIterator() as $file_wr) {
+    $file_urls[] = file_create_url($file_wr->value()['uri']);
+  }
+  $a = $wwork_wr->field_file_driver_proxy->value();
+  $a = url($wwork_wr->field_file_driver_proxy->value()->uri);
+  $a = $wwork_wr->field_file_driver_proxy->value()->uri;
+  $a = file_create_url($wwork_wr->field_file_driver_proxy->value()->uri);
+  $wwork_arr = [
+    'id' => $wwork_wr->getIdentifier(),
+    'time' => $wwork_wr->field_wwork_time->value(),
+    'driver' => [
+      'surname' => $wwork_wr->field_truck_driver_surname->value(),
+      'name' => $wwork_wr->field_truck_driver_name->value(),
+      'name2' => $wwork_wr->field_truck_driver_name2->value(),
+      'license' => $wwork_wr->field_truck_driver_license->value(),
+      'proxy_url' => $wwork_wr->field_file_driver_proxy->value() ? file_create_url($wwork_wr->field_file_driver_proxy->value()['uri']) : null,
+      'dopog' => $wwork_wr->field_dopog_license->value(),
+      'dopog_date' => $wwork_wr->field_dopog_license_validity->value(),
+    ],
+    'truck' => [
+      'number' => $wwork_wr->field_truck_number->value(),
+      'brand' => $wwork_wr->field_truck_brand->value(),
+      'trailer_type' => $wwork_wr->field_truck_trailer_type->value(),
+      'trailer_number' => $wwork_wr->field_truck_trailer_number->value(),
+    ],
+    'wwork_order_url' => $wwork_wr->field_file_wwork_order->value() ? file_create_url($wwork_wr->field_file_wwork_order->value()['uri']) : null,
+    'file_urls' => $file_urls,
+  ];
+
+  $wwork_json = json_encode($wwork_arr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+  $filename = 'wwork_export_' . $wwork_arr['id'] . '.json';
+  $directory = 'private://exchange/';
+  file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+  file_unmanaged_save_data($wwork_json, $directory . $filename, $replace = FILE_EXISTS_RENAME);
 }
 
 /**
@@ -313,43 +366,73 @@ function warehouse_get_day_schedule($month, $day, $year)
   $dbr->addField('ftn', 'field_truck_number_value', 'truck_number');
   $dbr->leftJoin('field_data_field_truck_driver', 'ftd', 'ftd.entity_id = w.id');
   $dbr->addField('ftd', 'field_truck_driver_value', 'truck_driver');
-  $dbr->leftJoin('field_data_field_part_number', 'fpn', 'fpn.entity_id = w.id');
-  $dbr->addField('fpn', 'field_part_number_value', 'part_number');
-  $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = w.id');
-  $dbr->innerJoin('taxonomy_term_data', 't', 't.tid = fn.field_nomenklatura_target_id');
-  $dbr->addField('t', 'name', 'nomenklatura');
 
   $load = $dbr->execute()->fetchAllAssoc('time');
 
-  $is_reserve_locked = count($load) <= 12;
-  $is_add_time_missed = $day_start < $day_after_current;
+  // количество погрузок в день после заполнения которых открывается резерв
+  // todo заменить на 16
+  $is_primary_time_filled = count($load) > 2;
+
+  $is_day_blocked = $day_start < $day_after_current;
+  $is_quarter_locked = true;
+
+  // определить, открываем дополнительное время или резервное
+  $offset_to_free = 0;
+  if ($is_primary_time_filled) {
+    $is_more_time_found = false;
+    foreach([960, 990, 1020, 1050, 1080] as $offset) {
+      if (!$is_more_time_found && !isset($load[$day_start + $offset*60])) {
+        $offset_to_free = $offset;
+        $is_more_time_found = true;
+      }
+    }
+
+    if (!$is_more_time_found) {
+      $is_quarter_locked = false;
+    }
+  }
 
   $schedule = [
-    '0700' => ['status' => isset($load[$day_start + 420*60]) ? ($load[$day_start + 420*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 420, 'text' => '7<sup>00</sup> - 7<sup>30</sup>', 'load' => isset($load[$day_start + 420*60]) ? $load[$day_start + 420*60] : null],
-    '0730' => ['status' => isset($load[$day_start + 450*60]) ? ($load[$day_start + 450*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 450, 'text' => '7<sup>30</sup> - 8<sup>00</sup>', 'load' => isset($load[$day_start + 450*60]) ? $load[$day_start + 450*60] : null],
-    '0800' => ['status' => isset($load[$day_start + 480*60]) ? ($load[$day_start + 480*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 480, 'text' => '8<sup>00</sup> - 8<sup>30</sup>', 'load' => isset($load[$day_start + 480*60]) ? $load[$day_start + 480*60] : null],
-    '0830' => ['status' => isset($load[$day_start + 510*60]) ? ($load[$day_start + 510*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 510, 'text' => '8<sup>30</sup> - 9<sup>00</sup>', 'load' => isset($load[$day_start + 510*60]) ? $load[$day_start + 510*60] : null],
-    '0900' => ['status' => isset($load[$day_start + 540*60]) ? ($load[$day_start + 540*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 540, 'text' => '9<sup>00</sup> - 9<sup>30</sup>', 'load' => isset($load[$day_start + 540*60]) ? $load[$day_start + 540*60] : null],
-    '0930' => ['status' => isset($load[$day_start + 570*60]) ? ($load[$day_start + 570*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 570, 'text' => '9<sup>30</sup> - 10<sup>00</sup>', 'load' => isset($load[$day_start + 570*60]) ? $load[$day_start + 570*60] : null],
-    '1000' => ['status' => isset($load[$day_start + 600*60]) ? ($load[$day_start + 600*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 600, 'text' => '10<sup>00</sup> - 10<sup>30</sup>', 'load' => isset($load[$day_start + 600*60]) ? $load[$day_start + 600*60] : null],
-    '1030' => ['status' => isset($load[$day_start + 630*60]) ? ($load[$day_start + 630*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 630, 'text' => '10<sup>30</sup> - 11<sup>00</sup>', 'load' => isset($load[$day_start + 630*60]) ? $load[$day_start + 630*60] : null],
-    '1100' => ['status' => isset($load[$day_start + 660*60]) ? ($load[$day_start + 660*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 660, 'text' => '11<sup>00</sup> - 11<sup>30</sup>', 'load' => isset($load[$day_start + 660*60]) ? $load[$day_start + 660*60] : null],
-    '1130' => ['status' => isset($load[$day_start + 690*60]) ? ($load[$day_start + 690*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 690, 'text' => '11<sup>30</sup> - 12<sup>00</sup>', 'load' => isset($load[$day_start + 690*60]) ? $load[$day_start + 690*60] : null],
+    420 => ['status' => isset($load[$day_start + 420*60]) ? ($load[$day_start + 420*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 420, 'duration' => 15, 'text' => '7<sup>00</sup>', 'load' => isset($load[$day_start + 420*60]) ? $load[$day_start + 420*60] : null],
+      435 => ['status' => isset($load[$day_start + 435*60]) ? ($load[$day_start + 435*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 435, 'duration' => 15, 'text' => '7<sup>15</sup>', 'load' => isset($load[$day_start + 435*60]) ? $load[$day_start + 435*60] : null],
+    450 => ['status' => isset($load[$day_start + 450*60]) ? ($load[$day_start + 450*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 450, 'duration' => 15, 'text' => '7<sup>30</sup>', 'load' => isset($load[$day_start + 450*60]) ? $load[$day_start + 450*60] : null],
+      465 => ['status' => isset($load[$day_start + 465*60]) ? ($load[$day_start + 465*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 465, 'duration' => 15, 'text' => '7<sup>45</sup>', 'load' => isset($load[$day_start + 465*60]) ? $load[$day_start + 465*60] : null],
+    480 => ['status' => isset($load[$day_start + 480*60]) ? ($load[$day_start + 480*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 480, 'duration' => 15, 'text' => '8<sup>00</sup>', 'load' => isset($load[$day_start + 480*60]) ? $load[$day_start + 480*60] : null],
+      495 => ['status' => isset($load[$day_start + 495*60]) ? ($load[$day_start + 495*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 495, 'duration' => 15, 'text' => '8<sup>15</sup>', 'load' => isset($load[$day_start + 495*60]) ? $load[$day_start + 495*60] : null],
+    510 => ['status' => isset($load[$day_start + 510*60]) ? ($load[$day_start + 510*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 510, 'duration' => 15, 'text' => '8<sup>30</sup>', 'load' => isset($load[$day_start + 510*60]) ? $load[$day_start + 510*60] : null],
+      525 => ['status' => isset($load[$day_start + 525*60]) ? ($load[$day_start + 525*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 525, 'duration' => 15, 'text' => '8<sup>45</sup>', 'load' => isset($load[$day_start + 525*60]) ? $load[$day_start + 525*60] : null],
+    540 => ['status' => isset($load[$day_start + 540*60]) ? ($load[$day_start + 540*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 540, 'duration' => 15, 'text' => '9<sup>00</sup>', 'load' => isset($load[$day_start + 540*60]) ? $load[$day_start + 540*60] : null],
+      555 => ['status' => isset($load[$day_start + 555*60]) ? ($load[$day_start + 555*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 555, 'duration' => 15, 'text' => '9<sup>15</sup>', 'load' => isset($load[$day_start + 555*60]) ? $load[$day_start + 555*60] : null],
+    570 => ['status' => isset($load[$day_start + 570*60]) ? ($load[$day_start + 570*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 570, 'duration' => 15, 'text' => '9<sup>30</sup>', 'load' => isset($load[$day_start + 570*60]) ? $load[$day_start + 570*60] : null],
+      585 => ['status' => isset($load[$day_start + 585*60]) ? ($load[$day_start + 585*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 585, 'duration' => 15, 'text' => '9<sup>45</sup>', 'load' => isset($load[$day_start + 585*60]) ? $load[$day_start + 585*60] : null],
+    600 => ['status' => isset($load[$day_start + 600*60]) ? ($load[$day_start + 600*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 600, 'duration' => 15, 'text' => '10<sup>00</sup>', 'load' => isset($load[$day_start + 600*60]) ? $load[$day_start + 600*60] : null],
+      615 => ['status' => isset($load[$day_start + 615*60]) ? ($load[$day_start + 615*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 615, 'duration' => 15, 'text' => '10<sup>15</sup>', 'load' => isset($load[$day_start + 615*60]) ? $load[$day_start + 615*60] : null],
+    630 => ['status' => isset($load[$day_start + 630*60]) ? ($load[$day_start + 630*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 630, 'duration' => 15, 'text' => '10<sup>30</sup>', 'load' => isset($load[$day_start + 630*60]) ? $load[$day_start + 630*60] : null],
+      645 => ['status' => isset($load[$day_start + 645*60]) ? ($load[$day_start + 645*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 645, 'duration' => 15, 'text' => '10<sup>45</sup>', 'load' => isset($load[$day_start + 645*60]) ? $load[$day_start + 645*60] : null],
+    660 => ['status' => isset($load[$day_start + 660*60]) ? ($load[$day_start + 660*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 660, 'duration' => 15, 'text' => '11<sup>00</sup>', 'load' => isset($load[$day_start + 660*60]) ? $load[$day_start + 660*60] : null],
+      675 => ['status' => isset($load[$day_start + 675*60]) ? ($load[$day_start + 675*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 675, 'duration' => 15, 'text' => '11<sup>15</sup>', 'load' => isset($load[$day_start + 675*60]) ? $load[$day_start + 675*60] : null],
+    690 => ['status' => isset($load[$day_start + 690*60]) ? ($load[$day_start + 690*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 690, 'duration' => 15, 'text' => '11<sup>30</sup>', 'load' => isset($load[$day_start + 690*60]) ? $load[$day_start + 690*60] : null],
+      705 => ['status' => isset($load[$day_start + 705*60]) ? ($load[$day_start + 705*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 705, 'duration' => 15, 'text' => '11<sup>45</sup>', 'load' => isset($load[$day_start + 705*60]) ? $load[$day_start + 705*60] : null],
 
-    '1300' => ['status' => isset($load[$day_start + 780*60]) ? ($load[$day_start + 780*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 780, 'text' => '13<sup>00</sup> - 13<sup>30</sup>', 'load' => isset($load[$day_start + 780*60]) ? $load[$day_start + 780*60] : null],
-    '1330' => ['status' => isset($load[$day_start + 810*60]) ? ($load[$day_start + 810*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 810, 'text' => '13<sup>30</sup> - 14<sup>00</sup>', 'load' => isset($load[$day_start + 810*60]) ? $load[$day_start + 810*60] : null],
-    '1400' => ['status' => isset($load[$day_start + 840*60]) ? ($load[$day_start + 840*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 840, 'text' => '14<sup>00</sup> - 14<sup>30</sup>', 'load' => isset($load[$day_start + 840*60]) ? $load[$day_start + 840*60] : null],
-    '1430' => ['status' => isset($load[$day_start + 870*60]) ? ($load[$day_start + 870*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 870, 'text' => '14<sup>30</sup> - 15<sup>00</sup>', 'load' => isset($load[$day_start + 870*60]) ? $load[$day_start + 870*60] : null],
-    '1500' => ['status' => isset($load[$day_start + 900*60]) ? ($load[$day_start + 900*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 900, 'text' => '15<sup>00</sup> - 15<sup>30</sup>', 'load' => isset($load[$day_start + 900*60]) ? $load[$day_start + 900*60] : null],
-    '1530' => ['status' => isset($load[$day_start + 930*60]) ? ($load[$day_start + 930*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_add_time_missed ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 930, 'text' => '15<sup>30</sup> - 16<sup>00</sup>', 'load' => isset($load[$day_start + 930*60]) ? $load[$day_start + 930*60] : null],
+    780 => ['status' => isset($load[$day_start + 780*60]) ? ($load[$day_start + 780*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 780, 'duration' => 15, 'text' => '13<sup>00</sup>', 'load' => isset($load[$day_start + 780*60]) ? $load[$day_start + 780*60] : null],
+      795 => ['status' => isset($load[$day_start + 795*60]) ? ($load[$day_start + 795*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 795, 'duration' => 15, 'text' => '13<sup>15</sup>', 'load' => isset($load[$day_start + 795*60]) ? $load[$day_start + 795*60] : null],
+    810 => ['status' => isset($load[$day_start + 810*60]) ? ($load[$day_start + 810*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 810, 'duration' => 15, 'text' => '13<sup>30</sup>', 'load' => isset($load[$day_start + 810*60]) ? $load[$day_start + 810*60] : null],
+      825 => ['status' => isset($load[$day_start + 825*60]) ? ($load[$day_start + 825*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 825, 'duration' => 15, 'text' => '13<sup>45</sup>', 'load' => isset($load[$day_start + 825*60]) ? $load[$day_start + 825*60] : null],
+    840 => ['status' => isset($load[$day_start + 840*60]) ? ($load[$day_start + 840*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 840, 'duration' => 15, 'text' => '14<sup>00</sup>', 'load' => isset($load[$day_start + 840*60]) ? $load[$day_start + 840*60] : null],
+      855 => ['status' => isset($load[$day_start + 855*60]) ? ($load[$day_start + 855*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 855, 'duration' => 15, 'text' => '14<sup>15</sup>', 'load' => isset($load[$day_start + 855*60]) ? $load[$day_start + 855*60] : null],
+    870 => ['status' => isset($load[$day_start + 870*60]) ? ($load[$day_start + 870*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 870, 'duration' => 15, 'text' => '14<sup>30</sup>', 'load' => isset($load[$day_start + 870*60]) ? $load[$day_start + 870*60] : null],
+      885 => ['status' => isset($load[$day_start + 885*60]) ? ($load[$day_start + 885*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 885, 'duration' => 15, 'text' => '14<sup>45</sup>', 'load' => isset($load[$day_start + 885*60]) ? $load[$day_start + 885*60] : null],
+    900 => ['status' => isset($load[$day_start + 900*60]) ? ($load[$day_start + 900*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 900, 'duration' => 15, 'text' => '15<sup>00</sup>', 'load' => isset($load[$day_start + 900*60]) ? $load[$day_start + 900*60] : null],
+      915 => ['status' => isset($load[$day_start + 915*60]) ? ($load[$day_start + 915*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 915, 'duration' => 15, 'text' => '15<sup>15</sup>', 'load' => isset($load[$day_start + 915*60]) ? $load[$day_start + 915*60] : null],
+    930 => ['status' => isset($load[$day_start + 930*60]) ? ($load[$day_start + 930*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 930, 'duration' => 15, 'text' => '15<sup>30</sup>', 'load' => isset($load[$day_start + 930*60]) ? $load[$day_start + 930*60] : null],
+      945 => ['status' => isset($load[$day_start + 945*60]) ? ($load[$day_start + 945*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $is_quarter_locked ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 945, 'duration' => 15, 'text' => '15<sup>45</sup>', 'load' => isset($load[$day_start + 945*60]) ? $load[$day_start + 945*60] : null],
 
-    '1600' => ['status' => isset($load[$day_start + 960*60]) ? ($load[$day_start + 960*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 960, 'text' => '16<sup>00</sup> - 16<sup>30</sup>', 'load' => isset($load[$day_start + 960*60]) ? $load[$day_start + 960*60] : null],
-    '1630' => ['status' => isset($load[$day_start + 990*60]) ? ($load[$day_start + 990*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 990, 'text' => '16<sup>30</sup> - 17<sup>00</sup>', 'load' => isset($load[$day_start + 990*60]) ? $load[$day_start + 990*60] : null],
-    '1700' => ['status' => isset($load[$day_start + 1020*60]) ? ($load[$day_start + 1020*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 1020, 'text' => '17<sup>00</sup> - 17<sup>30</sup>', 'load' => isset($load[$day_start + 1020*60]) ? $load[$day_start + 1020*60] : null],
-    '1730' => ['status' => isset($load[$day_start + 1050*60]) ? ($load[$day_start + 1050*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 1050, 'text' => '17<sup>30</sup> - 18<sup>00</sup>', 'load' => isset($load[$day_start + 1050*60]) ? $load[$day_start + 1050*60] : null],
-    '1800' => ['status' => isset($load[$day_start + 1080*60]) ? ($load[$day_start + 1080*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 1080, 'text' => '18<sup>00</sup> - 18<sup>30</sup>', 'load' => isset($load[$day_start + 1080*60]) ? $load[$day_start + 1080*60] : null],
-    '1830' => ['status' => isset($load[$day_start + 1110*60]) ? ($load[$day_start + 1110*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_reserve_locked || $is_add_time_missed ? DAY_STATUS_UNAVAILABLE: DAY_STATUS_FREE), 'offset' => 1110, 'text' => '18<sup>30</sup> - 19<sup>00</sup>', 'load' => isset($load[$day_start + 1110*60]) ? $load[$day_start + 1110*60] : null],
+    960 => ['status' => isset($load[$day_start + 960*60]) ? ($load[$day_start + 960*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $offset_to_free != 960 ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 960, 'duration' => 30, 'text' => '16<sup>00</sup>', 'load' => isset($load[$day_start + 960*60]) ? $load[$day_start + 960*60] : null],
+    990 => ['status' => isset($load[$day_start + 990*60]) ? ($load[$day_start + 990*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $offset_to_free != 990 ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 990, 'duration' => 30, 'text' => '16<sup>30</sup>', 'load' => isset($load[$day_start + 990*60]) ? $load[$day_start + 990*60] : null],
+    1020 => ['status' => isset($load[$day_start + 1020*60]) ? ($load[$day_start + 1020*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $offset_to_free != 1020 ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 1020, 'duration' => 30, 'text' => '17<sup>00</sup>', 'load' => isset($load[$day_start + 1020*60]) ? $load[$day_start + 1020*60] : null],
+    1050 => ['status' => isset($load[$day_start + 1050*60]) ? ($load[$day_start + 1050*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $offset_to_free != 1050 ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 1050, 'duration' => 30, 'text' => '17<sup>30</sup>', 'load' => isset($load[$day_start + 1050*60]) ? $load[$day_start + 1050*60] : null],
+    1080 => ['status' => isset($load[$day_start + 1080*60]) ? ($load[$day_start + 1080*60]->uid == $uid ? DAY_STATUS_BUSY_SAME : DAY_STATUS_BUSY) : ($is_day_blocked || $offset_to_free != 1080 ? DAY_STATUS_UNAVAILABLE : DAY_STATUS_FREE), 'offset' => 1080, 'duration' => 30, 'text' => '18<sup>00</sup>', 'load' => isset($load[$day_start + 1080*60]) ? $load[$day_start + 1080*60] : null],
   ];
 
-    return $schedule;
+  return $schedule;
 }

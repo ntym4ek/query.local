@@ -15,12 +15,12 @@
         }
       });
 
-      $(".warehouse-form .half").on("click", function() {
+      $(".warehouse-form .time-content").on("click", function() {
         if ($(this).hasClass("active")) {
           $(this).removeClass("active");
         } else {
           if ($(this).hasClass("free")) {
-            $(".warehouse-form .half").each(function() {
+            $(".warehouse-form .time-content").each(function() {
               $(this).removeClass("active");
               $("input[name=time]").val(0);
             });
@@ -34,7 +34,7 @@
 
       function updateTime() {
         var $date = $(".warehouse-form .day.active").data("date");
-        var $start_offset = $(".warehouse-form  .half.active").data("start-offset") * 60;
+        var $start_offset = $(".warehouse-form  .time-content.active").data("start-offset") * 60;
 
         $("input[name=time]").val($date + $start_offset);
       }
