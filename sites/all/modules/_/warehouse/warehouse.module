@@ -91,6 +91,12 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   }
 
   $output = '<div class="warehouse">';
+  $output.= '<div class="conditions"><ul>' .
+            '<li>Дополнительное время с 16<sup>00</sup> до 18<sup>00</sup> открывается после заполнения основного времени</li>' .
+            '<li>Резервное время открывается после заполнения дополнительного</li>' .
+            '<li>Добавление погрузки на следующий день возможно до 16<sup>00</sup> текущего дня</li>' .
+            '<li></li>' .
+            '</ul></div>';
   $output .=  '<div class="calendar">' .
                 '<h3>' .
                     '<span><a href="/' . $_GET["q"] . '?month=' . $month_prev . '&day=' . $day . '&year=' . $year_prev . '" class="btn btn-link">предыдущий</a></span>' .
@@ -261,14 +267,12 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_submit($f
 
 function warehouse_wwork_export($wwork_wr)
 {
+  // подготовка массива для выгрузки
   $file_urls = [];
   foreach ($wwork_wr->field_files->getIterator() as $file_wr) {
     $file_urls[] = file_create_url($file_wr->value()['uri']);
   }
-  $a = $wwork_wr->field_file_driver_proxy->value();
-  $a = url($wwork_wr->field_file_driver_proxy->value()->uri);
-  $a = $wwork_wr->field_file_driver_proxy->value()->uri;
-  $a = file_create_url($wwork_wr->field_file_driver_proxy->value()->uri);
+
   $wwork_arr = [
     'id' => $wwork_wr->getIdentifier(),
     'time' => $wwork_wr->field_wwork_time->value(),
@@ -360,7 +364,9 @@ function warehouse_get_day_schedule($month, $day, $year)
   $uid = $GLOBALS['user']->uid;
   $day_start = gmmktime(0, 0, 0, $month, $day, $year);
   $day_finish = gmmktime(0, 0, 0, $month, $day + 1, $year) - 1;
+  $day_current = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
   $day_after_current = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
+  $timestamp_gmt = time() + 180*60;
 
   // найти погрузки в этот день
   $dbr = db_select('eck_warehouse_work', 'w');
@@ -379,11 +385,14 @@ function warehouse_get_day_schedule($month, $day, $year)
   // todo заменить на 16
   $is_primary_time_filled = count($load) > 2;
 
-  $is_day_blocked = $day_start < $day_after_current;
-  $is_quarter_locked = true;
+  // условие, при котором на заданный день запись уже недоступна
+  // - текущий день и ранее
+  // - на следующий день запись доступна до 16:00 текущего
+  $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + 960*60);
 
   // определить, открываем дополнительное время или резервное
-  $offset_to_free = 0;
+  $is_quarter_locked = true;  // открывать ли резерв
+  $offset_to_free = 0;        // какое из дополнительного времени будет открыто
   if ($is_primary_time_filled) {
     $is_more_time_found = false;
     foreach([960, 990, 1020, 1050, 1080] as $offset) {

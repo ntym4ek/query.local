@@ -111,6 +111,18 @@ function query_empty_front_page_callback()
   return [];
 }
 
+
+/**
+ * Implements hook_field_placeholder_info().
+ */
+function query_field_placeholder_info()
+{
+  // добавить поддержку виджета masked_input в модуле Field Placeholder
+  return array(
+    'masked_input' => 'value',
+  );
+}
+
 /**
  * hook_form_FORM_ID_alter
  */
