@@ -38,6 +38,7 @@
 
         $("input[name=time]").val($date + $start_offset);
       }
+
     }
   }
 })(jQuery);

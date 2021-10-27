@@ -1463,6 +1463,23 @@ function query_get_nomenklatura_by_artikul($articul)
   return empty($entities) ? false: current($entities);
 }
 
+function query_get_driver_by_1cID($driver_1cID)
+{
+  $vid = taxonomy_vocabulary_machine_name_load('drivers')->vid;
+  $query = new EntityFieldQuery();
+  $terms = $query
+    ->entityCondition('entity_type', 'taxonomy_term')
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_oc_driver_id', 'value', $driver_1cID)
+    ->execute();
+
+  if ($terms) {
+    $entities = entity_load('taxonomy_term', [current($terms['taxonomy_term'])->tid]);
+  }
+  return empty($entities) ? false: current($entities);
+}
+
+
 /**
  * get_produce_units
  */
@@ -1971,6 +1988,25 @@ function query_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (query_produce_units_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Справочник Водителей
+  // получить список файлов по шаблону
+  $mask = '/driver.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (query_drivers_import($array)) {
         $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
         $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');

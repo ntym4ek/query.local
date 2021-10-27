@@ -234,4 +234,19 @@
       border: 1px solid $gray-lightest;
     }
   }
+
+  .ief-entity-table {
+    font-size: 14px;
+    th,
+    .inline-entity-form-taxonomy_term-vocabulary { display: none; }
+    &.table-striped > tbody tr { background: none; }
+    td {
+      border: none;
+      line-height: 30px;
+    }
+  }
+}
+
+.input-group-btn > .btn {
+  height: 34px;
 }

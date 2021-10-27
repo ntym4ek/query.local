@@ -585,4 +585,72 @@ function query_produce_plan_import($array)
   }
 }
 
+function query_drivers_import($array)
+{
+  if (is_array($array) && !empty($array['load'])) {
+    $vid = taxonomy_vocabulary_machine_name_load('drivers')->vid;
 
+    $drivers_got = [];
+    foreach($array['load'] as $key => $drv) {
+      $driver = null;
+      if ($drv['driver_id'] || $drv['driver_1c_id']) {
+
+        if ($drv['driver_id']) {
+          $driver = taxonomy_term_load($drv['driver_id']);
+        }
+        if (!$driver) {
+          $driver = query_get_driver_by_1cID($drv['driver_1c_id']);
+        }
+
+        if (!$driver) {
+          $driver = (object)array(
+            'vid' => $vid,
+            'name' => $drv['licence'],
+          );
+          taxonomy_term_save($driver);
+        }
+
+        // обновить значения полей
+        $driver_wr = entity_metadata_wrapper('taxonomy_term', $driver);
+        $driver_wr->name = $drv['licence'];
+        $driver_wr->field_oc_driver_id = $drv['driver_1c_id'];
+        $driver_wr->field_truck_driver_surname = $drv['surname'];
+        $driver_wr->field_truck_driver_name = $drv['name'];
+        $driver_wr->field_truck_driver_name2 = $drv['name2'];
+        $driver_wr->field_truck_driver_license = $drv['licence'];
+        $driver_wr->field_dopog_license = $drv['dopog'];
+        $dopog_valid_arr = explode('.', $array['dopog_valid']);
+        $dopog_valid = gmmktime(0, 0, 0, $dopog_valid_arr[1], $dopog_valid_arr[0], $dopog_valid_arr[2]);
+        $driver_wr->field_dopog_license_validity = $dopog_valid;
+        $driver_wr->field_status = 1;
+        $driver_wr->save();
+
+        $drivers_got[] = $driver_wr->getIdentifier();
+      }
+    }
+
+    // если полное обновление справочника, то запомнить отсутствующие записи и сделать их неактивными для клиента
+    if ($array['reload']) {
+      $dbr = db_select('taxonomy_term_data', 't');
+      $dbr->condition('t.vid', $vid);
+      $dbr->addField('t', 'tid');
+      $drivers_old = $dbr->execute()->fetchAllAssoc('tid');
+
+      foreach ($drivers_old as $d_tid => $drv) {
+        if (!in_array($d_tid, $drivers_got)) {
+          $term_wr = entity_metadata_wrapper('taxonomy_term', $d_tid);
+          $term_wr->field_status = 0;
+          $term_wr->save();
+        }
+      }
+    }
+
+    drupal_set_message('Водители импортированы.');
+    watchdog('import', 'Водители импортированы.', [], WATCHDOG_INFO);
+    return true;
+  } else {
+    drupal_set_message('Импорт водителей не выполнен.', 'warning');
+    watchdog('import', 'Импорт водителей не выполнен.', [], WATCHDOG_ERROR);
+    return false;
+  }
+}
