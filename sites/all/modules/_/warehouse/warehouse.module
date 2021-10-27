@@ -49,7 +49,7 @@ function warehouse_inline_entity_form_autocomplete($entity_type, $field_name, $b
 function warehouse_queue_page()
 {
   $month = isset($_GET['month']) ? $_GET['month'] : date('n');
-  $day = isset($_GET['day']) ? $_GET['day'] : date('j');
+  $day = isset($_GET['day']) ? $_GET['day'] : date('j')+1;
   $offset = isset($_GET['offset']) ? $_GET['offset'] : null;
   $year = isset($_GET['year']) ? $_GET['year'] : date('Y');
   $output =  warehouse_calendar_template($month, $day, $offset, $year);
@@ -88,6 +88,12 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   foreach($schedule as $key => $time) {
     if (in_array($key, [420, 780, 960])) {
       $time_list .= '<div class="col">';
+
+      if ($key == 960) {
+        $time_list .= '<div class="time-title half">доп</div>';
+      } else {
+        $time_list .= '<div class="time-title quarter">осн</div><div class="time-title quarter">рез</div>';
+      }
     }
     $classes = $time['status'] . ($time['offset'] == $offset ? ' active' : '');
     $time_list .= '<div class="time ' . (isset($time['duration']) && $time['duration'] == 15 ? 'quarter' : 'half') . '" data-start-offset="' . $time['offset'] . '">' .
@@ -115,10 +121,10 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
 
   $output = '<div class="warehouse">';
   $output.= '<div class="conditions"><ul>' .
-            '<li>Дополнительное время с 16<sup>00</sup> до 18<sup>00</sup> открывается после заполнения основного времени</li>' .
-            '<li>Резервное время открывается после заполнения дополнительного</li>' .
+            '<li>Дополнительное время (доп) с 16<sup>00</sup> до 18<sup>00</sup> открывается после заполнения основного (осн) времени</li>' .
+            '<li>Резервное время (рез) открывается после заполнения дополнительного</li>' .
             '<li>Добавление погрузки на следующий день возможно до 16<sup>00</sup> текущего дня</li>' .
-            '<li></li>' .
+//            '<li></li>' .
             '</ul></div>';
   $output .=  '<div class="calendar">' .
                 '<h3>' .
@@ -247,7 +253,7 @@ function warehouse_form_eck__entity__form_add_warehouse_work_warehouse_work_alte
 
 function warehouse_inline_entity_form_reference_form_alter(&$entity_form, &$form_state)
 {
-  $entity_form["entity_id"]["#title"] = 'Водительское удостоверение';
+  $entity_form["entity_id"]["#title"] = 'Водительское удостоверение или фамилия';
 
   $entity_form["actions"]["ief_reference_save"]["#value"] = 'Выбрать водителя';
   $entity_form["actions"]["ief_reference_cancel"]["#attributes"]["class"][] = 'btn-link';
@@ -455,8 +461,9 @@ function warehouse_get_day_schedule($month, $day, $year)
   $dbr->condition('ft.field_wwork_time_value', [$day_start, $day_finish], 'between');
   $dbr->leftJoin('field_data_field_truck_number', 'ftn', 'ftn.entity_id = w.id');
   $dbr->addField('ftn', 'field_truck_number_value', 'truck_number');
-  $dbr->leftJoin('field_data_field_truck_driver_surname', 'ftd', 'ftd.entity_id = w.id');
-  $dbr->addField('ftd', 'field_truck_driver_surname_value', 'truck_driver');
+  $dbr->leftJoin('field_data_field_driver', 'fd', 'fd.entity_id = w.id');
+  $dbr->leftJoin('taxonomy_term_data', 't', 't.tid = fd.field_driver_target_id');
+  $dbr->addField('t', 'name', 'truck_driver');
 
   $load = $dbr->execute()->fetchAllAssoc('time');
 

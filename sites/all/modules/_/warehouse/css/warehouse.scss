@@ -92,6 +92,7 @@
       padding: 0 15px;
       @include make-row(6px);
     }
+    .time-title,
     .time {
       @include make-sm-column(12, 5px);
       //flex: 100%;
@@ -114,6 +115,9 @@
         }
       }
       @include transition(all .1s linear);
+    }
+    .time-title {
+      color: $text-muted; font-size: $font-size-small; text-align: center;
     }
   }
 
@@ -168,9 +172,7 @@
           margin-bottom: 5px;
         }
       }
-      .field-truck-driver-surname { flex: 0 0 100px; }
-      .field-truck-driver-name { flex: 0 0 100px; }
-      .field-truck-driver-name2 { flex: 0 0 100px; }
+      .field-truck-driver { flex: 0 0 300px; }
       .field-actions {
         flex: 100%;
         border-top: 1px solid $gray-lightest;
