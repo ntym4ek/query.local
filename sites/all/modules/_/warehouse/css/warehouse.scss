@@ -113,6 +113,10 @@
         &.free.active, &.busy-same.active, {
           background: #6bbe6b;
         }
+        &.free.active.late, &.busy-same.active.late,
+        &.late { border-color: $brand-warning; }
+        &.free.active.missed, &.busy-same.active.missed,
+        &.missed { border-color: $brand-danger; }
       }
       @include transition(all .1s linear);
     }
@@ -160,19 +164,20 @@
     }
     .wwork-item {
       display: flex; flex-wrap:wrap; justify-content: flex-start;
-      border: 1px solid $brand-success;
-      border-top: 8px solid $brand-success;
+      border: 1px solid #888888;
+      border-top: 8px solid #888888;
       padding: 20px 20px 0;
       width: 100%;
       .field-item {
         flex: 0 0 150px;
-        margin-bottom: 15px;
+        margin-bottom: 15px; padding-right: 15px;
         .field-label {
           color: $text-muted; font-size: 12px;
           margin-bottom: 5px;
         }
       }
-      .field-truck-driver { flex: 0 0 300px; }
+      .field-truck-driver { flex: 0 0 400px; }
+      .field-status { flex: 0 0 170px; }
       .field-actions {
         flex: 100%;
         border-top: 1px solid $gray-lightest;
@@ -180,6 +185,11 @@
         text-align: right;
         a { margin-left: 10px; }
       }
+      &.late { border-color: $brand-warning; }
+      &.missed { border-color: $brand-danger; }
+      &.checkin { border-color: $brand-success; }
+      &.onload { border-color: $brand-success; }
+      &.gone { border-color: $brand-success; }
     }
   }
 
@@ -199,6 +209,13 @@
   .field-name-field-file-wwork-order { flex: 100%; }
   .field-name-field-files { flex: 100%; }
   .form-actions { flex: 100%; }
+  .field-name-field-driver {
+    flex: 100%;
+    .ief-row-form .ief-form-row {
+      border: none;
+      padding: 0;
+    }
+  }
 
   .selected {
     background: #6bbe6b;
@@ -236,7 +253,6 @@
       border: 1px solid $gray-lightest;
     }
   }
-
   .ief-entity-table {
     font-size: 14px;
     th,

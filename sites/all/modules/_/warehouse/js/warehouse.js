@@ -39,6 +39,30 @@
         $("input[name=time]").val($date + $start_offset);
       }
 
+      // - маски ввода на полях ----------------------------------------------------------------------------------------
+      setMasks();
+      $('#edit-foreign').click(function() {
+        if ($(this).prop('checked'))  unsetMasks();
+        else                          setMasks();
+      });
+      function setMasks() {
+        $('[id*=field-truck-number]').prop('placeholder', 'А000АА');
+        $('[id*=field-truck-number]').attr('data-original-title', 'только номер, без региона');
+        $('[id*=field-truck-number]').mask('а999аа');
+        $('[id*=field-truck-region]').show().prop('disabled', '');
+        $('[id*=field-truck-trailer-number]').prop('placeholder', 'АА 0000');
+        $('[id*=field-truck-trailer-number]').mask('аа 9999');
+      }
+      function unsetMasks() {
+        $('[id*=field-truck-number]').prop('placeholder', '');
+        $('[id*=field-truck-number]').attr('data-original-title', 'иностранный номер полностью');
+        $('[id*=field-truck-number]').mask('******?****');
+        $('[id*=field-truck-region]').val('').prop('disabled', 'disabled');
+        $('[id*=field-truck-trailer-number]').prop('placeholder', '');
+        $('[id*=field-truck-trailer-number]').mask('******?****');
+      }
+
+
     }
   }
 })(jQuery);

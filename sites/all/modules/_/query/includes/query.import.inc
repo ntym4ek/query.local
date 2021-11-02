@@ -585,72 +585,36 @@ function query_produce_plan_import($array)
   }
 }
 
-function query_drivers_import($array)
+function wwork_import($array)
 {
-  if (is_array($array) && !empty($array['load'])) {
-    $vid = taxonomy_vocabulary_machine_name_load('drivers')->vid;
+  $is_ok = false;
+  if (is_array($array) && !empty($array['id']) && !empty($array['status'])) {
 
-    $drivers_got = [];
-    foreach($array['load'] as $key => $drv) {
-      $driver = null;
-      if ($drv['driver_id'] || $drv['driver_1c_id']) {
+    $wwork_wr = entity_metadata_wrapper('warehouse_work', $array['id']);
 
-        if ($drv['driver_id']) {
-          $driver = taxonomy_term_load($drv['driver_id']);
-        }
-        if (!$driver) {
-          $driver = query_get_driver_by_1cID($drv['driver_1c_id']);
-        }
-
-        if (!$driver) {
-          $driver = (object)array(
-            'vid' => $vid,
-            'name' => $drv['licence'],
-          );
-          taxonomy_term_save($driver);
-        }
-
-        // обновить значения полей
-        $driver_wr = entity_metadata_wrapper('taxonomy_term', $driver);
-        $driver_wr->name = $drv['licence'];
-        $driver_wr->field_oc_driver_id = $drv['driver_1c_id'];
-        $driver_wr->field_truck_driver_surname = $drv['surname'];
-        $driver_wr->field_truck_driver_name = $drv['name'];
-        $driver_wr->field_truck_driver_name2 = $drv['name2'];
-        $driver_wr->field_truck_driver_license = $drv['licence'];
-        $driver_wr->field_dopog_license = $drv['dopog'];
-        $dopog_valid_arr = explode('.', $array['dopog_valid']);
-        $dopog_valid = gmmktime(0, 0, 0, $dopog_valid_arr[1], $dopog_valid_arr[0], $dopog_valid_arr[2]);
-        $driver_wr->field_dopog_license_validity = $dopog_valid;
-        $driver_wr->field_status = 1;
-        $driver_wr->save();
-
-        $drivers_got[] = $driver_wr->getIdentifier();
+    if ($wwork_wr->value()) {
+      $status_update = trim($array['status_update']);
+      if ($status_update) {
+        $date = explode(' ', $status_update)[0];
+        $date_arr = explode('.', $date);
+        $time = explode(' ', $status_update)[1];
+        $time_arr = explode(':', $time);
+        $update_unix = gmmktime($time_arr[0], $time_arr[1], 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        if ($array['status'] == 'checkin') $wwork_wr->field_checkin_time = $update_unix;
+        if ($array['status'] == 'onload') $wwork_wr->field_onload_time = $update_unix;
+        if ($array['status'] == 'gone') $wwork_wr->field_gone_time = $update_unix;
+        $wwork_wr->save();
+        $is_ok = true;
       }
     }
+  }
 
-    // если полное обновление справочника, то запомнить отсутствующие записи и сделать их неактивными для клиента
-    if ($array['reload']) {
-      $dbr = db_select('taxonomy_term_data', 't');
-      $dbr->condition('t.vid', $vid);
-      $dbr->addField('t', 'tid');
-      $drivers_old = $dbr->execute()->fetchAllAssoc('tid');
-
-      foreach ($drivers_old as $d_tid => $drv) {
-        if (!in_array($d_tid, $drivers_got)) {
-          $term_wr = entity_metadata_wrapper('taxonomy_term', $d_tid);
-          $term_wr->field_status = 0;
-          $term_wr->save();
-        }
-      }
-    }
-
-    drupal_set_message('Водители импортированы.');
-    watchdog('import', 'Водители импортированы.', [], WATCHDOG_INFO);
+  if ($is_ok) {
+    watchdog('import', 'Заявка на Погрузку ID ' . $array['id'] . ' обновлена.', [], WATCHDOG_INFO);
     return true;
   } else {
-    drupal_set_message('Импорт водителей не выполнен.', 'warning');
-    watchdog('import', 'Импорт водителей не выполнен.', [], WATCHDOG_ERROR);
+    watchdog('import', 'Заявка на Погрузку не обновлена.', [], WATCHDOG_ERROR);
     return false;
   }
 }
+
