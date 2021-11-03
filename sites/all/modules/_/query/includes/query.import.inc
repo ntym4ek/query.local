@@ -593,11 +593,11 @@ function wwork_import($array)
     $wwork_wr = entity_metadata_wrapper('warehouse_work', $array['id']);
 
     if ($wwork_wr->value()) {
-      $status_update = trim($array['status_update']);
-      if ($status_update) {
-        $date = explode(' ', $status_update)[0];
+      $status_updated = trim($array['status_updated']);
+      if ($status_updated) {
+        $date = explode(' ', $status_updated)[0];
         $date_arr = explode('.', $date);
-        $time = explode(' ', $status_update)[1];
+        $time = explode(' ', $status_updated)[1];
         $time_arr = explode(':', $time);
         $update_unix = gmmktime($time_arr[0], $time_arr[1], 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         if ($array['status'] == 'checkin') $wwork_wr->field_checkin_time = $update_unix;

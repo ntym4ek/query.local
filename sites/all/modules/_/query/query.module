@@ -514,7 +514,8 @@ function query_form_alter(&$form, &$form_state, $form_id)
   }
 
   // дополнительный обработчик сабмита
-  if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query', 'eck__entity__delete_form'])) {
+  if (in_array($form_id, ['eck__entity__form_add_query_query', 'eck__entity__form_edit_query_query'])
+      || ($form_id == 'eck__entity__delete_form' && $form["entity"]["#value"]->type == 'query')) {
     $form["#submit"][] = 'query_form_redirect_submit';
   }
 }
@@ -1775,7 +1776,7 @@ function query_get_company_id_by_user($user)
 function query_entity_delete($entity, $type)
 {
   // при удалении Запроса удалить всю Загрузку
-  if ($entity->type == 'query') {
+  if (isset($entity->type) && $entity->type == 'query') {
     if (!empty($entity->field_load['und'])) {
       $ids = [];
       foreach ($entity->field_load['und'] as $item) {

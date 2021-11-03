@@ -183,6 +183,7 @@
         border-top: 1px solid $gray-lightest;
         padding: 4px 0 4px;
         text-align: right;
+        min-height: 31px;
         a { margin-left: 10px; }
       }
       &.late { border-color: $brand-warning; }
@@ -204,16 +205,20 @@
     }
     .panel-body {
       padding: 15px 0;
+      .table-responsive { overflow: hidden; }
     }
   }
   .field-name-field-file-wwork-order { flex: 100%; }
   .field-name-field-files { flex: 100%; }
   .form-actions { flex: 100%; }
   .field-name-field-driver {
-    flex: 100%;
-    .ief-row-form .ief-form-row {
-      border: none;
-      padding: 0;
+    //flex: 100%;
+    .ief-row-form {
+      > td { padding: 0; }
+      .ief-form-row {
+        border: none;
+        padding: 0;
+      }
     }
   }
 
@@ -260,7 +265,10 @@
     &.table-striped > tbody tr { background: none; }
     td {
       border: none;
+    }
+    .inline-entity-form-taxonomy_term-name {
       line-height: 30px;
+      padding-left: 0;
     }
   }
 }
