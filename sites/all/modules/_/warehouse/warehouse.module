@@ -48,10 +48,16 @@ function warehouse_inline_entity_form_autocomplete($entity_type, $field_name, $b
  */
 function warehouse_queue_page()
 {
-  $month = isset($_GET['month']) ? $_GET['month'] : date('n');
-  $day = isset($_GET['day']) ? $_GET['day'] : date('j')+1;
+  $month = isset($_GET['month']) ? $_GET['month'] : null;
+  $day = isset($_GET['day']) ? $_GET['day'] : null;
   $offset = isset($_GET['offset']) ? $_GET['offset'] : null;
-  $year = isset($_GET['year']) ? $_GET['year'] : date('Y');
+  $year = isset($_GET['year']) ? $_GET['year'] : null;
+
+  if ($month == null) {
+    $year = date('Y');
+    $month = date('m');
+    $day = date('j')+1;
+  }
   $output =  warehouse_calendar_template($month, $day, $offset, $year);
 
   return $output;
@@ -62,7 +68,13 @@ function warehouse_queue_page()
  */
 function warehouse_calendar_template($month = null, $day = null, $offset = null, $year = 2021, $is_form = false)
 {
+  if (empty($day)) $day = 1;
   $selected_day_start = gmmktime(0, 0, 0, $month, $day, $year);
+  while (in_array(date('w', $selected_day_start), [0, 6])) {
+    $day++;
+    $selected_day_start = gmmktime(0, 0, 0, $month, $day, $year);
+    $offset = null;
+  }
   $timestamp_gmt = time() + 180*60;
 
   $calendar = $time_list = '';
@@ -71,9 +83,10 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
     if ($day_arr['day'] > 0) {
       $day_arr['day'] = $day_arr['day'] < 10 ? '0' . $day_arr['day'] : $day_arr['day'];
       $day_start = gmmktime(0, 0, 0, $month, $day_arr['day'], $year);
+      $is_weekend = in_array(date('w', $day_start), [0, 6]);
       $calendar .=
-        '<li class="day' . ($day_arr['day'] == $day ? ' active' : '') . '" data-date="' . $day_start . '">' .
-          ($day_arr['day'] > 0 ? '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>' : '') .
+        '<li class="day' . ($day_arr['day'] == $day ? ' active' : '') . ($is_weekend ? ' wend' : '') . '" data-date="' . $day_start . '">' .
+          ($day_arr['day'] > 0 ? ($is_weekend ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
           '<div class="busyness-same' . ($day_arr['busy_same'] ? ' busy' : '') . '"></div>' .
           '<div class="busyness">' . ($day_arr['wwork_qty'] ? number_format($day_arr['wwork_qty'] * 100/16, 0) . '%' : '') . '</div>' .
         '</li>';
@@ -130,100 +143,111 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
             '</ul></div>';
   $output .=  '<div class="calendar">' .
                 '<h3>' .
-                    '<span><a href="/' . $current_path . '?month=' . $month_prev . '&day=' . $day . '&year=' . $year_prev . '" class="btn btn-link">предыдущий</a></span>' .
+                    '<span><a href="/' . $current_path . '?month=' . $month_prev . ($day ? '&day=' . $day : '') . '&year=' . $year_prev . '" class="btn btn-link">предыдущий</a></span>' .
                     '<span>' . t(date('F', $selected_day_start)) . ' ' . date('Y', $selected_day_start) . '</span>' .
-                    '<span><a href="/' . $current_path . '?month=' . $month_next . '&day=' . $day . '&year=' . $year_next . '" class="btn btn-link">следующий</a></span>' .
+                    '<span><a href="/' . $current_path . '?month=' . $month_next . ($day ? '&day=' . $day : '') . '&year=' . $year_next . '" class="btn btn-link">следующий</a></span>' .
                 '</h3>' .
                 '<div class="wday">пн</div>' .
                 '<div class="wday">вт</div>' .
                 '<div class="wday">ср</div>' .
                 '<div class="wday">чт</div>' .
                 '<div class="wday">пт</div>' .
-                '<div class="wday">сб</div>' .
-                '<div class="wday">вс</div>' .
+                '<div class="wday wend">сб</div>' .
+                '<div class="wday wend">вс</div>' .
                 '<ul class="days">' .
                   $calendar .
                 '</ul>' .
               '</div>';
-  $output .=  '<div class="schedule">' .
-                '<h3>Расписание</h3>' .
-                '<div class="time-list">' .
-                  $time_list .
-                '</div>' .
-                '<div class="schedule-legend">' .
-                  '<div><span class="free"></span>- время свободно</div>' .
-                  '<div><span class="busy"></span>- время занято</div>' .
-                  '<div><span class="unavailable"></span>- время недоступно</div>' .
-                  '<div><span class="busy-same"></span>- время занято вашей компанией</div>' .
-                  '<div><span class="selected"></span>- выбранное время</div>' .
-                '</div>' .
-              '</div>';
+  if (!empty($day)) {
+    $output .=  '<div class="schedule">' .
+                  '<h3>Расписание</h3>' .
+                  '<div class="time-list">' .
+                    $time_list .
+                  '</div>' .
+                  '<div class="schedule-legend">' .
+                    '<div><span class="free"></span>- время свободно</div>' .
+                    '<div><span class="busy"></span>- время занято</div>' .
+                    '<div><span class="unavailable"></span>- время недоступно</div>' .
+                    '<div><span class="busy-same"></span>- время занято вашей компанией</div>' .
+                    '<div><span class="selected"></span>- выбранное время</div>' .
+                  '</div>' .
+                '</div>';
+  }
 
   if (!$is_form) {
-    // проверить, возможно клиент уже выбрал квоту погрузок на день
-    $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
-    $company_wwork_limit = 1;
-    if ($user_wr->value() && $user_wr->field_company->value() && $user_wr->field_company->field_wwork_limit->value()) {
-      $company_wwork_limit = $user_wr->field_company->field_wwork_limit->value();
-    }
-    $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] <= $company_wwork_limit;
-    // если квота выбрана, но остались сутки, то можно добавлять
-    if (!$is_add_allowed) {
-      if ($selected_day_start - $timestamp_gmt < 24*60*60) $is_add_allowed = true;
-    }
-
-    // текстовое сообщение менеджеру, если водитель опаздывает или пропустил погрузку (статус late или missed)
-    $status_message = '';
-    if (isset($schedule[$shedule_current_offset]['load']->status)) {
-      $status_message = warehouse_get_text_for_status($schedule[$shedule_current_offset]['load']->status);
-    }
-
     $output .=  '<div class="description">' .
-                  '<h3>Задание на погрузку</h3>';
-    if ($shedule_current_offset) {
-      // редактировать и отменять можно, если до погрузки более трёх часов
-      $is_edit_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
-      $is_cancel_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
+                '<h3>Задание на погрузку</h3>';
 
-      $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.n.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
-      $onload = $schedule[$shedule_current_offset]['load']->onload_time ?  date('d.n.Y H:i', $schedule[$shedule_current_offset]['load']->onload_time-180*60) : $status_message;
-      $gone = $schedule[$shedule_current_offset]['load']->gone_time ?  date('d.n.Y H:i', $schedule[$shedule_current_offset]['load']->gone_time-180*60) : $status_message;
-      $output .=  '<div class="wwork-item ' . $schedule[$shedule_current_offset]['load']->status . '">' .
-                      '<div class="field-item field-truck-number">' .
-                        '<span class="field-label">№ автомобиля</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_number . '</div>'.
+    if (!empty($day)) {
+      // проверить, возможно клиент уже выбрал квоту погрузок на день
+      $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
+      $company_wwork_limit = 1;
+      if ($user_wr->value() && $user_wr->field_company->value() && $user_wr->field_company->field_wwork_limit->value()) {
+        $company_wwork_limit = $user_wr->field_company->field_wwork_limit->value();
+      }
+      $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] <= $company_wwork_limit;
+      // если квота выбрана, но остались сутки, то можно добавлять
+      if (!$is_add_allowed) {
+        if ($selected_day_start - $timestamp_gmt < 24*60*60) $is_add_allowed = true;
+      }
+
+      // текстовое сообщение менеджеру, если водитель опаздывает или пропустил погрузку (статус late или missed)
+      $status_message = '';
+      if (isset($schedule[$shedule_current_offset]['load']->status)) {
+        $status_message = warehouse_get_text_for_status($schedule[$shedule_current_offset]['load']->status);
+      }
+
+      if ($shedule_current_offset) {
+        // редактировать и отменять можно, если до погрузки более трёх часов
+        $is_edit_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
+        $is_cancel_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
+
+        $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
+        if ($timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
+          $onload = $schedule[$shedule_current_offset]['load']->onload_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->onload_time-180*60) : $status_message;
+        }
+        if ($timestamp_gmt > $schedule[$shedule_current_offset]['load']->time + 30*60) {
+          $gone = $schedule[$shedule_current_offset]['load']->gone_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->gone_time-180*60) : $status_message;
+        }
+        $output .=  '<div class="wwork-item ' . $schedule[$shedule_current_offset]['load']->status . '" data-wwork-id="' . $schedule[$shedule_current_offset]['load']->id . '">' .
+                        '<div class="field-item field-truck-number">' .
+                          '<span class="field-label">№ автомобиля</span>' .
+                          '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_number . '</div>'.
+                        '</div>' .
+                        '<div class="field-item field-truck-driver">' .
+                          '<span class="field-label">Водитель</span>' .
+                          '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_driver . '</div>'.
+                        '</div>' .
+                        ($checkin ?
+                        '<div class="field-item field-time">' .
+                          '<span class="field-label">Регистрация</span>' .
+                          '<div class="field-content">'. $checkin . '</div>'.
+                        '</div>' : '') .
+                        ($onload ?
+                        '<div class="field-item field-time">' .
+                          '<span class="field-label">Въезд</span>' .
+                          '<div class="field-content">'. $onload . '</div>'.
+                        '</div>' : '') .
+                        ($gone ?
+                        '<div class="field-item field-time">' .
+                          '<span class="field-label">Выезд</span>' .
+                          '<div class="field-content">'. $gone . '</div>'.
+                        '</div>' : '') .
+                        '<div class="field-actions">' .
+                          ($is_cancel_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/delete' . '?month=' . $month . '&day=' . $day . '&year=' . $year . '&offset=' . $offset . '" class="btn btn-danger btn-xs">Отменить</a>' : '') .
+                          ($is_edit_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/edit" class="btn btn-primary btn-xs">Редактировать</a>' : '') .
+                        '</div>' .
                       '</div>' .
-                      '<div class="field-item field-truck-driver">' .
-                        '<span class="field-label">Водитель</span>' .
-                        '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_driver . '</div>'.
-                      '</div>' .
-                      ($checkin ?
-                      '<div class="field-item field-time">' .
-                        '<span class="field-label">Регистрация</span>' .
-                        '<div class="field-content">'. $checkin . '</div>'.
-                      '</div>' : '') .
-                      ($onload ?
-                      '<div class="field-item field-time">' .
-                        '<span class="field-label">Въезд</span>' .
-                        '<div class="field-content">'. $onload . '</div>'.
-                      '</div>' : '') .
-                      ($gone ?
-                      '<div class="field-item field-time">' .
-                        '<span class="field-label">Выезд</span>' .
-                        '<div class="field-content">'. $gone . '</div>'.
-                      '</div>' : '') .
-                      '<div class="field-actions">' .
-                        ($is_cancel_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/delete' . '?month=' . $month . '&day=' . $day . '&year=' . $year . '&offset=' . $offset . '" class="btn btn-danger btn-xs">Отменить</a>' : '') .
-                        ($is_edit_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/edit" class="btn btn-primary btn-xs">Редактировать</a>' : '') .
-                      '</div>' .
-                    '</div>' .
-                  '</div>';
-    } elseif ($offset) {
-      $output .= $is_add_allowed ?
-                  '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить</a>'
-                  : 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой.<br>Также вы можете запланировать их на другой день.' ;
+                    '</div>';
+      } elseif ($offset) {
+        $output .= $is_add_allowed ?
+                    '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить</a>'
+                    : 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой.<br>Также вы можете запланировать их на другой день.' ;
+      } else {
+        $output .= '<p>Выберите время в расписании</p>';
+      }
     } else {
-      $output .= '<p>Выберите время в расписании</p>';
+        $output .= '<p>Выберите дату</p>';
     }
     $output .= '</div>';
   }
@@ -623,8 +647,7 @@ function warehouse_get_day_schedule($month, $day, $year)
   }
 
   // количество погрузок в день после заполнения которых открывается резерв
-  // todo заменить на 16
-  $is_primary_time_filled = count($load) > 2;
+  $is_primary_time_filled = count($load) >= 16;
 
   // условие, при котором на заданный день запись уже недоступна
   // - текущий день и ранее
