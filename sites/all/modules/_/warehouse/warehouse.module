@@ -70,7 +70,9 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
 {
   if (empty($day)) $day = 1;
   $selected_day_start = gmmktime(0, 0, 0, $month, $day, $year);
-  while (in_array(date('w', $selected_day_start), [0, 6])) {
+  $is_selected_day_weekend = warehouse_is_date_weekend($selected_day_start);
+  if ($is_selected_day_weekend) $day = 1;
+  while (warehouse_is_date_weekend($selected_day_start)) {
     $day++;
     $selected_day_start = gmmktime(0, 0, 0, $month, $day, $year);
     $offset = null;
@@ -83,12 +85,16 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
     if ($day_arr['day'] > 0) {
       $day_arr['day'] = $day_arr['day'] < 10 ? '0' . $day_arr['day'] : $day_arr['day'];
       $day_start = gmmktime(0, 0, 0, $month, $day_arr['day'], $year);
-      $is_weekend = in_array(date('w', $day_start), [0, 6]);
+      $busyness = $day_arr['wwork_qty'] * 100/16;
+      // при занятости дня менее 50% выделить зелёным цветом, более - жёлтым, выходной красным
+      $day_color = $day_arr['is_weekend'] ? ' color-wend' : ($busyness <= 50 ? ' color-free' : ' color-lack');
+      $day_active =  $day_arr['day'] == $day ? ' active' : '';
       $calendar .=
-        '<li class="day' . ($day_arr['day'] == $day ? ' active' : '') . ($is_weekend ? ' wend' : '') . '" data-date="' . $day_start . '">' .
-          ($day_arr['day'] > 0 ? ($is_weekend ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
+        '<li class="day' . $day_color . $day_active . '" data-date="' . $day_start . '">' .
+          ($day_arr['day'] > 0 ? ($day_arr['is_weekend'] ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
           '<div class="busyness-same' . ($day_arr['busy_same'] ? ' busy' : '') . '"></div>' .
-          '<div class="busyness">' . ($day_arr['wwork_qty'] ? number_format($day_arr['wwork_qty'] * 100/16, 0) . '%' : '') . '</div>' .
+//          '<div class="busyness">' . ($day_arr['wwork_qty'] ? number_format($day_arr['wwork_qty'] * 100/16, 0) . '%' : '') . '</div>' .
+          '<div class="busyness"></div>' .
         '</li>';
 
     } else {
@@ -152,8 +158,8 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                 '<div class="wday">ср</div>' .
                 '<div class="wday">чт</div>' .
                 '<div class="wday">пт</div>' .
-                '<div class="wday wend">сб</div>' .
-                '<div class="wday wend">вс</div>' .
+                '<div class="wday color-wend">сб</div>' .
+                '<div class="wday color-wend">вс</div>' .
                 '<ul class="days">' .
                   $calendar .
                 '</ul>' .
@@ -198,15 +204,16 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       }
 
       if ($shedule_current_offset) {
+        $onload = $gone = null;
         // редактировать и отменять можно, если до погрузки более трёх часов
         $is_edit_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
         $is_cancel_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
 
         $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
-        if ($timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
+        if ($schedule[$shedule_current_offset]['load']->checkin_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
           $onload = $schedule[$shedule_current_offset]['load']->onload_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->onload_time-180*60) : $status_message;
         }
-        if ($timestamp_gmt > $schedule[$shedule_current_offset]['load']->time + 30*60) {
+        if ($schedule[$shedule_current_offset]['load']->onload_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time + 30*60) {
           $gone = $schedule[$shedule_current_offset]['load']->gone_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->gone_time-180*60) : $status_message;
         }
         $output .=  '<div class="wwork-item ' . $schedule[$shedule_current_offset]['load']->status . '" data-wwork-id="' . $schedule[$shedule_current_offset]['load']->id . '">' .
@@ -561,9 +568,13 @@ function warehouse_get_month_dates($month, $year)
   foreach($days as $key => $day) {
     $load = [];
     $busy_same = [];
+    $is_weekend = false;
     if ($day) {
       $day_start = gmmktime(0, 0, 0, $month, $day, $year);
       $day_finish = gmmktime(0, 0, 0, $month, $day + 1, $year) - 1;
+
+      // определить выходной
+      $is_weekend = warehouse_is_date_weekend($day_start);
 
       // проверить количество всех погрузок в этот день
       $dbr = db_select('eck_warehouse_work', 'w');
@@ -587,11 +598,52 @@ function warehouse_get_month_dates($month, $year)
       'wwork_qty' => count($load),
       'wwork_qty_own' => count($busy_same),
       'busy_same' => (bool)$busy_same,
+      'is_weekend' => $is_weekend,
     ];
 
   }
 
   return $calendar;
+}
+
+// является ли дата выходным днём
+function warehouse_is_date_weekend($day_unix)
+{
+  $vid = taxonomy_vocabulary_machine_name_load('dates')->vid;
+
+  // сначала проверяем по своей БД
+  $dbr = db_select('taxonomy_term_data', 't');
+  $dbr->condition('t.vid', $vid);
+  $dbr->condition('t.name', $day_unix);
+  $dbr->addField('t', 'description');
+  $result = $dbr->execute()->fetchField();
+  if ($result !== false) {
+    $is_weekend = (bool)$result;
+  } else {
+    // при отсутствии - через сервис
+    $year = date('Y', $day_unix);
+    $month = date('m', $day_unix);
+    $day = date('d', $day_unix);
+    $ch = curl_init('https://isdayoff.ru/' . $year . '-' . $month . '-' . $day);
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+    $is_weekend = curl_exec($ch);
+    if ($is_weekend === false) {
+      $is_weekend = in_array(date('w', $day_unix), [0, 6]);
+    }
+
+    curl_close($ch);
+
+    $day = (object)array(
+      'vid' => $vid,
+      'name' => $day_unix,
+      'description' => (int)$is_weekend,
+    );
+    taxonomy_term_save($day);
+  }
+
+  return (bool)$is_weekend;
 }
 
 function warehouse_get_day_schedule($month, $day, $year)
@@ -629,21 +681,26 @@ function warehouse_get_day_schedule($month, $day, $year)
   foreach ($load as &$item_l) {
     $item_l->status = 'new';
 
-    if (!$item_l->checkin_time) {
-      // если за час до назначенного времени не зарегистрирован - Предупреждение
-      if ($timestamp_gmt + 60 * 60 > $item_l->time) $item_l->status = 'late';
-      // если назначенное время прошло - Пропустил
-      if ($timestamp_gmt > $item_l->time) $item_l->status = 'missed';
-    } else $item_l->status = 'checkin';
+    // статусы только для "своих" погрузок
+    if ($item_l->uid == $GLOBALS['user']->uid) {
+      if (!$item_l->checkin_time) {
+        // если за час до назначенного времени не зарегистрирован - Предупреждение
+        if ($timestamp_gmt + 60 * 60 > $item_l->time) $item_l->status = 'late';
+        // если назначенное время прошло - Пропустил
+        if ($timestamp_gmt > $item_l->time) $item_l->status = 'missed';
+      } else {
+        $item_l->status = 'checkin';
 
-    if (!$item_l->onload_time) {
-      // если в течение 10 минут не заехал - Предупреждение
-      if ($timestamp_gmt > $item_l->time + 10 * 60) $item_l->status = 'late';
-      // если в течение 30 минут не заехал - Пропустил
-      if ($timestamp_gmt > $item_l->time + 30 * 60) $item_l->status = 'missed';
-    } else $item_l->status = 'onload';
+        if (!$item_l->onload_time) {
+          // если в течение 10 минут не заехал - Предупреждение
+          if ($timestamp_gmt > $item_l->time + 10 * 60) $item_l->status = 'late';
+          // если в течение 30 минут не заехал - Пропустил
+          if ($timestamp_gmt > $item_l->time + 20 * 60) $item_l->status = 'missed';
+        } else $item_l->status = 'onload';
 
-    if ($item_l->gone_time) $item_l->status = 'gone';
+        if ($item_l->gone_time) $item_l->status = 'gone';
+      }
+    }
   }
 
   // количество погрузок в день после заполнения которых открывается резерв
