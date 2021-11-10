@@ -24,24 +24,24 @@ function warehouse_menu()
 /**
  * Implementation of hook_menu_alter().
  */
-function warehouse_menu_alter(&$items)
-{
-  // заменить callback автокомплита на свой, чтобы изменить подбор из справочника Водителей
-  if (isset($items['inline_entity_form/autocomplete'])) {
-    $items['inline_entity_form/autocomplete']['page callback'] = 'warehouse_inline_entity_form_autocomplete';
-  }
-}
+//function warehouse_menu_alter(&$items)
+//{
+//  // заменить callback автокомплита на свой, чтобы изменить подбор из справочника Водителей
+//  if (isset($items['inline_entity_form/autocomplete'])) {
+//    $items['inline_entity_form/autocomplete']['page callback'] = 'warehouse_inline_entity_form_autocomplete';
+//  }
+//}
 
-function warehouse_inline_entity_form_autocomplete($entity_type, $field_name, $bundle, $string = '')
-{
-  // для водителей вывести только при вводе удостоверения полностью
-  $string = str_replace('_', '', $string);
-    if ($field_name == 'field_driver' && $bundle == 'warehouse_work' && strlen($string) < 4) {
-    drupal_json_output([]);
-  } else {
-    inline_entity_form_autocomplete($entity_type, $field_name, $bundle, $string);
-  }
-}
+//function warehouse_inline_entity_form_autocomplete($entity_type, $field_name, $bundle, $string = '')
+//{
+//  // для водителей вывести только при вводе удостоверения полностью
+//  $string = str_replace('_', '', $string);
+//    if ($field_name == 'field_driver' && $bundle == 'warehouse_work' && strlen($string) < 4) {
+//    drupal_json_output([]);
+//  } else {
+//    inline_entity_form_autocomplete($entity_type, $field_name, $bundle, $string);
+//  }
+//}
 
 /**
  *
@@ -58,9 +58,8 @@ function warehouse_queue_page()
     $month = date('m');
     $day = date('j')+1;
   }
-  $output =  warehouse_calendar_template($month, $day, $offset, $year);
 
-  return $output;
+  return warehouse_calendar_template($month, $day, $offset, $year);
 }
 
 /**
@@ -93,7 +92,6 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
         '<li class="day' . $day_color . $day_active . '" data-date="' . $day_start . '">' .
           ($day_arr['day'] > 0 ? ($day_arr['is_weekend'] ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
           '<div class="busyness-same' . ($day_arr['busy_same'] ? ' busy' : '') . '"></div>' .
-//          '<div class="busyness">' . ($day_arr['wwork_qty'] ? number_format($day_arr['wwork_qty'] * 100/16, 0) . '%' : '') . '</div>' .
           '<div class="busyness"></div>' .
         '</li>';
 
