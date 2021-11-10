@@ -530,6 +530,7 @@ function warehouse_wwork_export($wwork_wr)
         'trailer_type' => $wwork_wr->field_truck_trailer_type->value(),
         'trailer_number' => $wwork_wr->field_truck_trailer_number->value(),
       ],
+      'combined_cargo' =>  $wwork_wr->field_combined_cargo->value(),
       'wwork_order_url' => $wwork_wr->field_file_wwork_order->value() ? file_create_url($wwork_wr->field_file_wwork_order->value()['uri']) : null,
       'file_urls' => $file_urls,
     ];

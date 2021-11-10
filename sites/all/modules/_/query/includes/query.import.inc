@@ -589,7 +589,6 @@ function wwork_import($array)
 {
   $is_ok = false;
   if (is_array($array) && !empty($array['id'])) {
-
     $wwork_wr = entity_metadata_wrapper('warehouse_work', $array['id']);
 
     if ($wwork_wr->value()) {

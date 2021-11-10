@@ -313,3 +313,20 @@
 .input-group-btn > .btn {
   height: 34px;
 }
+
+.view-report-wworks {
+  table {
+    caption {
+      color: #333; font-size: $font-size-h3;
+      padding-bottom: 0; padding-left: 7px;
+    }
+    > tbody > tr:nth-of-type(odd):not(:hover) { background: none; }
+    > thead > tr > th {
+      color: $text-muted; font-weight: 400;
+      border-bottom: 1px solid #ddd;
+      &.views-field-field-checkin-time { width: 150px; }
+      &.views-field-field-onload-time { width: 150px; }
+      &.views-field-field-gone-time { width: 150px; }
+    }
+  }
+}
