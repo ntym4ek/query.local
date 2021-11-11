@@ -613,8 +613,10 @@ function warehouse_is_date_weekend($day_unix)
   // сначала проверяем по своей БД
   $dbr = db_select('taxonomy_term_data', 't');
   $dbr->condition('t.vid', $vid);
-  $dbr->condition('t.name', $day_unix);
-  $dbr->addField('t', 'description');
+  $dbr->innerJoin('field_data_field_date', 'fd', 'fd.entity_id = t.tid');
+  $dbr->condition('fd.field_date_value', $day_unix);
+  $dbr->innerJoin('field_data_field_is_weekend', 'fw', 'fw.entity_id = t.tid');
+  $dbr->addField('fw', 'field_is_weekend_value');
   $result = $dbr->execute()->fetchField();
   if ($result !== false) {
     $is_weekend = (bool)$result;
@@ -636,8 +638,9 @@ function warehouse_is_date_weekend($day_unix)
 
     $day = (object)array(
       'vid' => $vid,
-      'name' => $day_unix,
-      'description' => (int)$is_weekend,
+      'name' => date('d.m.Y', $day_unix),
+      'field_date' => ['und' => [0 => ['value' => $day_unix]]],
+      'field_is_weekend' => ['und' => [0 => ['value' => (int)$is_weekend]]],
     );
     taxonomy_term_save($day);
   }
