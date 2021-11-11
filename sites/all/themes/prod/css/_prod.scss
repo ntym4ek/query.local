@@ -234,6 +234,16 @@ form {
 }
 
 
+.view-weekends {
+  .views-exposed-form { display: none; }
+  .views-field-field-date {
+    color: $text-muted;
+  }
+  .views-view-grid td {
+    padding: 0 5px;
+  }
+}
+
 .produce-unit {
   display: flex;
   margin-bottom: $grid-gutter-width/2;

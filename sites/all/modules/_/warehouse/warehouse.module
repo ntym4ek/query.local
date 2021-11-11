@@ -6,6 +6,9 @@ define('DAY_STATUS_BUSY_SAME', 'busy-same');
 define('DAY_STATUS_SELECTED', 'selected');
 define('DAY_STATUS_UNAVAILABLE', 'unavailable');
 
+define('HOUR_ADD_AVAILABLE_TILL', 16);
+define('DEFAULT_CLIENT_LOADS_LIMIT', 5);
+
 /**
  * Implementation of hook_menu().
  */
@@ -78,6 +81,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   }
   $timestamp_gmt = time() + 180*60;
 
+  // - календарь
   $calendar = $time_list = '';
   $calendar_arr = warehouse_get_month_dates($month, $year);
   foreach ($calendar_arr as $day_arr) {
@@ -101,6 +105,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
     }
   }
 
+  // - расписание
   $schedule = warehouse_get_day_schedule($month, $day, $year);
   $shedule_current_offset = null;
   foreach($schedule as $key => $time) {
@@ -142,8 +147,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   $output.= '<div class="conditions"><ul>' .
             '<li>Дополнительное время (доп) с 16<sup>00</sup> до 18<sup>00</sup> открывается после заполнения основного (осн) времени</li>' .
             '<li>Резервное время (рез) открывается после заполнения дополнительного</li>' .
-            '<li>Добавление погрузки на следующий день возможно до 16<sup>00</sup> текущего дня</li>' .
-//            '<li></li>' .
+            '<li>Добавление погрузки на следующий день возможно до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего дня</li>' .
             '</ul></div>';
   $output .=  '<div class="calendar">' .
                 '<h3>' .
@@ -161,6 +165,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                 '<ul class="days">' .
                   $calendar .
                 '</ul>' .
+                (user_has_role(ROLE_MANAGER, $GLOBALS['user']) ? '<div class="edit-weekends"><a href="/weekends?field_date_value[value][month]=' . $month . '&field_date_value[value][year]=' . $year . '" target="_blank"><span class="glyphicon glyphicon-calendar"></span> редактировать выходные дни</a></div>' : '') .
               '</div>';
   if (!empty($day)) {
     $output .=  '<div class="schedule">' .
@@ -183,16 +188,16 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                 '<h3>Задание на погрузку</h3>';
 
     if (!empty($day)) {
-      // проверить, возможно клиент уже выбрал квоту погрузок на день
+      // проверить, возможно клиент уже выбрал квоту погрузок на день (по умолчанию - DEFAULT_CLIENT_LOADS_LIMIT)
       $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
-      $company_wwork_limit = 1;
+      $company_wwork_limit = DEFAULT_CLIENT_LOADS_LIMIT;
       if ($user_wr->value() && $user_wr->field_company->value() && $user_wr->field_company->field_wwork_limit->value()) {
         $company_wwork_limit = $user_wr->field_company->field_wwork_limit->value();
       }
-      $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] <= $company_wwork_limit;
+      $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] < $company_wwork_limit;
       // если квота выбрана, но остались сутки, то можно добавлять
       if (!$is_add_allowed) {
-        if ($selected_day_start - $timestamp_gmt < 24*60*60) $is_add_allowed = true;
+        if ($selected_day_start - $timestamp_gmt < (24*60*60 + (24-HOUR_ADD_AVAILABLE_TILL)*60*60)) $is_add_allowed = true;
       }
 
       // текстовое сообщение менеджеру, если водитель опаздывает или пропустил погрузку (статус late или missed)
@@ -710,8 +715,8 @@ function warehouse_get_day_schedule($month, $day, $year)
 
   // условие, при котором на заданный день запись уже недоступна
   // - текущий день и ранее
-  // - на следующий день запись доступна до 16:00 текущего
-  $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + 960*60);
+  // - на следующий день запись доступна до HOUR_ADD_AVAILABLE_TILL текущего
+  $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + HOUR_ADD_AVAILABLE_TILL*60*60);
 
   // определить, открываем дополнительное время или резервное
   $is_quarter_locked = true;  // открывать ли резерв

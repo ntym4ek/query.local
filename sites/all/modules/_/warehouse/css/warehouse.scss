@@ -74,7 +74,12 @@
         }
       }
     }
-
+    .edit-weekends {
+      padding: 20px;
+      text-align: right;
+      width: 100%;
+      a { color: $text-muted; font-size: $font-size-small; }
+    }
   }
 
   .schedule {
@@ -333,11 +338,3 @@
   }
 }
 
-.view-weekends {
-  form > div {
-    display: flex;
-  }
-  .view-row {
-
-  }
-}
