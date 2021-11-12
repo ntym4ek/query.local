@@ -165,7 +165,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                 '<ul class="days">' .
                   $calendar .
                 '</ul>' .
-                (user_has_role(ROLE_MANAGER, $GLOBALS['user']) ? '<div class="edit-weekends"><a href="/weekends?field_date_value[value][month]=' . $month . '&field_date_value[value][year]=' . $year . '" target="_blank"><span class="glyphicon glyphicon-calendar"></span> редактировать выходные дни</a></div>' : '') .
+                (user_has_role(ROLE_MANAGER_WAREHOUSE) ? '<div class="edit-weekends"><a href="/weekends?field_date_value[value][month]=' . $month . '&field_date_value[value][year]=' . $year . '" target="_blank"><span class="glyphicon glyphicon-calendar"></span> редактировать выходные дни</a></div>' : '') .
               '</div>';
   if (!empty($day)) {
     $output .=  '<div class="schedule">' .
@@ -195,9 +195,15 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
         $company_wwork_limit = $user_wr->field_company->field_wwork_limit->value();
       }
       $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] < $company_wwork_limit;
+      $add_not_allowed_text = 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой.<br>Также вы можете запланировать их на другой день.';
       // если квота выбрана, но остались сутки, то можно добавлять
       if (!$is_add_allowed) {
         if ($selected_day_start - $timestamp_gmt < (24*60*60 + (24-HOUR_ADD_AVAILABLE_TILL)*60*60)) $is_add_allowed = true;
+      }
+      // менеджерам добавление недоступно
+      if (user_has_role(ROLE_MANAGER_WAREHOUSE)) {
+        $is_add_allowed = false;
+        $add_not_allowed_text = 'Добавление погрузок в кабинете менеджера недоступно.';
       }
 
       // текстовое сообщение менеджеру, если водитель опаздывает или пропустил погрузку (статус late или missed)
@@ -209,8 +215,8 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       if ($shedule_current_offset) {
         $onload = $gone = null;
         // редактировать и отменять можно, если до погрузки более трёх часов
-        $is_edit_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
-        $is_cancel_allowed = $schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60;
+        $is_edit_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) && !user_has_role(ROLE_MANAGER_WAREHOUSE);
+        $is_cancel_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) && !user_has_role(ROLE_MANAGER_WAREHOUSE);
 
         $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
         if ($schedule[$shedule_current_offset]['load']->checkin_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
@@ -252,7 +258,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       } elseif ($offset) {
         $output .= $is_add_allowed ?
                     '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить</a>'
-                    : 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой.<br>Также вы можете запланировать их на другой день.' ;
+                    : $add_not_allowed_text ;
       } else {
         $output .= '<p>Выберите время в расписании</p>';
       }
@@ -509,7 +515,6 @@ function warehouse_wwork_export($wwork_wr)
     $created_unix = $wwork_wr->created->value();
     $time_unix = $wwork_wr->field_wwork_time->value();
 
-    $wwork_created = gmdate('d', $created_unix) . '.' . gmdate('m', $created_unix) . '.' . gmdate('Y', $created_unix) . ' ' . gmdate('H', $created_unix) . ':' . gmdate('i', $created_unix);
     $wwork_time = gmdate('d', $time_unix) . '.' . gmdate('m', $time_unix) . '.' . gmdate('Y', $time_unix) . ' ' . gmdate('H', $time_unix) . ':' . gmdate('i', $time_unix);
     $dopog_unix = $wwork_wr->field_driver->field_dopog_license_validity->value();
     $dopog_date = gmdate('d', $dopog_unix) . '.' . gmdate('m', $dopog_unix) . '.' . gmdate('Y', $dopog_unix);
@@ -517,8 +522,6 @@ function warehouse_wwork_export($wwork_wr)
       'id' => $wwork_wr->getIdentifier(),
       'time' => $wwork_time,
       'dav_id' => $davalec_id,
-      'status' => 'new', // onload, gone, checkin, new
-      'status_updated' => $wwork_created,
       'driver' => [
         'surname' => $wwork_wr->field_driver->field_truck_driver_surname->value(),
         'name' => $wwork_wr->field_driver->field_truck_driver_name->value(),
@@ -535,7 +538,7 @@ function warehouse_wwork_export($wwork_wr)
         'trailer_type' => $wwork_wr->field_truck_trailer_type->value(),
         'trailer_number' => $wwork_wr->field_truck_trailer_number->value(),
       ],
-      'combined_cargo' =>  $wwork_wr->field_combined_cargo->value(),
+      'combined_cargo' =>  (int)$wwork_wr->field_combined_cargo->value(),
       'wwork_order_url' => $wwork_wr->field_file_wwork_order->value() ? file_create_url($wwork_wr->field_file_wwork_order->value()['uri']) : null,
       'file_urls' => $file_urls,
     ];
