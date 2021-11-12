@@ -815,3 +815,18 @@ function warehouse_get_text_for_status($status)
 
   return $text;
 }
+
+
+function date_field_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items)
+{
+  // todo переделать
+  // кривое решение вывода времени в формате UTC+3 хранящегося в БД в ФОРМАТЕ UTC+0
+  // изменяем время перед рендерингом поля
+  if (in_array($field["field_name"], ['field_wwork_time', 'field_checkin_time', 'field_onload_time', 'field_gone_time'])) {
+    foreach ($items as &$item) {
+      if (isset($item[0])) {
+        $item[0]["value"] = $item[0]["value"] - 3*60*60;
+      }
+    }
+  }
+}
