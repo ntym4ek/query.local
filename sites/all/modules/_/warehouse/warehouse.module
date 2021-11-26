@@ -7,6 +7,7 @@ define('DAY_STATUS_SELECTED', 'selected');
 define('DAY_STATUS_UNAVAILABLE', 'unavailable');
 
 define('HOUR_ADD_AVAILABLE_TILL', 16);
+define('HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL', 10);
 define('DEFAULT_CLIENT_LOADS_LIMIT', 5);
 
 /**
@@ -70,6 +71,9 @@ function warehouse_queue_page()
  */
 function warehouse_calendar_template($month = null, $day = null, $offset = null, $year = 2021, $is_form = false)
 {
+  //  $current_path = strpos($_GET['q'], 'system/ajax') === false ? $_GET['q'] : 'warehouse/queue';
+  $current_path = 'warehouse/queue';
+
   if (empty($day)) $day = 1;
   $selected_day_start = gmmktime(0, 0, 0, $month, $day, $year);
   $is_selected_day_weekend = warehouse_is_date_weekend($selected_day_start);
@@ -94,7 +98,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       $day_active =  $day_arr['day'] == $day ? ' active' : '';
       $calendar .=
         '<li class="day' . $day_color . $day_active . '" data-date="' . $day_start . '">' .
-          ($day_arr['day'] > 0 ? ($day_arr['is_weekend'] ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $_GET["q"] . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
+          ($day_arr['day'] > 0 ? ($day_arr['is_weekend'] ? '<div class="day-content">' . $day_arr['day'] . '</div>' : '<a href="/' . $current_path . '?month=' . $month . '&day=' . $day_arr['day'] . '&year=' . $year . '" class="day-content">' . $day_arr['day'] . '</a>') : '') .
           '<div class="busyness-same' . ($day_arr['busy_same'] ? ' busy' : '') . '"></div>' .
           '<div class="busyness"></div>' .
         '</li>';
@@ -121,7 +125,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
     $classes = $time['status'] . ($time['offset'] == $offset ? ' active' : '');
     if (isset($time['load']->status)) $classes .= ' ' . $time['load']->status;
     $time_list .= '<div class="time ' . (isset($time['duration']) && $time['duration'] == 15 ? 'quarter' : 'half') . '" data-start-offset="' . $time['offset'] . '">' .
-                (in_array($time['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $time['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="time-content ' . $classes . '">' . $time['text'] . '</div> ' : '<a href="/' . $_GET["q"] . '?year=' . $year . '&month=' . $month . '&day=' . $day . '&offset=' . $time['offset'] . '" class="time-content ' . $classes . '">' . $time['text'] . '</a>') .
+                (in_array($time['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $time['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="time-content ' . $classes . '">' . $time['text'] . '</div> ' : '<a href="/' . $current_path . '?year=' . $year . '&month=' . $month . '&day=' . $day . '&offset=' . $time['offset'] . '" class="time-content ' . $classes . '">' . $time['text'] . '</a>') .
               '</div>';
     if (in_array($key, [705, 945, 1080])) {
       $time_list .= '</div>';
@@ -140,8 +144,6 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
   if ($month == 12) {
     $month_next = 1; $year_next = $year + 1;
   }
-
-  $current_path = strpos($_GET['q'], 'system/ajax') === false ? $_GET['q'] : 'warehouse/queue';
 
   $output = '<div class="warehouse">';
   $output.= '<div class="conditions"><ul>' .
@@ -196,14 +198,22 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       }
       $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] < $company_wwork_limit;
       $add_not_allowed_text = 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой при наличии свободных мест.<br>Также вы можете запланировать их на другой день.';
+
       // если квота выбрана, но остались сутки, то можно добавлять
       if (!$is_add_allowed) {
         if ($selected_day_start - $timestamp_gmt < (24*60*60 + (24-HOUR_ADD_AVAILABLE_TILL)*60*60)) $is_add_allowed = true;
       }
+
       // менеджерам добавление недоступно
       if (user_has_role(ROLE_MANAGER_WAREHOUSE)) {
         $is_add_allowed = false;
         $add_not_allowed_text = 'Добавление погрузок в кабинете менеджера недоступно.';
+      }
+
+      // добавление сборных грузов недоступно реньше, чем обычных грузов ( с HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL вместо HOUR_ADD_AVAILABLE_TILL)
+      $is_combined_cargo_add_allowed = false;
+      if ($is_add_allowed) {
+        $is_combined_cargo_add_allowed = _warehouse_is_combined_cargo_add_allowed($year, $month, $day);
       }
 
       // текстовое сообщение менеджеру, если водитель опаздывает или пропустил погрузку (статус late или missed)
@@ -215,8 +225,8 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       if ($shedule_current_offset) {
         $onload = $gone = null;
         // редактировать и отменять можно, если до погрузки более трёх часов
-        $is_edit_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) && !user_has_role(ROLE_MANAGER_WAREHOUSE);
-        $is_cancel_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) && !user_has_role(ROLE_MANAGER_WAREHOUSE);
+        $is_edit_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
+        $is_cancel_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
 
         $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
         if ($schedule[$shedule_current_offset]['load']->checkin_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
@@ -250,15 +260,31 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                           '<div class="field-content">'. $gone . '</div>'.
                         '</div>' : '') .
                         '<div class="field-actions">' .
-                          ($is_cancel_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/delete' . '?month=' . $month . '&day=' . $day . '&year=' . $year . '&offset=' . $offset . '" class="btn btn-danger btn-xs">Отменить</a>' : '') .
+                          ($is_cancel_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/delete' . '?month=' . $month . '&day=' . $day . '&year=' . $year . '&offset=' . $offset . '" class="btn btn-danger btn-xs">Удалить</a>' : '') .
                           ($is_edit_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/edit" class="btn btn-primary btn-xs">Редактировать</a>' : '') .
                         '</div>' .
                       '</div>' .
                     '</div>';
       } elseif ($offset) {
+        $output .= '<div class="add-actions">';
         $output .= $is_add_allowed ?
-                    '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить</a>'
-                    : $add_not_allowed_text ;
+          '<p>Груз может состоять из цельных паллет и его подготовка и погрузка будут занимать минимальное время. Но если на погрузку запланированы несколько различных наименований и/или номера партий требуют распаллечивания, ' .
+          'то на подготовку складу требуется больше времени и такую заявку нужно добавлять заблаговременно.<br>' .
+          '</p>' .
+          '<div>' .
+            '<div>' .
+              '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить погрузку</a>' .
+              '<p>если ваш груз не требует предварительной подготовки<br>добавление на следующий день доступно до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего</p>' .
+            '</div>' .
+            '<div>' .
+              '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '&complex_cargo=1" class="btn btn-primary add-wwork"' . ($is_combined_cargo_add_allowed ? '' : ' disabled="disabled"') . '>Добавить сборную погрузку</a>' .
+              '<p>если требуется предварительной подготовка<br>добавление на следующий день доступно до ' . HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего</p>' .
+            '</div>' .
+
+          '</div>'
+          : $add_not_allowed_text ;
+
+        $output .= '</div>';
       } else {
         $output .= '<p>Выберите время в расписании</p>';
       }
@@ -292,6 +318,18 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
         if (isset($_GET['day']))    $form_state['date']['day'] = $_GET['day'];
         if (isset($_GET['offset'])) $form_state['date']['offset'] = $_GET['offset'];
         if (isset($_GET['year']))   $form_state['date']['year'] = $_GET['year'];
+        if (isset($_GET['complex_cargo']) && _warehouse_is_combined_cargo_add_allowed($form_state['date']['year'], $form_state['date']['month'], $form_state['date']['day'])) $form_state['complex_cargo'] = $_GET['complex_cargo'];
+      }
+
+      if (!user_has_role(ROLE_MANAGER_WAREHOUSE)) {
+        $form["field_wwork_time"]['#access'] = false;
+      } else {
+        // для менеджера подключаем виджет выбора даты-времени
+        // https://xdan.ru/samij-udobnij-datetimepicker.html
+        // версия js из статьи выдавала ошибку,
+        // поэтому взят файл из https://github.com/xdan/datetimepicker/issues/471
+        $form['#attached']['css'][] = drupal_get_path('module', 'warehouse') . '/css/jquery.datetimepicker.css';
+        $form['#attached']['js'][] = drupal_get_path('module', 'warehouse') . '/js/jquery.datetimepicker.js';
       }
 
       $offset = null;
@@ -331,8 +369,19 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
       array_unshift($form["#groups"]["group_truck"]->children, 'foreign');
       $form["#group_children"]["foreign"] = 'group_truck';
 
-      array_unshift($form["#validate"], 'warehouse_eck__entity__form_add_warehouse_work_warehouse_work_validate');
+      array_unshift($form["#validate"], 'warehouse_eck__entity__form_warehouse_work_warehouse_work_validate');
       $form["actions"]["submit"]["#submit"][] = 'warehouse_eck__entity__form_add_warehouse_work_warehouse_work_submit';
+
+
+      // cargo
+      $form["field_combined_cargo"]["#access"] = false;
+      if (isset($form_state['complex_cargo'])) {
+        $form["field_combined_cargo"]["und"]["#default_value"] = $form_state['complex_cargo'];
+      }
+      if (!$form["field_combined_cargo"]["und"]["#default_value"] && !user_has_role(ROLE_MANAGER_WAREHOUSE)) {
+          $form["field_file_wwork_order"]["und"][0]["#description"] = '<span class="text-danger">ВНИМАНИЕ!</span> Вы оформляете погрузку не предусматривающую предварительную сборку и подготовку груза. Прикрепление несоответствующей накладной может привести к отмене или переносу времени погрузки';
+      }
+
 
       // оформление
       $form['#attributes']['class'][] = 'warehouse-form';
@@ -342,8 +391,20 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
 
       $form["field_file_wwork_order"]["#prefix"] = '<div class="row">';
       $form["field_file_wwork_order"]["#attributes"]["class"][] = 'col-sm-6';
-      $form["field_file_driver_proxy"]["#attributes"]["class"][] = 'col-sm-6';
+      $form["field_text"]["#attributes"]["class"][] = 'col-sm-6';
+      $form["field_text"]["#suffix"] = '</div>';
+
+      $form["field_driver"]["#prefix"] = '<div class="row">';
+      if (isset($form["field_driver"]["und"]["#title"])) $form["field_driver"]["und"]["#title"] = '';
+      if (isset($form["field_driver"]["und"]["form"]["#title"])) {
+        $form["#groups"]["group_driver"]->label = $form["field_driver"]["und"]["form"]["#title"];
+        $form["field_driver"]["und"]["form"]["#title"] = '';
+      }
+
+      $form["field_driver"]["#attributes"]["class"][] = 'col-sm-8';
+      $form["field_file_driver_proxy"]["#attributes"]["class"][] = 'col-sm-4';
       $form["field_file_driver_proxy"]["#suffix"] = '</div>';
+
 
       $form["field_truck_number"]["#prefix"] = '<div class="row">';
       $form["field_truck_number"]["#attributes"]["class"][] = 'col-sm-2';
@@ -357,25 +418,39 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
       $form["field_checkin_time"]["#access"] = false;
       $form["field_onload_time"]["#access"] = false;
       $form["field_gone_time"]["#access"] = false;
-      $form["field_files"]["und"]["#file_upload_title"] = '';
+
 
       if ($form_id == 'eck__entity__form_add_warehouse_work_warehouse_work') {
-        drupal_set_title('Добавление погрузки');
+        if (empty($form_state['date']['complex_cargo'])) {
+          drupal_set_title('Добавление погрузки');
+        } else {
+          drupal_set_title('Добавление сборной погрузки');
+        }
         // указываем компанию клиента
         $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
         $form["field_company"]["und"]["#default_value"] = $user_wr->field_company->getIdentifier();
       }
       if ($form_id == 'eck__entity__form_edit_warehouse_work_warehouse_work') {
-        drupal_set_title('Редактирование погрузки');
+        if ($form["field_combined_cargo"]["und"]["#default_value"]) {
+          drupal_set_title('Добавление сборной погрузки');
+        } else {
+          drupal_set_title('Редактирование погрузки');
+        }
         // погрузочный лист не даём менять
         $form["field_file_wwork_order"]['#disabled'] = true;
+      }
+
+      // изменения в блоке водителя
+      if (isset($form["field_driver"]["und"]["entities"][0]["actions"]["ief_entity_remove"])) {
+        $form["field_driver"]["und"]["entities"][0]["actions"]["ief_entity_remove"]["#value"] = 'Убрать из заявки';
       }
 
       // изменения в форме удаления водителя
       if (isset($form["field_driver"]["und"]["entities"][0]["form"]["#op"]) && $form["field_driver"]["und"]["entities"][0]["form"]["#op"] == 'remove') {
         $form["field_driver"]["und"]["entities"][0]["form"]["message"]["#markup"] = str_replace('<div>', '<div class="form-group">', $form["field_driver"]["und"]["entities"][0]["form"]["message"]["#markup"]);
         $form["field_driver"]["und"]["entities"][0]["form"]["actions"]["ief_remove_cancel"]["#attributes"]["class"][] = 'btn-link';
-        $form["field_driver"]["und"]["entities"][0]["form"]["actions"]["ief_remove_cancel"]["#value"] = 'отменить';
+        $form["field_driver"]["und"]["entities"][0]["form"]["actions"]["ief_remove_cancel"]["#value"] = 'вернуться';
+        $form["field_driver"]["und"]["entities"][0]["form"]["actions"]["ief_remove_confirm"]["#value"] = 'Убрать из заявки';
       }
     }
   }
@@ -396,7 +471,7 @@ function warehouse_inline_entity_form_reference_form_alter(&$entity_form, &$form
 
   $entity_form["actions"]["ief_reference_save"]["#value"] = 'Выбрать водителя';
   $entity_form["actions"]["ief_reference_cancel"]["#attributes"]["class"][] = 'btn-link';
-  $entity_form["actions"]["ief_reference_cancel"]["#value"] = 'отменить';
+  $entity_form["actions"]["ief_reference_cancel"]["#value"] = 'убрать из заявки';
 
 }
 
@@ -464,7 +539,7 @@ function warehouse_inline_entity_form_entity_form_validate($entity_form, &$form_
 }
 
 
-function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_validate($form, &$form_state)
+function warehouse_eck__entity__form_warehouse_work_warehouse_work_validate($form, &$form_state)
 {
   // проверка выбора времени в расписании
   if (empty($form_state["input"]["time"])) {
@@ -484,6 +559,28 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_validate(
 
     $form_state["values"]["field_wwork_time"]["und"][0]["value"] = $form_state["values"]["time"];
     $form_state["values"]["field_wwork_time"]["und"][0]["value2"] = $form_state["values"]["time"];
+  } elseif ($form["#form_id"] == 'eck__entity__form_edit_warehouse_work_warehouse_work') {
+    // менеджер может изменить время
+    // проверить на предмет занятости данного времени (заняли другие, пока заполняли форму)
+    $dbr = db_select('eck_warehouse_work', 'w');
+    $dbr->addField('w', 'id');
+    $dbr->innerJoin('field_data_field_wwork_time', 'ft', 'ft.entity_id = w.id');
+    $dbr->condition('ft.field_wwork_time_value', $form_state["values"]["field_wwork_time"]["und"][0]["value"]);
+    $dbr->condition('w.id', $form_state["warehouse_work"]->id, '<>');
+    $load = $dbr->execute()->fetchCol();
+    if (count($load)) {
+      form_set_error('field_wwork_time', 'Время погрузки уже занято, выберите другое');
+      return false;
+    }
+  }
+
+  // todo проверка заполнения полей, если задан водитель
+  if (isset($form_state['values']['field_driver']['und']['form']) || isset($form_state["values"]["field_driver"]["und"]["entities"])) {
+    if (empty($form_state["values"]["field_file_driver_proxy"]["und"][0]["fid"]))       form_set_error('field_file_driver_proxy', 'Необходимо прикрепить доверенность на водителя');
+    if (empty($form_state["values"]["field_truck_number"]["und"][0]["value"]))          form_set_error('field_truck_number', 'Необходимо заполнить номер машины');
+    if (empty($form_state["values"]["field_truck_brand"]["und"][0]["value"]))           form_set_error('field_truck_brand', 'Необходимо заполнить марку машины');
+    if (empty($form_state["values"]["field_truck_trailer_number"]["und"][0]["value"]))  form_set_error('field_truck_trailer_number', 'Необходимо заполнить номер прицепа');
+    if (empty($form_state["values"]["field_truck_trailer_type"]["und"][0]["value"]))    form_set_error('field_truck_trailer_type', 'Необходимо выбрать тип прицепа');
   }
 }
 
@@ -522,20 +619,30 @@ function warehouse_wwork_export($wwork_wr)
     $time_unix = $wwork_wr->field_wwork_time->value();
 
     $wwork_time = gmdate('d', $time_unix) . '.' . gmdate('m', $time_unix) . '.' . gmdate('Y', $time_unix) . ' ' . gmdate('H', $time_unix) . ':' . gmdate('i', $time_unix);
-    $dopog_unix = $wwork_wr->field_driver->field_dopog_license_validity->value();
+    $dopog_unix = 0;
+    $surname = $name = $name2 = $phone = $license = $dopog_license = '';
+    if ($wwork_wr->field_driver->value()) {
+      $surname = $wwork_wr->field_driver->field_truck_driver_surname->value();
+      $name = $wwork_wr->field_driver->field_truck_driver_name->value();
+      $name2 = $wwork_wr->field_driver->field_truck_driver_name2->value();
+      $phone = str_replace( ' ', '', $wwork_wr->field_driver->field_truck_driver_phone->value());
+      $license = $wwork_wr->field_driver->field_truck_driver_license->value();
+      $dopog_unix = $wwork_wr->field_driver->field_dopog_license_validity->value();
+      $dopog_license = $wwork_wr->field_driver->field_dopog_license->value();
+    }
     $dopog_date = gmdate('d', $dopog_unix) . '.' . gmdate('m', $dopog_unix) . '.' . gmdate('Y', $dopog_unix);
     $wwork_arr = [
       'id' => $wwork_wr->getIdentifier(),
       'time' => $wwork_time,
       'dav_id' => $davalec_id,
       'driver' => [
-        'surname' => $wwork_wr->field_driver->field_truck_driver_surname->value(),
-        'name' => $wwork_wr->field_driver->field_truck_driver_name->value(),
-        'name2' => $wwork_wr->field_driver->field_truck_driver_name2->value(),
-        'phone' => str_replace( ' ', '', $wwork_wr->field_driver->field_truck_driver_phone->value()),
-        'license' => $wwork_wr->field_driver->field_truck_driver_license->value(),
+        'surname' => $surname,
+        'name' => $name,
+        'name2' => $name2,
+        'phone' => $phone,
+        'license' => $license,
         'proxy_url' => $wwork_wr->field_file_driver_proxy->value() ? file_create_url($wwork_wr->field_file_driver_proxy->value()['uri']) : null,
-        'dopog' => $wwork_wr->field_driver->field_dopog_license->value(),
+        'dopog' => $dopog_license,
         'dopog_date' => $dopog_date,
       ],
       'truck' => [
@@ -742,7 +849,7 @@ function warehouse_get_day_schedule($month, $day, $year)
     $item_l->status = 'new';
 
     // статусы только для "своих" погрузок
-    if ($item_l->company_id == $company_id) {
+    if ($item_l->company_id == $company_id || user_has_role(ROLE_MANAGER_WAREHOUSE)) {
       if (!$item_l->checkin_time) {
         // если за час до назначенного времени не зарегистрирован - Предупреждение
         if ($timestamp_gmt + 60 * 60 > $item_l->time) $item_l->status = 'late';
@@ -838,7 +945,7 @@ function warehouse_taxonomy_term_presave($term)
 {
   if ($term->vocabulary_machine_name == 'drivers') {
     // автоматически заполнить поле name
-    $term->name = $term->field_truck_driver_surname["und"][0]["value"] . ' ' . $term->field_truck_driver_name["und"][0]["value"] . ' ' . $term->field_truck_driver_name2["und"][0]["value"];
+    $term->name = $term->field_truck_driver_surname["und"][0]["value"] . ' ' . $term->field_truck_driver_name["und"][0]["value"] . (empty($term->field_truck_driver_name2["und"][0]["value"]) ? '' : ' ' . $term->field_truck_driver_name2["und"][0]["value"]);
     $term->name .= ' (' . $term->field_truck_driver_license["und"][0]["value"] . ')';
   }
 }
@@ -880,4 +987,16 @@ function date_field_prepare_view($entity_type, $entities, $field, $instances, $l
       }
     }
   }
+}
+
+function _warehouse_is_combined_cargo_add_allowed($year, $month, $day)
+{
+  $day_start = gmmktime(0, 0, 0, $month, $day, $year);
+  $day_current = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+  $day_after_current = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
+  $timestamp_gmt = time() + 180*60;
+
+  $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL*60*60);
+
+  return !$is_day_blocked;
 }

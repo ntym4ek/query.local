@@ -62,6 +62,18 @@
         $('[id*=field-truck-trailer-number]').mask('******?****');
       }
 
+      // - виджет ввода даты-времени -----------------------------------------------------------------------------------
+      $("[name^=field_wwork_time]").datetimepicker({
+        lang: 'ru',
+        format: 'd.m.Y - H:i',
+        dayOfWeekStart: 1,
+        allowBlank: false,
+        validateOnBlur: false,
+        step: 15,
+        minTime: "07:00",
+        maxTime: "18:15",
+        defaultSelect: false
+      });
 
     }
   }
