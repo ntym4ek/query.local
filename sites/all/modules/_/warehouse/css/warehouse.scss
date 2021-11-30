@@ -203,11 +203,15 @@
       margin-bottom: 15px;
     }
     .wwork-item {
-      display: flex; flex-wrap:wrap; justify-content: flex-start;
+      display: flex; flex-wrap: wrap;
       border: 1px solid #888888;
       border-top: 8px solid #888888;
       padding: 20px 20px 0;
       width: 100%;
+      > div {
+        flex: 100%;
+        display: flex; flex-wrap:wrap; justify-content: space-between;
+      }
       .field-item {
         flex: 0 0 150px;
         margin-bottom: 15px; padding-right: 15px;
@@ -216,13 +220,19 @@
           margin-bottom: 5px;
         }
       }
-      .field-truck-driver { flex: 0 0 400px; }
+      .field-truck-driver { flex: 1 0 400px; }
       .field-status { flex: 0 0 170px; }
+      .field-note {
+        flex: 1 0 400px;
+      }
+      //.field-combined-cargo {
+      //  flex: 0 0 150px;
+      //}
       .field-actions {
-        flex: 100%;
+        flex: 100%; justify-content: flex-end;
         border-top: 1px solid $gray-lightest;
         padding: 4px 0 4px;
-        text-align: right;
+        //text-align: right;
         min-height: 31px;
         a { margin-left: 10px; }
       }
@@ -367,7 +377,8 @@
       color: $text-muted; font-weight: 400;
       border-bottom: 1px solid #ddd;
       &.views-field-field-wwork-time-1 { width: 100px; }
-      &.views-field-field-truck-number { width: 150px; }
+      &.views-field-field-text { width: 200px; }
+      &.views-field-field-truck-number { width: 110px; }
       &.views-field-field-company { width: 250px; }
       &.views-field-field-checkin-time { width: 110px; }
       &.views-field-field-onload-time { width: 110px; }

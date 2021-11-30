@@ -80,6 +80,19 @@ function mailer_mail($key, &$message, $params)
 
       break;
 
+    case 'client_notify_wwork_fail':
+      $message['subject'] = $params["subject"];
+      $message['body'][] =
+        '<h2>Здравствуйте!</h2>' .
+        '<p>' . $params["text"] . '</p>' .
+        'Дата и время заявки: ' . $params["datetime"] . ' (<a href="/warehouse/queue?month=' . gmdate('n', $params["wwork_time"]) . '&day=' . gmdate('j', $params["wwork_time"]) . '&year=' . gmdate('Y', $params["wwork_time"]) . '&offset=' . $params["offset"]/60 . '" target="_blank">ссылка</a>)<br />' .
+        (!empty($params["truck_number"]) ? '№ автомобиля: ' . $params["truck_number"] .  '<br />' : '') .
+        (!empty($params["driver"]) ? 'Водитель: ' . $params["driver"] .  '<br />' : '') .
+        (!empty($params["note"]) ? 'Пометки: ' . $params["note"] . '<br />' : '') .
+        '<p>Перейти к управлению заявками в <a href="' . $front_url . '">Личный кабинет</a></p>';
+
+      break;
+
 //    case 'client_notify_query_handling':
 //      $message['subject'] = 'Статус заявки на производство изменился';
 //      $message['body'][] =
@@ -137,7 +150,7 @@ function mailer_mail_alter(&$message)
 /**
  * Собрать все изменения за день в одно письмо
  */
-function mailer_batch_mail()
+function mailer_batch_mail_production()
 {
   // извлечь все пришедшие заявки за прошедние сутки
   $efquery = new EntityFieldQuery();

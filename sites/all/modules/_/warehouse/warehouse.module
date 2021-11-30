@@ -6,9 +6,13 @@ define('DAY_STATUS_BUSY_SAME', 'busy-same');
 define('DAY_STATUS_SELECTED', 'selected');
 define('DAY_STATUS_UNAVAILABLE', 'unavailable');
 
-define('HOUR_ADD_AVAILABLE_TILL', 16);
-define('HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL', 10);
-define('DEFAULT_CLIENT_LOADS_LIMIT', 5);
+define('HOUR_ADD_AVAILABLE_TILL', 15);                    // время текущего дня, до которого доступно добавления заявок на следующий день
+define('HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL', 13);     // время текущего дня, до которого доступно добавления СБОРНЫХ заявок на следующий день
+define('MINS_BEFORE_EDIT_AVAILABLE', 60);                 // кол-во минут до погрузки, до которого доступно редактирование (добавление водителя)
+define('MINS_BEFORE_DRIVER_MISSED', 180);                 // кол-во минут до погрузки, за которое уведомлять об отсутствии ДАННЫХ о водителе
+define('MINS_BEFORE_REGISTER_LATE', 15);                  // кол-во минут до погрузки, за которое уведомлять об отсутствии РЕГИСТРАЦИИ водителя
+define('MINS_BEFORE_ONLOAD_LATE', 10);                    // кол-во минут с  погрузки, после которого уведомлять об отсутствии водителя на ПОГРУЗКЕ
+define('DEFAULT_CLIENT_LOADS_LIMIT', 5);                  // количество заявок в день для одной компании по умолчанию
 
 /**
  * Implementation of hook_menu().
@@ -23,6 +27,107 @@ function warehouse_menu()
   );
 
   return $items;
+}
+
+/**
+ * Implements hook_cron()
+ */
+function warehouse_cron()
+{
+  warehouse_check_missed_queues();
+}
+
+/**
+ * проверка просроченных заявок
+ */
+function warehouse_check_missed_queues()
+{
+  $timestamp_gmt = time() + 180*60;
+
+  // список заявок с -35 мин до  +MINS_BEFORE_DRIVER_MISSED
+  $query = new EntityFieldQuery();
+  $result = $query
+    ->entityCondition('entity_type', 'warehouse_work')
+    ->fieldCondition('field_wwork_time', 'value', [$timestamp_gmt-35*60, $timestamp_gmt+MINS_BEFORE_DRIVER_MISSED*60], 'BETWEEN')
+    ->execute();
+
+  if ($result['warehouse_work']) {
+    foreach($result['warehouse_work'] as $wwork) {
+      $wwork_wr = entity_metadata_wrapper('warehouse_work', $wwork->id);
+      $wwork_time = $wwork_wr->field_wwork_time->value();
+      $day_start = gmmktime(0, 0, 0, gmdate('n', $wwork_time), gmdate('j', $wwork_time), gmdate('Y', $wwork_time));
+      $offset = $wwork_time - $day_start;
+      $service = $wwork_wr->field_service->value() ? json_decode($wwork_wr->field_service->value(), true) : [];
+      $service_old = $service;
+      $user_wr = entity_metadata_wrapper('user', $wwork_wr->uid->value());
+      $params = [
+        'subject' => '',
+        'wwork_time' => $wwork_time,
+        'offset' => $offset,
+        'datetime' => gmdate('d-m-Y H:i', $wwork_time),
+        'note' => $wwork_wr->field_text->value(),
+      ];
+
+      // если уведомлять
+      if ($user_wr->field_notify_query->value()) {
+        // обязательно об отсутствии данных о водителе
+        if (!$wwork_wr->field_driver->value()) {
+
+          // письмо об отсутсвии данных о водителе (t-MINS_BEFORE_DRIVER_MISSED)
+          if (empty($service['mail']['order_missed_info']) && $timestamp_gmt > $wwork_time - MINS_BEFORE_DRIVER_MISSED * 60) {
+            // отправка
+            $params['subject'] = 'Уведомление об отсутствии данных о водителе';
+            $params['text'] = 'По одной из заявок отсутствуют данные о водителе.<br>До времени погрузки осталось менее 3х часов. Внесите данные до ' . gmdate('H', $params['wwork_time']-MINS_BEFORE_EDIT_AVAILABLE*60) . '<sup>' . gmdate('i', $params['wwork_time']-MINS_BEFORE_EDIT_AVAILABLE*60) . '</sup> или заявка может быть отменена.';
+            $service['mail']['order_missed_info'] = 1;
+          }
+
+        } else {
+          // если уведомлять сразу
+          if (!$user_wr->field_notify_once_a_day->value()) {
+
+            $params['driver'] = $wwork_wr->field_driver->field_truck_driver_surname->value() . ' ' . $wwork_wr->field_driver->field_truck_driver_name->value() . ($wwork_wr->field_driver->field_truck_driver_name2->value() ? ' ' . $wwork_wr->field_driver->field_truck_driver_name2->value() : '');
+            $params['phone'] = $wwork_wr->field_driver->field_truck_driver_phone->value();
+            $params['truck_number'] = $wwork_wr->field_truck_number->value();
+
+            $checkin_time = $wwork_wr->field_checkin_time->value();
+            $onload_time  = $wwork_wr->field_onload_time->value();
+
+            // письмо об опоздании на регистрацию (t-MINS_BEFORE_REGISTER_LATE)
+            if (!$checkin_time && empty($service['mail']['registration_late']) && $timestamp_gmt > $wwork_time - MINS_BEFORE_REGISTER_LATE*60) {
+              // отправка
+              $params['subject'] = 'Уведомление об опоздании на регистрацию';
+              $params['text'] = 'По одной из заявок водитель не прошёл регистрацию.<br>До времени погрузки осталось менее ' . MINS_BEFORE_REGISTER_LATE . ' минут.';
+              $service['mail']['registration_late'] = 1;
+            }
+            // письмо об опоздании на погрузку (t+MINS_BEFORE_ONLOAD_LATE)
+            elseif (!$onload_time && empty($service['mail']['load_late']) && $timestamp_gmt > $wwork_time + MINS_BEFORE_ONLOAD_LATE*60) {
+              // отправка
+              $params['subject'] = 'Уведомление об опоздании на погрузку';
+              $params['text'] = 'По одной из заявок водитель не подъехал на погрузку в течение ' . MINS_BEFORE_ONLOAD_LATE . ' минут от назначенного времени.';
+              $service['mail']['load_late'] = 1;
+            }
+            // письмо о пропуске погрузки (t+30)
+            elseif (!$onload_time && empty($service['mail']['load_missed']) && $timestamp_gmt >= $wwork_time + 30 * 60) {
+              // отправка
+              $params['subject'] = 'Уведомление о пропуске погрузки';
+              $params['text'] = 'По одной из заявок водитель пропустил погрузку.';
+              $service['mail']['load_missed'] = 1;
+            }
+          }
+        }
+
+        if ($service != $service_old) {
+          if ($params['subject']) {
+            drupal_mail('mailer', 'client_notify_wwork_fail', $user_wr->mail->value(), user_preferred_language($user_wr->value()), $params);
+          }
+          $wwork_wr->field_service = json_encode($service);
+          $wwork_wr->save();
+        }
+      }
+    }
+  }
+
+
 }
 
 /**
@@ -58,9 +163,10 @@ function warehouse_queue_page()
   $year = isset($_GET['year']) ? $_GET['year'] : null;
 
   if ($month == null) {
-    $year = date('Y');
-    $month = date('m');
-    $day = date('j')+1;
+    $day_start = gmmktime(0, 0, 0, date('m'), date('j')+1, date('Y'));
+    $year = date('Y', $day_start);
+    $month = date('m', $day_start);
+    $day = date('j', $day_start);
   }
 
   return warehouse_calendar_template($month, $day, $offset, $year);
@@ -223,43 +329,67 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       }
 
       if ($shedule_current_offset) {
-        $onload = $gone = null;
-        // редактировать и отменять можно, если до погрузки более трёх часов
-        $is_edit_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
-        $is_cancel_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 3*60*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
+        // ссылка на накладную
+        $file = file_load($schedule[$shedule_current_offset]['load']->fid);
+        $uri = $file->uri;
+        $url = file_create_url($uri);
 
+        // редактировать и отменять можно, если до погрузки более трёх часов
+        $is_edit_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 30*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
+        $is_cancel_allowed = ($schedule[$shedule_current_offset]['load']->time - $timestamp_gmt > 30*60) || user_has_role(ROLE_MANAGER_WAREHOUSE);
+
+        $onload = $gone = null;
         $checkin = $schedule[$shedule_current_offset]['load']->checkin_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->checkin_time-180*60) : $status_message;
         if ($schedule[$shedule_current_offset]['load']->checkin_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time) {
           $onload = $schedule[$shedule_current_offset]['load']->onload_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->onload_time-180*60) : $status_message;
         }
-        if ($schedule[$shedule_current_offset]['load']->onload_time && $timestamp_gmt > $schedule[$shedule_current_offset]['load']->time + 30*60) {
+        if ($schedule[$shedule_current_offset]['load']->onload_time) {
           $gone = $schedule[$shedule_current_offset]['load']->gone_time ?  date('d.m.Y H:i', $schedule[$shedule_current_offset]['load']->gone_time-180*60) : $status_message;
         }
         $output .=  '<div class="wwork-item ' . $schedule[$shedule_current_offset]['load']->status . '" data-wwork-id="' . $schedule[$shedule_current_offset]['load']->id . '">' .
-                        '<div class="field-item field-truck-number">' .
-                          '<span class="field-label">№ автомобиля</span>' .
-                          '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_number . '</div>'.
+                        '<div>' .
+                          '<div class="field-item field-wwork-order">' .
+                            '<span class="field-label">Накладная</span>' .
+                            '<div class="field-content"><a href="'. $url .'" target="_blank">открыть</a></div>' .
+                          '</div>' .
+                          '<div class="field-item field-note">' .
+                            '<span class="field-label">Пометки</span>' .
+                            '<div class="field-content">'. ($schedule[$shedule_current_offset]['load']->note ? $schedule[$shedule_current_offset]['load']->note : '-') . '</div>' .
+                          '</div>' .
+                          '<div class="field-item field-combined-cargo">' .
+                            '<span class="field-label">Сборный груз</span>' .
+                            '<div class="field-content">'. ($schedule[$shedule_current_offset]['load']->combined_cargo ? 'да' : 'нет') . '</div>' .
+                          '</div>' .
                         '</div>' .
-                        '<div class="field-item field-truck-driver">' .
-                          '<span class="field-label">Водитель</span>' .
-                          '<div class="field-content">'. $schedule[$shedule_current_offset]['load']->truck_driver . '</div>'.
+                        '<div>' .
+                          '<div class="field-item field-truck-number">' .
+                            '<span class="field-label">№ автомобиля</span>' .
+                            '<div class="field-content">'. ($schedule[$shedule_current_offset]['load']->truck_number ? $schedule[$shedule_current_offset]['load']->truck_number : '-') . '</div>'.
+                          '</div>' .
+                          '<div class="field-item field-truck-driver">' .
+                            '<span class="field-label">Водитель</span>' .
+                            '<div class="field-content">'. ($schedule[$shedule_current_offset]['load']->truck_driver ? $schedule[$shedule_current_offset]['load']->truck_driver : '-') . '</div>'.
+                          '</div>' .
+                          '<div class="field-item field-time">' .
+                          ($checkin ?
+                            '<span class="field-label">Регистрация</span>' .
+                            '<div class="field-content">'. $checkin . '</div>'
+                            : '') .
+                          '</div>' .
+                          '<div class="field-item field-time">' .
+                          ($onload ?
+                            '<span class="field-label">Въезд</span>' .
+                            '<div class="field-content">'. $onload . '</div>'
+                          : '') .
+                          '</div>' .
+                          '<div class="field-item field-time">' .
+                          ($gone ?
+                            '<span class="field-label">Выезд</span>' .
+                            '<div class="field-content">'. $gone . '</div>'
+                            : '') .
+                          '</div>' .
                         '</div>' .
-                        ($checkin ?
-                        '<div class="field-item field-time">' .
-                          '<span class="field-label">Регистрация</span>' .
-                          '<div class="field-content">'. $checkin . '</div>'.
-                        '</div>' : '') .
-                        ($onload ?
-                        '<div class="field-item field-time">' .
-                          '<span class="field-label">Въезд</span>' .
-                          '<div class="field-content">'. $onload . '</div>'.
-                        '</div>' : '') .
-                        ($gone ?
-                        '<div class="field-item field-time">' .
-                          '<span class="field-label">Выезд</span>' .
-                          '<div class="field-content">'. $gone . '</div>'.
-                        '</div>' : '') .
-                        '<div class="field-actions">' .
+                         '<div class="field-actions">' .
                           ($is_cancel_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/delete' . '?month=' . $month . '&day=' . $day . '&year=' . $year . '&offset=' . $offset . '" class="btn btn-danger btn-xs">Удалить</a>' : '') .
                           ($is_edit_allowed ? '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/' . $schedule[$shedule_current_offset]['load']->id . '/edit" class="btn btn-primary btn-xs">Редактировать</a>' : '') .
                         '</div>' .
@@ -268,17 +398,17 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       } elseif ($offset) {
         $output .= '<div class="add-actions">';
         $output .= $is_add_allowed ?
-          '<p>Груз может состоять из цельных паллет и его подготовка и погрузка будут занимать минимальное время. Но если на погрузку запланированы несколько различных наименований и/или номера партий требуют распаллечивания, ' .
-          'то на подготовку складу требуется больше времени и такую заявку нужно добавлять заблаговременно.<br>' .
+          '<p>Подготовка сборного груза требует перепаллетирования и поэтому занимает больше времени. При планировании на следующий день, заявка на погрузку, состоящая только из целых паллет ' .
+          'подаётся до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего, а заявка, требующая подготовки и перепаллетирования, до ' . HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL . '<sup>00</sup>.'.
           '</p>' .
           '<div>' .
             '<div>' .
               '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '" class="btn btn-primary add-wwork">Добавить погрузку</a>' .
-              '<p>если ваш груз не требует предварительной подготовки<br>добавление на следующий день доступно до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего</p>' .
+              '<p>Добавление на следующий день доступно до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего.</p>' .
             '</div>' .
             '<div>' .
               '<a href="/admin/structure/entity-type/warehouse_work/warehouse_work/add?month=' . $month . '&day=' . $day . '&offset=' . $offset . '&year=' . $year . '&complex_cargo=1" class="btn btn-primary add-wwork"' . ($is_combined_cargo_add_allowed ? '' : ' disabled="disabled"') . '>Добавить сборную погрузку</a>' .
-              '<p>если требуется предварительной подготовка<br>добавление на следующий день доступно до ' . HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего</p>' .
+              '<p>Добавление на следующий день доступно до ' . HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего.</p>' .
             '</div>' .
 
           '</div>'
@@ -379,7 +509,7 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
         $form["field_combined_cargo"]["und"]["#default_value"] = $form_state['complex_cargo'];
       }
       if (!$form["field_combined_cargo"]["und"]["#default_value"] && !user_has_role(ROLE_MANAGER_WAREHOUSE)) {
-          $form["field_file_wwork_order"]["und"][0]["#description"] = '<span class="text-danger">ВНИМАНИЕ!</span> Вы оформляете погрузку не предусматривающую предварительную сборку и подготовку груза. Прикрепление несоответствующей накладной может привести к отмене или переносу времени погрузки';
+          $form["field_file_wwork_order"]["und"][0]["#description"] = '<span class="text-danger">ВНИМАНИЕ!</span> Вы оформляете погрузку не предусматривающую переупаковку груза. Прикрепление несоответствующей накладной может привести к отмене или переносу времени погрузки';
       }
 
 
@@ -414,6 +544,8 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
       $form["field_truck_trailer_type"]["#attributes"]["class"][] = 'col-sm-3';
       $form["field_truck_trailer_type"]["#suffix"] = '</div>';
 
+      // скрыть служебные поле
+      $form['field_service']["#access"] = false;
       $form["field_company"]["#access"] = false;
       $form["field_checkin_time"]["#access"] = false;
       $form["field_onload_time"]["#access"] = false;
@@ -574,7 +706,7 @@ function warehouse_eck__entity__form_warehouse_work_warehouse_work_validate($for
     }
   }
 
-  // todo проверка заполнения полей, если задан водитель
+  // проверка заполнения полей, если задан водитель
   if (isset($form_state['values']['field_driver']['und']['form']) || isset($form_state["values"]["field_driver"]["und"]["entities"])) {
     if (empty($form_state["values"]["field_file_driver_proxy"]["und"][0]["fid"]))       form_set_error('field_file_driver_proxy', 'Необходимо прикрепить доверенность на водителя');
     if (empty($form_state["values"]["field_truck_number"]["und"][0]["value"]))          form_set_error('field_truck_number', 'Необходимо заполнить номер машины');
@@ -822,11 +954,20 @@ function warehouse_get_day_schedule($month, $day, $year)
     // найти погрузки в этот день
   $dbr = db_select('eck_warehouse_work', 'w');
   $dbr->fields('w', ['id', 'uid']);
-  $dbr->addField('ft', 'field_wwork_time_value', 'time');
-  $dbr->innerJoin('field_data_field_wwork_time', 'ft', 'ft.entity_id = w.id');
-  $dbr->condition('ft.field_wwork_time_value', [$day_start, $day_finish], 'between');
+  $dbr->addField('fwt', 'field_wwork_time_value', 'time');
+  $dbr->innerJoin('field_data_field_wwork_time', 'fwt', 'fwt.entity_id = w.id');
+  $dbr->condition('fwt.field_wwork_time_value', [$day_start, $day_finish], 'between');
   $dbr->leftJoin('field_data_field_truck_number', 'ftn', 'ftn.entity_id = w.id');
   $dbr->addField('ftn', 'field_truck_number_value', 'truck_number');
+
+  $dbr->leftJoin('field_data_field_text', 'ft', 'ft.entity_id = w.id');
+  $dbr->addField('ft', 'field_text_value', 'note');
+
+  $dbr->leftJoin('field_data_field_file_wwork_order', 'fwo', 'fwo.entity_id = w.id');
+  $dbr->addField('fwo', 'field_file_wwork_order_fid', 'fid');
+
+  $dbr->leftJoin('field_data_field_combined_cargo', 'fcc', 'fcc.entity_id = w.id');
+  $dbr->addField('fcc', 'field_combined_cargo_value', 'combined_cargo');
 
   $dbr->leftJoin('field_data_field_company', 'fc', 'fc.entity_id = w.id');
   $dbr->addField('fc', 'field_company_target_id', 'company_id');
@@ -851,18 +992,20 @@ function warehouse_get_day_schedule($month, $day, $year)
     // статусы только для "своих" погрузок
     if ($item_l->company_id == $company_id || user_has_role(ROLE_MANAGER_WAREHOUSE)) {
       if (!$item_l->checkin_time) {
-        // если за час до назначенного времени не зарегистрирован - Предупреждение
-        if ($timestamp_gmt + 60 * 60 > $item_l->time) $item_l->status = 'late';
+        // если за MINS_BEFORE_REGISTER_LATE до назначенного времени не зарегистрирован - Предупреждение
+        if ($timestamp_gmt + MINS_BEFORE_REGISTER_LATE * 60 > $item_l->time) {
+          $item_l->status = 'late';
+        }
         // если назначенное время прошло - Пропустил
-        if ($timestamp_gmt > $item_l->time) $item_l->status = 'missed';
+//        if ($timestamp_gmt > $item_l->time) $item_l->status = 'missed';
       } else {
         $item_l->status = 'checkin';
 
         if (!$item_l->onload_time) {
-          // если в течение 10 минут не заехал - Предупреждение
-          if ($timestamp_gmt > $item_l->time + 10 * 60) $item_l->status = 'late';
+          // если в течение MINS_BEFORE_ONLOAD_LATE минут не заехал - Предупреждение
+          if ($timestamp_gmt > $item_l->time + MINS_BEFORE_ONLOAD_LATE * 60) $item_l->status = 'late';
           // если в течение 30 минут не заехал - Пропустил
-          if ($timestamp_gmt > $item_l->time + 20 * 60) $item_l->status = 'missed';
+          if ($timestamp_gmt > $item_l->time + 30 * 60) $item_l->status = 'missed';
         } else $item_l->status = 'onload';
 
         if ($item_l->gone_time) $item_l->status = 'gone';
