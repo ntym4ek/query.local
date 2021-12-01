@@ -51,7 +51,7 @@ function warehouse_check_missed_queues()
     ->fieldCondition('field_wwork_time', 'value', [$timestamp_gmt-35*60, $timestamp_gmt+MINS_BEFORE_DRIVER_MISSED*60], 'BETWEEN')
     ->execute();
 
-  if ($result['warehouse_work']) {
+  if (!empty($result['warehouse_work'])) {
     foreach($result['warehouse_work'] as $wwork) {
       $wwork_wr = entity_metadata_wrapper('warehouse_work', $wwork->id);
       $wwork_time = $wwork_wr->field_wwork_time->value();
@@ -732,70 +732,77 @@ function warehouse_eck__entity__form_add_warehouse_work_warehouse_work_submit($f
   ];
 }
 
-function warehouse_wwork_export($wwork_wr)
+function warehouse_wwork_export($wwork_wr, $delete = null)
 {
-  // подготовка массива для выгрузки
-  $file_urls = [];
-  foreach ($wwork_wr->field_files->getIterator() as $file_wr) {
-    $file_urls[] = file_create_url($file_wr->value()['uri']);
-  }
-
-  $davalec_id = 0;
-  $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
-  if ($user_wr->field_company->value()) {
-    $davalec_id = $user_wr->field_company->field_oc_davalec_id->value();
-  }
-
-  if ($davalec_id) {
-    $created_unix = $wwork_wr->created->value();
-    $time_unix = $wwork_wr->field_wwork_time->value();
-
-    $wwork_time = gmdate('d', $time_unix) . '.' . gmdate('m', $time_unix) . '.' . gmdate('Y', $time_unix) . ' ' . gmdate('H', $time_unix) . ':' . gmdate('i', $time_unix);
-    $dopog_unix = 0;
-    $surname = $name = $name2 = $phone = $license = $dopog_license = '';
-    if ($wwork_wr->field_driver->value()) {
-      $surname = $wwork_wr->field_driver->field_truck_driver_surname->value();
-      $name = $wwork_wr->field_driver->field_truck_driver_name->value();
-      $name2 = $wwork_wr->field_driver->field_truck_driver_name2->value();
-      $phone = str_replace( ' ', '', $wwork_wr->field_driver->field_truck_driver_phone->value());
-      $license = $wwork_wr->field_driver->field_truck_driver_license->value();
-      $dopog_unix = $wwork_wr->field_driver->field_dopog_license_validity->value();
-      $dopog_license = $wwork_wr->field_driver->field_dopog_license->value();
-    }
-    $dopog_date = gmdate('d', $dopog_unix) . '.' . gmdate('m', $dopog_unix) . '.' . gmdate('Y', $dopog_unix);
+  if ($delete && is_numeric($delete)) {
     $wwork_arr = [
-      'id' => $wwork_wr->getIdentifier(),
-      'time' => $wwork_time,
-      'dav_id' => $davalec_id,
-      'driver' => [
-        'surname' => $surname,
-        'name' => $name,
-        'name2' => $name2,
-        'phone' => $phone,
-        'license' => $license,
-        'proxy_url' => $wwork_wr->field_file_driver_proxy->value() ? file_create_url($wwork_wr->field_file_driver_proxy->value()['uri']) : null,
-        'dopog' => $dopog_license,
-        'dopog_date' => $dopog_date,
-      ],
-      'truck' => [
-        'number' => $wwork_wr->field_truck_number->value(),
-        'region' => $wwork_wr->field_truck_region->value(),
-        'brand' => $wwork_wr->field_truck_brand->value(),
-        'trailer_type' => $wwork_wr->field_truck_trailer_type->value(),
-        'trailer_number' => $wwork_wr->field_truck_trailer_number->value(),
-      ],
-      'combined_cargo' =>  (int)$wwork_wr->field_combined_cargo->value(),
-      'wwork_order_url' => $wwork_wr->field_file_wwork_order->value() ? file_create_url($wwork_wr->field_file_wwork_order->value()['uri']) : null,
-      'file_urls' => $file_urls,
+      'id' => $delete,
+      'delete' => 1,
     ];
+  } else {
+    // подготовка массива для выгрузки
+    $file_urls = [];
+    foreach ($wwork_wr->field_files->getIterator() as $file_wr) {
+      $file_urls[] = file_create_url($file_wr->value()['uri']);
+    }
 
-    $wwork_json = json_encode($wwork_arr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-    $filename = 'wwork_export_' . $wwork_arr['id'] . '.json';
-    $directory = 'private://exchange/';
-    file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
-    file_unmanaged_save_data($wwork_json, $directory . $filename, $replace = FILE_EXISTS_RENAME);
-    watchdog('export', 'Заявка на Погрузку экспортирована.', [], WATCHDOG_INFO);
+    $davalec_id = 0;
+    $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
+    if ($user_wr->field_company->value()) {
+      $davalec_id = $user_wr->field_company->field_oc_davalec_id->value();
+    }
+
+    if ($davalec_id) {
+      $created_unix = $wwork_wr->created->value();
+      $time_unix = $wwork_wr->field_wwork_time->value();
+
+      $wwork_time = gmdate('d', $time_unix) . '.' . gmdate('m', $time_unix) . '.' . gmdate('Y', $time_unix) . ' ' . gmdate('H', $time_unix) . ':' . gmdate('i', $time_unix);
+      $dopog_unix = 0;
+      $surname = $name = $name2 = $phone = $license = $dopog_license = '';
+      if ($wwork_wr->field_driver->value()) {
+        $surname = $wwork_wr->field_driver->field_truck_driver_surname->value();
+        $name = $wwork_wr->field_driver->field_truck_driver_name->value();
+        $name2 = $wwork_wr->field_driver->field_truck_driver_name2->value();
+        $phone = str_replace(' ', '', $wwork_wr->field_driver->field_truck_driver_phone->value());
+        $license = $wwork_wr->field_driver->field_truck_driver_license->value();
+        $dopog_unix = $wwork_wr->field_driver->field_dopog_license_validity->value();
+        $dopog_license = $wwork_wr->field_driver->field_dopog_license->value();
+      }
+      $dopog_date = $dopog_unix ? gmdate('d', $dopog_unix) . '.' . gmdate('m', $dopog_unix) . '.' . gmdate('Y', $dopog_unix) : '';
+      $wwork_arr = [
+        'id' => $wwork_wr->getIdentifier(),
+        'time' => $wwork_time,
+        'dav_id' => $davalec_id,
+        'driver' => [
+          'surname' => $surname,
+          'name' => $name,
+          'name2' => $name2,
+          'phone' => $phone,
+          'license' => $license,
+          'proxy_url' => $wwork_wr->field_file_driver_proxy->value() ? file_create_url($wwork_wr->field_file_driver_proxy->value()['uri']) : null,
+          'dopog' => $dopog_license,
+          'dopog_date' => $dopog_date,
+        ],
+        'truck' => [
+          'number' => $wwork_wr->field_truck_number->value(),
+          'region' => $wwork_wr->field_truck_region->value(),
+          'brand' => $wwork_wr->field_truck_brand->value(),
+          'trailer_type' => $wwork_wr->field_truck_trailer_type->value(),
+          'trailer_number' => $wwork_wr->field_truck_trailer_number->value(),
+        ],
+        'combined_cargo' => (int)$wwork_wr->field_combined_cargo->value(),
+        'wwork_order_url' => $wwork_wr->field_file_wwork_order->value() ? file_create_url($wwork_wr->field_file_wwork_order->value()['uri']) : null,
+        'file_urls' => $file_urls,
+      ];
+    }
   }
+  $wwork_json = json_encode($wwork_arr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+  $filename = 'wwork_export_' . $wwork_arr['id'] . '.json';
+  $directory = 'private://exchange/';
+  file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+  file_unmanaged_save_data($wwork_json, $directory . $filename, $replace = FILE_EXISTS_RENAME);
+  watchdog('export', 'Заявка на Погрузку экспортирована.', [], WATCHDOG_INFO);
+
 }
 
 
@@ -1142,4 +1149,15 @@ function _warehouse_is_combined_cargo_add_allowed($year, $month, $day)
   $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL*60*60);
 
   return !$is_day_blocked;
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function warehouse_entity_delete($entity, $type)
+{
+  // при удалении заявки отправить пакет в 1с
+  if (isset($entity->type) && $entity->type == 'warehouse_work') {
+    warehouse_wwork_export(null, $entity->id);
+  }
 }
