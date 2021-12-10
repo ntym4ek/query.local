@@ -61,6 +61,11 @@ function ext_user_login_name_validate($form, &$form_state)
 function ext_user_form_user_profile_form_alter(&$form, &$form_state)
 {
   if (!user_has_role(ROLE_ADMIN)) {
+    $form["account"]["pass"]["#title"] = t('Password');
+    $form["account"]["pass"]["#type"] = 'password';
+
+
+    $form["field_wwork_limit"]["#access"] = false;
     $form["field_company"]["#access"] = false;
     $form["field_oc_davalec_id"]["#access"] = false;
     $form["locale"]["#access"] = false;

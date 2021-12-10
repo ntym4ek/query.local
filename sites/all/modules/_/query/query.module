@@ -98,7 +98,7 @@ function query_menu_alter(&$items)
   $items['node/%node/delete']['context'] = MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE;
 
   // убрать восстановление пароля со страницы входа
-  $items['user/password']['access callback'] = false;
+//  $items['user/password']['access callback'] = false;
 }
 
 /**

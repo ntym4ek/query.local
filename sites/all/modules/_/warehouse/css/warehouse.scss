@@ -63,9 +63,18 @@
         color: #ccc; font-size: $font-size-small; text-align: center;
         min-height: 20px;
       }
-      &.color-wend .day-content { background: #fff0ee; }
-      &.color-free .day-content { background: #f0ffee; }
-      &.color-lack .day-content { background: #fff6d8; }
+      &.color-wend {
+        //.day-content { background: #fff0ee; }
+        .day-content { background: #fdc3bc; }
+      }
+      &.color-free {
+        //.day-content { background: #f0ffee; }
+        .day-content { background: #bfffb6; }
+      }
+      &.color-lack {
+        //.day-content { background: #fff6d8; }
+        .day-content { background: #ffedb1; }
+      }
       &.active {
         .day-content {
           background: $brand-primary;
