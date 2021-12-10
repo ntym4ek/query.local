@@ -225,6 +225,7 @@
       border-top: 8px solid #888888;
       padding: 20px 20px 0;
       width: 100%;
+      position: relative;
       > div {
         flex: 100%;
         display: flex; flex-wrap:wrap; justify-content: space-between;
@@ -238,28 +239,35 @@
         }
       }
       .field-truck-driver { flex: 1 0 400px; }
-      .field-status { flex: 0 0 170px; }
+      .field-combined-cargo { flex: 0 0 150px; }
+      .field-status {
+        border: 1px solid #888888; border-right: none; border-top: none;
+        position: absolute; top: 0; right: 0;
+        padding: 20px 20px 10px 20px;
+        width: 175px;
+      }
       .field-note {
         flex: 1 0 400px;
       }
-      //.field-combined-cargo {
-      //  flex: 0 0 150px;
-      //}
       .field-actions {
         flex: 100%; justify-content: flex-end;
         border-top: 1px solid $gray-lightest;
         padding: 4px 0 4px;
-        //text-align: right;
         min-height: 31px;
         a { margin-left: 10px; }
       }
-      &.late {
+      &.late,
+      &.late .field-status {
         border-color: $brand-warning;
       }
-      &.missed { border-color: $brand-danger; }
-      &.checkin { border-color: $brand-success; }
-      &.onload { border-color: $brand-success; }
-      &.gone { border-color: $brand-success; }
+      &.missed,
+      &.missed .field-status { border-color: $brand-danger; }
+      &.checkin,
+      &.checkin .field-status { border-color: $brand-success; }
+      &.onload,
+      &.onload.field-status { border-color: $brand-success; }
+      &.gone,
+      &.gone .field-status { border-color: $brand-success; }
     }
 
     .add-actions {
@@ -310,13 +318,14 @@
     }
   }
 
-  .container-inline-date .form-item {
-    margin: 0;
-    input {
-      margin: 0;
-      width: 100%;
-    }
-  }
+  //.container-inline-date .form-item {
+  //  margin: 0;
+  //  .form-type-select { margin-right: 5px; }
+  //  input {
+  //    margin: 0;
+  //    width: 100%;
+  //  }
+  //}
 
   [class*=form-item-field-files] {
     width: 50%;
@@ -400,6 +409,7 @@
       &.views-field-field-checkin-time { width: 110px; }
       &.views-field-field-onload-time { width: 110px; }
       &.views-field-field-gone-time { width: 110px; }
+      &.views-field-status { width: 140px; }
     }
   }
 }

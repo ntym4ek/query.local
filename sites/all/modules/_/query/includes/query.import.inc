@@ -613,6 +613,11 @@ function wwork_import($array)
         $wwork_wr->field_processing = $array['processing'];
         $is_ok = true;
       }
+      // или отмена
+      if (!empty($array['cancel_reason'])) {
+        $wwork_wr->field_cancel_reason = $array['cancel_reason'];
+        $is_ok = true;
+      }
 
       if ($is_ok) {
         $wwork_wr->save();

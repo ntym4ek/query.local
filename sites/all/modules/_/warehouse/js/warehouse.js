@@ -40,7 +40,9 @@
       }
 
       // - маски ввода на полях ----------------------------------------------------------------------------------------
-      setMasks();
+      if (typeof $.fn.mask === 'function') {
+        setMasks();
+      }
       $('#edit-foreign').click(function() {
         if ($(this).prop('checked'))  unsetMasks();
         else                          setMasks();
@@ -77,6 +79,15 @@
         });
       }
 
+      // - exposed form Пометки ----------------------------------------------------------------------------------------
+      // устанавливать фокус после автосабмита
+      if ($(".views-exposed-form [class*=field_text_value]").is("div")) {
+        var input = $(".views-exposed-form [name=field_text_value]");
+        input.focus();
+        var tmp = input.val();
+        input.val('');
+        input.val(tmp);
+      }
     }
   }
 })(jQuery);

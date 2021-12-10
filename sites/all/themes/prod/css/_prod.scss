@@ -24,24 +24,22 @@ a:focus {
   padding: 0;
   display: flex;
   justify-content: flex-start;
-  .container-inline-date {
-    //flex: 0 0 auto;
-    width: initial;
-    .end-date-wrapper {
-      label {
-        font-weight: 400;
-        vertical-align: top;
-        line-height: 2.5;
-      }
-      .date-padding {
-        float: none;
-        display: inline-block;
-      }
+}
+.container-inline-date {
+  //flex: 0 0 auto;
+  width: initial;
+  .end-date-wrapper {
+    label {
+      font-weight: 400;
+      vertical-align: top;
+      line-height: 2.5;
     }
-    .form-item-field-month-und-0-value-month {
-      padding-right: 5px;
+    .date-padding {
+      float: none;
+      display: inline-block;
     }
   }
+  .form-type-select { margin-right: 5px; }
 }
 
 form {
