@@ -69,7 +69,7 @@
       }
       &.color-free {
         //.day-content { background: #f0ffee; }
-        .day-content { background: #bfffb6; }
+        .day-content { background: #c3e5c3; }
       }
       &.color-lack {
         //.day-content { background: #fff6d8; }
@@ -132,7 +132,6 @@
         }
         &.free.active.late, &.busy-same.active.late,
         &.late {
-          //border-color: $brand-warning;
           &:after {
             position: absolute; left: 10px; top: 10px;
             display: inline-block;
@@ -144,7 +143,6 @@
         }
         &.free.active.missed, &.busy-same.active.missed,
         &.missed {
-          //border-color: $brand-danger;
           &:after {
             position: absolute; left: 10px; top: 10px;
             display: inline-block;
@@ -156,13 +154,23 @@
         }
         &.free.active.gone, &.busy-same.active.gone,
         &.gone {
-          //border-color: $brand-warning;
           &:after {
             position: absolute; left: 10px; top: 10px;
             display: inline-block;
             color: #009100;
             font-family: "Glyphicons Halflings"; font-size: 13px; font-style: normal; font-weight: 400; line-height: 1;
             content: "\e013";
+            -webkit-font-smoothing: antialiased;
+          }
+        }
+        &.free.active.lack, &.busy-same.active.lack,
+        &.lack {
+          &:after {
+            position: absolute; left: 10px; top: 10px;
+            display: inline-block;
+            color: #999;
+            font-family: "Glyphicons Halflings"; font-size: 13px; font-style: normal; font-weight: 400; line-height: 1;
+            content: "\e086";
             -webkit-font-smoothing: antialiased;
           }
         }

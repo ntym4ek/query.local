@@ -229,9 +229,13 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       }
     }
     $classes = $time['status'] . ($time['offset'] == $offset ? ' active' : '');
-    if (isset($time['load']->status)) $classes .= ' ' . $time['load']->status;
+    $title = '';
+    if (isset($time['load']->status)) {
+      $classes .= ' ' . $time['load']->status;
+      $title = warehouse_get_text_for_status($time['load']->status);
+    }
     $time_list .= '<div class="time ' . (isset($time['duration']) && $time['duration'] == 15 ? 'quarter' : 'half') . '" data-start-offset="' . $time['offset'] . '">' .
-                (in_array($time['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $time['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="time-content ' . $classes . '">' . $time['text'] . '</div> ' : '<a href="/' . $current_path . '?year=' . $year . '&month=' . $month . '&day=' . $day . '&offset=' . $time['offset'] . '" class="time-content ' . $classes . '">' . $time['text'] . '</a>') .
+                (in_array($time['status'], [DAY_STATUS_UNAVAILABLE, DAY_STATUS_BUSY]) || ($is_form && $time['status'] == DAY_STATUS_BUSY_SAME) ? '<div class="time-content ' . $classes . '">' . $time['text'] . '</div> ' : '<a href="/' . $current_path . '?year=' . $year . '&month=' . $month . '&day=' . $day . '&offset=' . $time['offset'] . '" class="time-content ' . $classes . '" title="' . $title . '">' . $time['text'] . '</a>') .
               '</div>';
     if (in_array($key, [705, 945, 1080])) {
       $time_list .= '</div>';
@@ -993,6 +997,9 @@ function warehouse_get_day_schedule($month, $day, $year)
   $dbr->leftJoin('field_data_field_gone_time', 'fgt', 'fgt.entity_id = w.id');
   $dbr->addField('fgt', 'field_gone_time_value', 'gone_time');
 
+//  $dbr->leftJoin('field_data_field_processing', 'fp', 'fp.entity_id = w.id');
+//  $dbr->addField('fp', 'field_processing_value', 'processing');
+
   $dbr->leftJoin('field_data_field_driver', 'fd', 'fd.entity_id = w.id');
   $dbr->leftJoin('taxonomy_term_data', 't', 't.tid = fd.field_driver_target_id');
   $dbr->addField('t', 'name', 'truck_driver');
@@ -1005,13 +1012,18 @@ function warehouse_get_day_schedule($month, $day, $year)
 
     // статусы только для "своих" погрузок
     if ($item_l->company_id == $company_id || user_has_role(ROLE_MANAGER_WAREHOUSE)) {
+      // если отсутсвует информация
+      if (!$item_l->truck_driver) {
+        $item_l->status = 'lack';
+      }
+
       if (!$item_l->checkin_time) {
         // если за MINS_BEFORE_REGISTER_LATE до назначенного времени не зарегистрирован - Предупреждение
         if ($timestamp_gmt + MINS_BEFORE_REGISTER_LATE * 60 > $item_l->time) {
           $item_l->status = 'late';
         }
-        // если назначенное время прошло - Пропустил
-//        if ($timestamp_gmt > $item_l->time) $item_l->status = 'missed';
+        // если назначенное время+30мин прошло - Пропустил
+        if ($timestamp_gmt > $item_l->time + 30*60) $item_l->status = 'missed';
       } else {
         $item_l->status = 'checkin';
 
@@ -1122,10 +1134,10 @@ function warehouse_get_text_for_status($status)
 {
   $text = '';
   switch ($status) {
-    case 'late':
-      $text = 'Опаздывает';
-      break;
-    case 'missed': $text = 'Пропустил';
+    case 'late':    $text = 'Опаздывает'; break;
+    case 'lack':    $text = 'Не хватает данных'; break;
+    case 'gone':    $text = 'Уехал'; break;
+    case 'missed':  $text = 'Пропустил';  break;
   }
 
   return $text;
