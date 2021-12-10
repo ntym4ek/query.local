@@ -4,6 +4,7 @@ define('ROLE_ADMIN', 3);
 define('ROLE_MANAGER_PRODUCTION', 4);
 define('ROLE_MANAGER_WAREHOUSE', 7);
 
+
 /**
  * hook_module_implements_alter
  * change hook execution order, commerce_helper - last

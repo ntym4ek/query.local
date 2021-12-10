@@ -592,6 +592,7 @@ function wwork_import($array)
     $wwork_wr = entity_metadata_wrapper('warehouse_work', $array['id']);
 
     if ($wwork_wr->value()) {
+      // статус
       foreach(['checkin', 'onload', 'gone'] as $status) {
         $status_key = $status . '_time';
         if (!empty($array[$status_key])) {
@@ -607,6 +608,12 @@ function wwork_import($array)
           $is_ok = true;
         }
       }
+      // или обработка
+      if (!empty($array['processing'])) {
+        $wwork_wr->field_processing = $array['processing'];
+        $is_ok = true;
+      }
+
       if ($is_ok) {
         $wwork_wr->save();
       }

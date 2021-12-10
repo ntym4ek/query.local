@@ -550,6 +550,7 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
       $form["field_checkin_time"]["#access"] = false;
       $form["field_onload_time"]["#access"] = false;
       $form["field_gone_time"]["#access"] = false;
+      $form["field_processing"]["#access"] = false;
 
 
       if ($form_id == 'eck__entity__form_add_warehouse_work_warehouse_work') {
@@ -568,8 +569,14 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
         } else {
           drupal_set_title('Редактирование погрузки');
         }
-        // погрузочный лист не даём менять
-        $form["field_file_wwork_order"]['#disabled'] = true;
+        // погрузочный лист не даём менять,
+        // если заблокировано или осталось менее 3х часов
+        $timestamp_gmt = time() + 180*60;
+        if (!empty($form["entity"]["#value"]->field_processing["und"][0]["value"]
+          || $timestamp_gmt > $wwork_time_unix - 3*60*60)) {
+          $form["field_file_wwork_order"]['#disabled'] = true;
+          $form["field_file_wwork_order"]["und"][0]["#description"] = '<span class="text-danger">ВНИМАНИЕ!</span> Заявка уже обрабатывается и накладная может быть изменена только по согласованию со складом.';
+        }
       }
 
       // изменения в блоке водителя
