@@ -108,6 +108,8 @@ function ext_user_get_managers_by_company_uid($company_uid)
     $query ->fields('u', ['uid']);
     $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
     $query ->condition('fc.field_company_target_id', $company_uid);
+    $query ->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
+    $query ->condition('ur.rid', ROLE_MANAGER_PRODUCTION);
     $uids = $query->execute()->fetchCol();
     if ($uids) {
       $users = user_load_multiple($uids);

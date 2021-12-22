@@ -687,7 +687,7 @@ function query_form_eck__entity__form_query_query_submit(&$form, &$form_state)
 function query_form_redirect_submit(&$form, &$form_state)
 {
   if (!user_has_role(ROLE_ADMIN)) {
-    $form_state['redirect'] = user_has_role(ROLE_MANAGER_PRODUCTION) ? 'manage' : 'queries';
+    $form_state['redirect'] = user_has_role(ROLE_MANAGER_PRODUCTION) ? 'manage' : 'production/queries';
   }
 }
 
