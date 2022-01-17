@@ -63,7 +63,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
           if (!empty($load[$day_start]) && (!empty($load[$day_start]['is_busy_same_company']) || user_has_role(ROLE_MANAGER_PRODUCTION)|| user_has_role(ROLE_ADMIN))) {
             $name = $load[$day_start]['nomenklatura']['name'];
             $name_arr = [];
-            if (!empty($load[$day_start]["nomenklatura"]["artikul_d"]) || !empty($load[$day_start]["nomenklatura"]["name_d"])) {
+            if (!empty($load[$day_start]["nomenklatura"]["name_d"])) {
               $name_arr[] = $load[$day_start]["nomenklatura"]["artikul_d"];
               $name_arr[] = $load[$day_start]["nomenklatura"]["name_d"];
             }

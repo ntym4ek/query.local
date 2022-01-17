@@ -1963,7 +1963,7 @@ function query_process_incoming_files()
 
   // -- Справочник Давальцев
   // получить список файлов по шаблону
-  $mask = '/dav.*\.json/';
+  $mask = '/^dav.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -1982,7 +1982,7 @@ function query_process_incoming_files()
 
   // -- Справочник Установок
   // получить список файлов по шаблону
-  $mask = '/ust.*\.json/';
+  $mask = '/^ust.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2020,7 +2020,7 @@ function query_process_incoming_files()
 
   // -- Справочник Причин
   // получить список файлов по шаблону
-  $mask = '/cause.*\.json/';
+  $mask = '/^cause.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2039,7 +2039,7 @@ function query_process_incoming_files()
 
   // -- Справочник Номенклатуры
   // получить список файлов по шаблону
-  $mask = '/nom.*\.json/';
+  $mask = '/^nom.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2059,7 +2059,7 @@ function query_process_incoming_files()
   // -- Заявки на Производство
   // -- здесь грузим для предварительного плана, только с type: 'pred'
   // получить список файлов по шаблону
-  $mask = '/query_import_.*.json/';
+  $mask = '/^query_import_.*.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2080,7 +2080,7 @@ function query_process_incoming_files()
 
   // -- План
   // получить список файлов по шаблону
-  $mask = '/plan.*\.json/';
+  $mask = '/^plan.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2100,7 +2100,7 @@ function query_process_incoming_files()
   // -- Заявки
   // -- здесь грузим для утверждённого плана, только с type: 'main'
   // получить список файлов по шаблону
-  $mask = '/query_import_.*.json/';
+  $mask = '/^query_import_.*.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
@@ -2121,7 +2121,7 @@ function query_process_incoming_files()
 
   // -- Заявки на Погрузку
   // получить список файлов по шаблону
-  $mask = '/wwork_import.*\.json/';
+  $mask = '/^wwork_import.*\.json/';
   $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
 
   // импортировать
