@@ -353,24 +353,6 @@ function query_nomenklatura_import($array)
     $got = [];
     foreach($array['load'] as $key => $nom) {
         if ($nom['name'] && $nom['art'] && $nom['dav_id']) {
-          // проверить наличие записи Номенклатуры
-          $query = new EntityFieldQuery();
-          $terms = $query
-            ->entityCondition('entity_type', 'taxonomy_term')
-            ->propertyCondition('vid', $vid)
-            ->fieldCondition('field_oc_artikul', 'value', $nom['art'])
-            ->execute();
-
-          if (!$terms) {
-            $term = (object)array(
-              'vid' => $vid,
-              'name' => $nom['name'],
-            );
-            taxonomy_term_save($term);
-          } else {
-            $term = current($terms['taxonomy_term']);
-          }
-
           // найти пользователя
           $query = new EntityFieldQuery();
           $users = $query
@@ -378,6 +360,24 @@ function query_nomenklatura_import($array)
             ->fieldCondition('field_oc_davalec_id', 'value', $nom['dav_id'])
             ->execute();
           if ($users) {
+            // проверить наличие записи Номенклатуры
+            $query = new EntityFieldQuery();
+            $terms = $query
+              ->entityCondition('entity_type', 'taxonomy_term')
+              ->propertyCondition('vid', $vid)
+              ->fieldCondition('field_oc_artikul', 'value', $nom['art'])
+              ->execute();
+
+            if (!$terms) {
+              $term = (object)array(
+                'vid' => $vid,
+                'name' => $nom['name'],
+              );
+              taxonomy_term_save($term);
+            } else {
+              $term = current($terms['taxonomy_term']);
+            }
+
             // обновить значения полей
             if ($user = current($users['user'])) {
               $term_wr = entity_metadata_wrapper('taxonomy_term', $term);

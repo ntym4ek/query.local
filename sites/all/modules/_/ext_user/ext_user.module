@@ -2,7 +2,9 @@
 
 define('ROLE_ADMIN', 3);
 define('ROLE_MANAGER_PRODUCTION', 4);
+define('ROLE_USER_PRODUCTION', 6);
 define('ROLE_MANAGER_WAREHOUSE', 7);
+define('ROLE_USER_WAREHOUSE', 5);
 
 define('COMPANY_TD', 80);
 
@@ -77,6 +79,9 @@ function ext_user_form_user_profile_form_alter(&$form, &$form_state)
     if (!user_has_role(ROLE_MANAGER_PRODUCTION)) {
       $form["field_notify_query"]["#access"] = false;
     }
+    if (!user_has_role(ROLE_USER_PRODUCTION)) {
+      $form["field_notify_once_a_day"]["#access"] = false;
+    }
   }
 }
 
@@ -109,7 +114,7 @@ function ext_user_get_managers_by_company_uid($company_uid)
     $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
     $query ->condition('fc.field_company_target_id', $company_uid);
     $query ->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
-    $query ->condition('ur.rid', ROLE_MANAGER_PRODUCTION);
+    $query ->condition('ur.rid', ROLE_USER_PRODUCTION);
     $uids = $query->execute()->fetchCol();
     if ($uids) {
       $users = user_load_multiple($uids);

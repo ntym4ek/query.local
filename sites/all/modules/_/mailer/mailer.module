@@ -161,7 +161,7 @@ function mailer_batch_mail_production()
     ->propertyCondition('created', time() - 60*60*24, '>=')
     ->propertyOrderBy('id', 'ASC');
   $result = $efquery->execute();
-  if ($result['query']) {
+  if (!empty($result['query'])) {
 
     // разбить по Компаниям
     $queries_by_companies = [];
