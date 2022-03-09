@@ -29,33 +29,42 @@ class query_handler_field_produce_units_form extends views_handler_field
 
     // вывести комментарий, если заявка от клиента
     // вывести установки, если есть
-    $produce_units = query_get_produce_units_from_query($query_wr->value());
-    foreach ($produce_units as $pu_tid => $produce_unit) {
-      $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
-
+    if ($produce_units = query_get_produce_units_from_query($query_wr->value())) {
       $output .=
-        '<div class="produce-unit">' .
-        '<div class="produce-unit-name">' .
+        '<div class="produce-units">' .
+          '<div class="produce-units-list">';
+
+      foreach ($produce_units as $pu_tid => $produce_unit) {
+        $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
+
+        $output .=
+          '<div class="produce-unit">' .
+          '<div class="produce-unit-name">' .
           '<label class="views-label" for="edit-name--2">Установка</label>' .
           '<h3>' . $produce_unit['name'] . '</h3>' .
           (empty($notif_arr[$pu_tid]) ? '' : '<div class="notification" data-toggle="popover" data-trigger="hover" title="Внимание!" data-content="' . $notif_arr[$pu_tid] . '"></div>') .
-        '</div>' .
-        '<div class="produce-unit-dates">' .
-        '<label class="views-label">Даты</label>' .
-        '<div class="form-checkboxes">';
-      for ($i = 1; $i <= date("t", $month_start); $i++) {
-        $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
+          '</div>' .
+          '<div class="produce-unit-dates">' .
+          '<label class="views-label">Даты</label>' .
+          '<div class="form-checkboxes">';
+        for ($i = 1; $i <= date("t", $month_start); $i++) {
+          $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
 
-        $classes = empty($load[$day_start]['classes']) ? [] : $load[$day_start]['classes'];
+          $classes = empty($load[$day_start]['classes']) ? [] : $load[$day_start]['classes'];
 
-        $tooltip = empty($load[$day_start]['output']) || empty($load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $load[$day_start]['output'] . '"';
+          $tooltip = empty($load[$day_start]['output']) || empty($load[$day_start]['is_current_load']) ? '' : ' data-toggle="tooltip" data-placement="top" title="' . $load[$day_start]['output'] . '"';
 
-        $output .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
+          $output .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
+        }
+        $output .=
+          '</div>' .
+          '</div>' .
+          '</div>';
       }
+
       $output .=
         '</div>' .
-        '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="loaded"></span>- установка занята <span class="company-loaded"></span>- другая продукция компании <span class="selected"></span>- выбранные даты</div>' .
-        '</div>' .
+        '<div class="produce-unit-legenda"><div><span></span>- установка свободна</div><div><span class="loaded"></span>- установка занята</div><div><span class="company-loaded"></span>- другая продукция компании</div><div><span class="selected"></span>- выбранные даты</div></div>' .
         '</div>';
     }
 

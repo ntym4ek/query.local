@@ -71,7 +71,42 @@ form {
   .views-field-field-comment { max-width: 250px; }
 }
 
-.view {
+.dtable {
+  .dhead {
+    display: flex;
+    font-weight: 700;
+    border-bottom: 2px solid #ddd;
+  }
+  .drow {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    min-height: 10px;
+  }
+  .dcol {
+    display: flex;
+    padding: 8px;
+    line-height: 1.42857;
+    vertical-align: top;
+  }
+  .arch {
+    background-color: #eee;
+    border: none;
+  }
+  .views-field-field-nomenklatura {
+    flex: 1 0 300px;
+  }
+  .views-field-created { flex: 0 0 120px; justify-content: center; }
+  .views-field-field-qty { flex: 0 0 80px; justify-content: flex-end; }
+  .views-field-field-query-reason { flex: 0 0 200px; }
+  .views-field-field-query-status-manager { flex: 0 0 140px; }
+  .views-field-actions {
+    justify-content: flex-end; align-items: center;
+    flex: 0 0 230px;
+    a { margin-left: 10px; }
+  }
+}
+
+.view.view-display-id-page_1 {
   position: relative;
   .attachment-before,
   .view-filters,
@@ -142,7 +177,7 @@ form {
       justify-content: flex-start;
       border: 1px solid $gray-lightest;
       border-top: 8px solid $gray-lightest;
-      padding: 20px 20px 0;
+      padding: 15px 20px 0;
       &.actual:not(.produced) { border-color: $brand-success; }
       &.attention { border-color: $brand-danger; }
       &.processing { border-color: $brand-warning; }
@@ -186,7 +221,10 @@ form {
       &.stamp-cancelled:after {
         content: "ОТМЕНЕНА";
       }
-      .query-comment { text-align: right; }
+      .query-comment {
+        text-align: right;
+        .alert { padding: 8px 15px; }
+      }
       &.from-client {
         .query-comment { text-align: left; }
       }
@@ -195,6 +233,15 @@ form {
   &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
   &.view-nomenklatura .table td {
     font-size: 16px;
+  }
+}
+
+.view.view-display-id-page_2 {
+  position: relative;
+
+  .view-filters,
+  .view-header {
+    margin-bottom: $grid-gutter-width;
   }
 }
 
@@ -242,13 +289,20 @@ form {
   }
 }
 
+.produce-units {
+  display: flex;
+  .produce-units-list { flex: auto; }
+}
 .produce-unit {
   display: flex;
   margin-bottom: $grid-gutter-width/2;
   //margin-bottom: 0; // если установок две, то между ними нет интервала
-  h3 { margin: 0 0 2px 0; }
+  h3 {
+    font-size: 20px;
+    margin: 0 0 2px 0;
+  }
   .produce-unit-name {
-    flex: 0 1 155px;
+    flex: 0 1 130px;
     border-right: 1px solid $gray-lightest;
     padding-right: $grid-gutter-width/2; margin: 0;
     position: relative;
@@ -269,6 +323,7 @@ form {
   .produce-unit-dates {
     padding: 0 $grid-gutter-width/2;
     margin: 0;
+    flex: auto;
   }
   .produce-unit-performance {
     flex: 0 1 170px;
@@ -283,7 +338,7 @@ form {
     text-align: center;
   }
   .form-checkboxes {
-    display: flex; justify-content: space-between;
+    display: flex; justify-content: flex-start;
     margin: 2px 0 10px 0;
     label { padding: 0; }
     input[type="checkbox"] {
@@ -345,8 +400,10 @@ form {
 }
 
 .produce-unit-legenda {
-  font-size: $font-size-small;
-  color: $text-muted;
+  display: flex; flex-wrap: wrap; align-content: center;
+  flex: 0 0 200px;
+  padding-left: 15px;
+  color: $text-muted; font-size: 11px;
   span {
     display: inline-block;
     width: 20px; height: 10px;

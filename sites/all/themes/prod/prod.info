@@ -20,17 +20,7 @@ regions[footer]         = 'Footer'
 regions[page_top]       = 'Page top'
 regions[page_bottom]    = 'Page bottom'
 
-
-;;;;;;;;;;;;;;;;;;;;;
-;; Stylesheets
-;;;;;;;;;;;;;;;;;;;;;
-
 stylesheets[all][] = css/style.css
-
-
-;;;;;;;;;;;;;;;;;;;;;
-;; Scripts
-;;;;;;;;;;;;;;;;;;;;;
 
 
 ; Uncomment the following scripts if using Sass source JavaScript files.
@@ -45,7 +35,8 @@ scripts[] = 'bootstrap/assets/javascripts/bootstrap/tooltip.js'
 scripts[] = 'bootstrap/assets/javascripts/bootstrap/popover.js'
 scripts[] = 'bootstrap/assets/javascripts/bootstrap/scrollspy.js'
 scripts[] = 'bootstrap/assets/javascripts/bootstrap/tab.js'
-scripts[] = 'bootstrap/assets/javascripts/bootstrap/transition.js'
+
+scripts[] = 'js/prod.js'
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Theme Settings

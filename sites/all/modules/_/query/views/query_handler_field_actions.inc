@@ -24,16 +24,20 @@ class query_handler_field_actions extends views_handler_field
     $deadline_start = gmmktime(0, 0, 0, date('n', $month_start)-1, 26, date('Y', $month_start));
 
     // новая корректировка только при утверждённой основной и отсутствии созданных позже
-    $efquery = new EntityFieldQuery();
-    $has_correction = $efquery
-      ->entityCondition('entity_type', 'query')
-      ->propertyCondition('created', $values->eck_query_created, '>')
-      ->fieldCondition('field_month', 'value', $month_start)
-      ->fieldCondition('field_nomenklatura', 'target_id', $values->field_field_nomenklatura[0]["raw"]["target_id"])
-      ->count()
-      ->execute();
-    // если нет Корректировок и прошло 25 число
-    if (!$has_correction) {
+    $has_corrections_after = $has_corrections_before = false;
+    $nom_id = $values->field_field_nomenklatura[0]["raw"]["target_id"];
+    foreach($this->view->result as $result) {
+      if ($result->field_field_nomenklatura[0]["raw"]["target_id"] == $nom_id && $result->eck_query_created > $values->eck_query_created) {
+        $has_corrections_after = true;
+      }
+      if ($result->field_field_nomenklatura[0]["raw"]["target_id"] == $nom_id && $result->eck_query_created < $values->eck_query_created) {
+        $has_corrections_before = true;
+      }
+    }
+
+
+    // если нет Корректировок после
+    if (!$has_corrections_after) {
       // изменения за сутки до начала производства запретить
         // для клиента
         if (!user_has_role(ROLE_MANAGER_PRODUCTION)) {
@@ -45,6 +49,10 @@ class query_handler_field_actions extends views_handler_field
 //            && !query_check_query_produce_started($query_id)) {
 //            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
 //          }
+          // если есть заявки до, добавить кнопку архива
+          if ($has_corrections_before) {
+            $output .= '<a class="btn btn-default btn-xs" role="button" data-toggle="collapse" href="#collapse-' . $query_id . '">архив</a>';
+          }
           if (true) {
             $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
           }
