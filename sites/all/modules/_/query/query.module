@@ -1665,7 +1665,8 @@ function query_get_produce_units_from_query($query)
  */
 function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = null, $current_query = null)
 {
-//  $load_array = &drupal_static(__FUNCTION__);
+//  $fid = drupal_hash_base64(__FUNCTION__ . $produce_unit_tid . $month_start . ($date ? $date : ''));
+//  $load_array = &drupal_static($fid);
 
   if (!isset($load_array)) {
 

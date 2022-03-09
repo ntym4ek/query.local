@@ -296,6 +296,7 @@ form {
 .produce-unit {
   display: flex;
   margin-bottom: $grid-gutter-width/2;
+  .views-field-produce-unit-load & { flex-wrap: wrap; }
   //margin-bottom: 0; // если установок две, то между ними нет интервала
   h3 {
     font-size: 20px;
@@ -319,6 +320,11 @@ form {
     flex: 0 1 130px;
     text-align: right;
     padding: 0 $grid-gutter-width/2; margin: 0;
+  }
+  .produce-unit-nom {
+    flex: 100%;
+    padding-left: 150px;
+    color: $text-muted; font-size: $font-size-small;
   }
   .produce-unit-dates {
     padding: 0 $grid-gutter-width/2;

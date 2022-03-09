@@ -16,7 +16,8 @@ class query_handler_field_produce_unit_load extends views_handler_field
    */
   function render($values)
   {
-    $output = '';
+    $output = $nom = '';
+    $nomenklatura = [];
     // вывести список дат с загрузкой для каждой установки
     $produce_unit_tid = $values->tid;
 
@@ -37,18 +38,24 @@ class query_handler_field_produce_unit_load extends views_handler_field
         if (!empty($load_item['is_busy_same_company']) || user_has_role(ROLE_MANAGER_PRODUCTION)|| user_has_role(ROLE_ADMIN)) {
           $volume += $load_item['output'];
         }
+        // список номенклатуры
+        $nom_tid = $load_item["nomenklatura"]["tid"];
+        if ($nom_tid && $load_item["is_busy_same_company"] && empty($nomenklatura[$nom_tid])) {
+          $nomenklatura[$nom_tid] = $load_item["nomenklatura"]["name"];
+//          $nom .= '<div>' . $load_item["nomenklatura"]["name"] . '</div>';
+        }
       }
 
       if ($volume) {
         $output =
           '<div class="produce-unit">' .
-          '<div class="produce-unit-name">' .
-          '<label class="views-label" for="edit-name--2">Установка</label>' .
-          '<h3>' . $values->taxonomy_term_data_name . '</h3>' .
-          '</div>' .
-          '<div class="produce-unit-dates">' .
-          '<label class="views-label">Даты</label>' .
-          '<div class="form-checkboxes">';
+            '<div class="produce-unit-name">' .
+              '<label class="views-label" for="edit-name--2">Установка</label>' .
+              '<h3>' . $values->taxonomy_term_data_name . '</h3>' .
+            '</div>' .
+            '<div class="produce-unit-dates">' .
+              '<label class="views-label">Даты</label>' .
+              '<div class="form-checkboxes">';
         for ($i = 1; $i <= date("t", $month_start); $i++) {
           $day_start = $month_start + ($i - 1) * 60 * 60 * 24;
           $class = '';
@@ -75,10 +82,13 @@ class query_handler_field_produce_unit_load extends views_handler_field
         $output .=
           '</div>' .
           '</div>' .
-          '<div class="produce-unit-aux">' .
-          '<label class="views-label">Общий объём</label>' .
-          '<h3>' . number_format($volume, 0, ',', ' ') . '</h3>' .
-          '</div>' .
+            '<div class="produce-unit-aux">' .
+              '<label class="views-label">Общий объём</label>' .
+              '<h3>' . number_format($volume, 0, ',', ' ') . '</h3>' .
+            '</div>' .
+            '<div class="produce-unit-nom">' .
+              implode('; ', $nomenklatura) .
+            '</div>' .
           '</div>';
       }
     }
