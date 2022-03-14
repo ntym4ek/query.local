@@ -322,7 +322,7 @@ function query_form_alter(&$form, &$form_state, $form_id)
         $form["field_query_client_approve"]["#access"] = false;
       }
 
-      // ограничить клиентов
+      // ограничить возможности клиентов
       if (!user_has_role(ROLE_MANAGER_PRODUCTION, $GLOBALS['user'])) {
         $form["field_query_status_manager"]["#access"] = false;
         $form["field_query_client_approve"]["#access"] = false;
@@ -332,11 +332,13 @@ function query_form_alter(&$form, &$form_state, $form_id)
         $form["field_query_reason"]["und"]["#default_value"] = [553];
 
         // ограничить Номенклатуру текущим юзером
+        $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
+        $company_id = $user_wr->field_company->getIdentifier();
         $query = new EntityFieldQuery();
         $result = $query
           ->entityCondition('entity_type', 'taxonomy_term')
           ->propertyCondition('vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid)
-          ->fieldCondition('field_user', 'target_id', $GLOBALS['user']->uid)
+          ->fieldCondition('field_user', 'target_id', $company_id)
           ->execute();
         if ($result) {
           $nomenklatura_all = entity_load('taxonomy_term', array_keys($result['taxonomy_term']));
@@ -1792,6 +1794,7 @@ function query_get_produce_unit_load($produce_unit_tid, $month_start, $date = nu
         $query_wr = entity_metadata_wrapper('query', $query['query_id']);
         foreach ($query_wr->field_load->getIterator() as $load_wr) {
           // в одной Заявке может быть Загрузка с разных установок, отфильтровать
+
           if ($load_wr->field_produce_unit->tid->value() == $produce_unit_tid) {
             $day_start = $load_wr->field_produce_date->value();
 
