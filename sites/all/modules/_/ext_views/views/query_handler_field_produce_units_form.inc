@@ -29,19 +29,22 @@ class query_handler_field_produce_units_form extends views_handler_field
 
     // вывести комментарий, если заявка от клиента
     // вывести установки, если есть
-    if ($produce_units = query_get_produce_units_from_query($query_wr->value())) {
+    if ($query_load = drupal_json_decode($query_wr->field_load_json->value())) {
+//    if ($produce_units = production_produce_units_get_from_query1($query_wr->value())) {
       $output .=
         '<div class="produce-units">' .
           '<div class="produce-units-list">';
 
-      foreach ($produce_units as $pu_tid => $produce_unit) {
-        $load = query_get_produce_unit_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
+      foreach ($query_load as $pu_tid => $query_pu_load) {
+        //$load = production_produce_unit_get_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
+        $pu_wr = entity_metadata_wrapper('taxonomy_term', $pu_tid);
+        $load = production_produce_unit_get_load1($pu_tid, $month_start, $query_wr->created->value(), $query_wr->getIdentifier());
 
         $output .=
           '<div class="produce-unit">' .
           '<div class="produce-unit-name">' .
           '<label class="views-label" for="edit-name--2">Установка</label>' .
-          '<h3>' . $produce_unit['name'] . '</h3>' .
+          '<h3>' . $pu_wr->label() . '</h3>' .
           (empty($notif_arr[$pu_tid]) ? '' : '<div class="notification" data-toggle="popover" data-trigger="hover" title="Внимание!" data-content="' . $notif_arr[$pu_tid] . '"></div>') .
           '</div>' .
           '<div class="produce-unit-dates">' .

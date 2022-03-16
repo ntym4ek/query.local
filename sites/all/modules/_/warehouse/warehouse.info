@@ -3,4 +3,7 @@ description = Складская очередь на разгрузку/погр
 package = Custom
 core = 7.x
 
+files[] = includes/warehouse.import.inc
 files[] = views/warehouse_handler_field_status.inc
+
+

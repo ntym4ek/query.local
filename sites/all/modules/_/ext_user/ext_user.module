@@ -1,12 +1,79 @@
 <?
 
-define('ROLE_ADMIN', 3);
+define('ROLE_ADMIN', '3');
 define('ROLE_MANAGER_PRODUCTION', 4);
 define('ROLE_USER_PRODUCTION', 6);
 define('ROLE_MANAGER_WAREHOUSE', 7);
 define('ROLE_USER_WAREHOUSE', 5);
 
 define('COMPANY_TD', 80);
+
+/**
+ * Implementation of hook_menu().
+ */
+function ext_user_menu()
+{
+//  $items['admin/config/custom'] = array(
+//    'title' => 'Custom',
+//    'page callback' => 'drupal_get_form',
+//    'page arguments' => array('ext_user_settings_form'),
+//    'access arguments' => array('access manager settings'),
+//    'file' => 'includes/ext_user.admin.inc',
+//  );
+//  $items['admin/config/custom/settings'] = array(
+//    'title' => 'Настройки',
+//    'type' => MENU_DEFAULT_LOCAL_TASK,
+//  );
+
+  $items['admin/config/custom'] = array(
+    'title' => 'Custom',
+    'position' => 'left',
+    'weight' => -100,
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('access administration pages'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+  );
+  $items['admin/config/custom/settings'] = array(
+    'title' => 'Настройки',
+    'weight' => -1,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ext_user_settings_form'),
+    'access arguments' => array('access manager settings'),
+    'file' => 'includes/ext_user.admin.inc',
+  );
+  $items['admin/config/custom/transfer'] = array(
+    'title' => 'Запустить перенос данных',
+    'weight' => 5,
+    'page callback' => 'ext_user_transfer_callback',
+    'access arguments' => array('access manager settings'),
+    'file' => 'includes/ext_user.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_menu_alter().
+ */
+function ext_user_menu_alter(&$items)
+{
+  // убрать восстановление пароля со страницы входа
+//  $items['user/password']['access callback'] = false;
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function ext_user_cron_queue_info()
+{
+  $queues['ext_user_transfer_queue'] = array(
+    'worker callback' => 'ext_user_transfer_range',
+  );
+
+  return $queues;
+}
+
 
 
 /**
@@ -122,4 +189,42 @@ function ext_user_get_managers_by_company_uid($company_uid)
   }
 
   return $users;
+}
+
+function ext_user_transfer_range($ids)
+{
+  foreach ($ids as $id) {
+    $success = false; $error = '';
+    $query_wr = entity_metadata_wrapper('query', $id);
+    if ($query_wr->field_load->value()) {
+      $load = [];
+      foreach ($query_wr->field_load->getIterator() as $load_wr) {
+        if ($load_wr->value() && $load_wr->field_produce_unit->value() && $load_wr->field_produce_date->value()) {
+          $pu_tid = $load_wr->field_produce_unit->getIdentifier();
+          if (!isset($load[$pu_tid])) $load[$pu_tid] = [];
+          $load[$pu_tid][] = [
+            'pu_tid' => $pu_tid,
+            'date' => $load_wr->field_produce_date->value(),
+            'output' => $load_wr->field_produce_output->value(),
+          ];
+        } else {
+          if (!$load_wr->value()) $error = 'Пустая загрузка';
+          if (!$load_wr->field_produce_unit->value()) $error = 'Пустая установка';
+          if (!$load_wr->field_produce_date->value()) $error = 'Пустая дата';
+        }
+      }
+      $query_wr->field_load_json = drupal_json_encode($load);
+      if ($query_wr->save()) {
+        $success = true;
+      }
+    } else {
+      $error = 'Пустой массив загрузки';
+    }
+
+    if ($success) {
+      watchdog('transfer', 'Удачно (' . $id . ')');
+    } else {
+      watchdog('transfer', 'Недачно. ' . $error . ' (' . $id . ')', [], WATCHDOG_ERROR);
+    }
+  }
 }

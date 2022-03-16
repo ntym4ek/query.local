@@ -1,6 +1,6 @@
 <?php
 
-function query_import_form($form, &$form_state)
+function production_import_form($form, &$form_state)
 {
   $form['actions'] = array('#type' => 'actions');
   $form['actions']['submit'] = array(
@@ -9,13 +9,12 @@ function query_import_form($form, &$form_state)
     '#value' => 'Сабмит',
   );
 
-//  $form['#submit'][] = 'query_import_submit';
+//  $form['#submit'][] = 'production_import_submit';
 
   return $form;
 }
 
-
-function query_delete_form($form, &$form_state)
+function production_delete_form($form, &$form_state)
 {
   $form['month'] = array(
     '#type' => 'date_select',
@@ -40,7 +39,7 @@ function query_delete_form($form, &$form_state)
     '#value' => 'Удалить все заявки',
   );
 
-  $form['#submit'][] = 'query_delete_submit';
+  $form['#submit'][] = 'production_delete_submit';
 
   return $form;
 }
@@ -48,18 +47,18 @@ function query_delete_form($form, &$form_state)
 /**
  * Form submit callback.
  */
-function query_delete_submit($form, &$form_state)
+function production_delete_submit($form, &$form_state)
 {
   if ($form_state["triggering_element"]["#name"] == 'delete') {
     $date_array = explode('-', $form_state["values"]["month"]);
     $month_start = gmmktime(0, 0, 0, $date_array[1], 1, $date_array[0]);
-    query_queries_delete($month_start);
+    production_queries_delete($month_start);
   } elseif ($form_state["triggering_element"]["#name"] == 'delete_all') {
-    query_queries_delete();
+    production_queries_delete();
   }
 }
 
-function query_plan_delete($month_start, $delete_approved = false)
+function production_plan_delete($month_start, $delete_approved = false)
 {
   if ($month_start) {
     $efquery = new EntityFieldQuery();
@@ -93,7 +92,7 @@ function query_plan_delete($month_start, $delete_approved = false)
   }
 }
 
-function query_queries_delete($month_start = null)
+function production_queries_delete($month_start = null)
 {
   $efquery = new EntityFieldQuery();
   $efquery->entityCondition('entity_type', 'query');
@@ -122,7 +121,7 @@ function query_queries_delete($month_start = null)
   }
 }
 
-//function query_produce_service_import($array)
+//function production_produce_service_import($array)
 //{
 //  if (is_array($array) && !empty($array['load'])) {
 //    // удалить занятость месяца
@@ -142,7 +141,7 @@ function query_queries_delete($month_start = null)
 //
 //    foreach($array['load'] as $key => $buzy) {
 //      if ($buzy['zan'] == 2) {
-//        $produce_unit = query_get_produce_unit_by_1cID($buzy['ust_id']);
+//        $produce_unit = production_get_produce_unit_by_1cID($buzy['ust_id']);
 //        $date_array = explode('.', $buzy['date']);
 //        $day_start = gmmktime(0, 0, 0, $date_array[1], $date_array[0], $date_array[2]);
 //
@@ -168,7 +167,172 @@ function query_queries_delete($month_start = null)
 //}
 
 
-function query_davalec_import($array)
+function production_process_incoming_files()
+{
+//  require_once 'includes/production.import.inc';
+
+  $directory = 'private://exchange/';
+
+  // -- Справочник Давальцев
+  // получить список файлов по шаблону
+  $mask = '/^dav.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (production_davalec_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Справочник Установок
+  // получить список файлов по шаблону
+  $mask = '/^ust.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (production_produce_units_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Справочник Водителей
+  // получить список файлов по шаблону
+//  $mask = '/driver.*\.json/';
+//  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+//
+//  // импортировать
+//  if ($files) {
+//    foreach($files as $file) {
+//      $array = drupal_json_decode(file_get_contents($file->uri));
+//      if (production_drivers_import($array)) {
+//        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+//      } else {
+//        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+//      }
+//      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+//      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+//    }
+//  }
+
+  // -- Справочник Причин
+  // получить список файлов по шаблону
+  $mask = '/^cause.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (production_reasons_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Справочник Номенклатуры
+  // получить список файлов по шаблону
+  $mask = '/^nom.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (production_nomenklatura_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Заявки на Производство
+  // -- здесь грузим для предварительного плана, только с type: 'pred'
+  // получить список файлов по шаблону
+  $mask = '/^query_import_.*.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if ($array['type'] == 'pred') {
+        if (production_query_import($array)) {
+          $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        } else {
+          $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        }
+        file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+        file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+      }
+    }
+  }
+
+  // -- План
+  // получить список файлов по шаблону
+  $mask = '/^plan.*\.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if (production_produce_plan_import($array)) {
+        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+      } else {
+        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+      }
+      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+    }
+  }
+
+  // -- Заявки
+  // -- здесь грузим для утверждённого плана, только с type: 'main'
+  // получить список файлов по шаблону
+  $mask = '/^query_import_.*.json/';
+  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
+
+  // импортировать
+  if ($files) {
+    foreach($files as $file) {
+      $array = drupal_json_decode(file_get_contents($file->uri));
+      if ($array['type'] == 'main') {
+        if (production_query_import($array)) {
+          $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        } else {
+          $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        }
+        file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+        file_unmanaged_move($file->uri, $path . '/' . $file->filename);
+      }
+    }
+  }
+}
+
+function production_davalec_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     $got = [];
@@ -230,7 +394,7 @@ function query_davalec_import($array)
   }
 }
 
-function query_produce_units_import($array)
+function production_produce_units_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('produce_units')->vid;
@@ -238,7 +402,7 @@ function query_produce_units_import($array)
     $punits_got = [];
     foreach($array['load'] as $key => $punit) {
         if ($punit['ust_id'] && $punit['ust_name']) {
-          $produce_unit = query_get_produce_unit_by_1cID($punit['ust_id']);
+          $produce_unit = production_get_produce_unit_by_1cID($punit['ust_id']);
 
           if (!$produce_unit) {
             $produce_unit = (object)array(
@@ -285,7 +449,7 @@ function query_produce_units_import($array)
   }
 }
 
-function query_reasons_import($array)
+function production_reasons_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('reasons')->vid;
@@ -293,7 +457,7 @@ function query_reasons_import($array)
     $got = [];
     foreach($array['load'] as $key => $item) {
       if ($item['cause_id'] && $item['cause_name']) {
-        $reason = query_get_reason_by_oc_id($item['cause_id']);
+        $reason = production_get_reason_by_oc_id($item['cause_id']);
 
         if (!$reason) {
           $reason = (object)array(
@@ -345,7 +509,7 @@ function query_reasons_import($array)
   }
 }
 
-function query_nomenklatura_import($array)
+function production_nomenklatura_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
@@ -426,7 +590,7 @@ function query_nomenklatura_import($array)
   }
 }
 
-function query_produce_plan_import($array)
+function production_produce_plan_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     // подготовить массив с Планом для внесения в базу
@@ -453,8 +617,8 @@ function query_produce_plan_import($array)
     $produce_unit_id_arr = [];
     foreach ($array['load'] as $key => $item) {
       if ($item['artikul_1c'] && $item['unit_id_1c'] && $item['date']) {
-        if (($nom = query_get_nomenklatura_by_artikul($item['artikul_1c']))
-          && ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c']))) {
+        if (($nom = production_get_nomenklatura_by_artikul($item['artikul_1c']))
+          && ($produce_unit = production_get_produce_unit_by_1cID($item['unit_id_1c']))) {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
 
@@ -490,7 +654,7 @@ function query_produce_plan_import($array)
     }
 
     // удалить старый план на месяц
-    query_plan_delete($month_start);
+    production_plan_delete($month_start);
 
     // создание Заявок на месяц
     $user_mails = [];
@@ -513,7 +677,7 @@ function query_produce_plan_import($array)
       $query_wr->field_query_period = ['value' => 0, 'value2' => 0];
       $query_wr->save();
 
-      query_query_load_update($query->id, $plan_item['field_load']);
+      production_query_load_update($query->id, $plan_item['field_load']);
 
       if (empty($user_mails[$plan_item['uid']])) {
         $user_mails[$plan_item['uid']] = [
@@ -526,7 +690,7 @@ function query_produce_plan_import($array)
     if (!empty($array['service'])) {
       $service_arr = [];
       foreach ($array['service'] as $item) {
-        if ($produce_unit = query_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+        if ($produce_unit = production_get_produce_unit_by_1cID($item['unit_id_1c'])) {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
           $service_arr[] = [
@@ -554,7 +718,7 @@ function query_produce_plan_import($array)
         $query_zan_wr->field_query_type = 'service';
         $query_zan_wr->save();
 
-        query_query_load_update($query_zan->id, $service_arr);
+        production_query_load_update($query_zan->id, $service_arr);
       }
     }
 
@@ -585,52 +749,261 @@ function query_produce_plan_import($array)
   }
 }
 
-function wwork_import($array)
+/**
+ * импорт Заявки
+ */
+function production_query_import($array)
 {
-  $is_ok = false;
-  if (is_array($array) && !empty($array['id'])) {
-    $wwork_wr = entity_metadata_wrapper('warehouse_work', $array['id']);
+  $query = null;
+  $old_query_id = empty($array['ID']) ? 0 : $array['ID'];
+  $query_oc_id = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
+  $month_value = empty($array['month']) ? '' : $array['month'];
+  $query_import_time = time();
 
-    if ($wwork_wr->value()) {
-      // статус
-      foreach(['checkin', 'onload', 'gone'] as $status) {
-        $status_key = $status . '_time';
-        if (!empty($array[$status_key])) {
-          $status_updated = trim($array[$status_key]);
-          $date = explode(' ', $status_updated)[0];
-          $date_arr = explode('.', $date);
-          $time = explode(' ', $status_updated)[1];
-          $time_arr = explode(':', $time);
-          $update_unix = gmmktime($time_arr[0], $time_arr[1], 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-          if ($status == 'checkin') $wwork_wr->field_checkin_time = $update_unix;
-          if ($status == 'onload') $wwork_wr->field_onload_time = $update_unix;
-          if ($status == 'gone') $wwork_wr->field_gone_time = $update_unix;
-          $is_ok = true;
-        }
-      }
-      // или обработка
-      if (!empty($array['processing'])) {
-        $wwork_wr->field_processing = $array['processing'];
-        $is_ok = true;
-      }
-      // или отмена
-      if (!empty($array['cancel_reason'])) {
-        $wwork_wr->field_cancel_reason = $array['cancel_reason'];
-        $is_ok = true;
-      }
+  if (!$month_value) {
+    watchdog('import', 'Пустое поле меcяца в файле экспорта. (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
+    return false;
+  }
+  $artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
+  $nom = production_get_nomenklatura_by_artikul($artikul);
+  if (!$nom) {
+    watchdog('import', 'Не найдена номенклатура по артикулу "' . $artikul . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
+    return false;
+  }
 
-      if ($is_ok) {
-        $wwork_wr->save();
+  $query_status_manager = empty($array['status_manager']) ? '' : $array['status_manager'];
+  if (!in_array($query_status_manager, ['processing', 'approved', 'deny'])) {
+    watchdog('import', 'Не найден статус менеджера "' . $query_status_manager . '". (' . $query_oc_id . ')', [], WATCHDOG_ERROR);
+    return false;
+  }
+
+  // получить Загрузку
+  $load_arr = [];
+  $query_qty = 0;
+  if (!empty($array['load'])) {
+    foreach($array['load'] as $item) {
+      if ($produce_unit = production_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+        $date_arr = explode('.', $item['date']);
+        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        $load_arr[] = [
+          'field_produce_unit' => $produce_unit->tid,
+          'field_produce_date' => $day_start,
+          'field_produce_output' => $item['output'],
+        ];
+        $query_qty += $item['output'];
+      } else {
+        watchdog('import', 'Импорт заявки. Не найдена установка "' . $item['unit_id_1c'] . '". (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+        return false;
       }
     }
   }
 
-  if ($is_ok) {
-    watchdog('import', 'Заявка на Погрузку ID ' . $array['id'] . ' обновлена.', [], WATCHDOG_INFO);
-    return true;
-  } else {
-    watchdog('import', 'Заявка на Погрузку не обновлена.', [], WATCHDOG_ERROR);
+  // в Отказе должно быть количество, так как Загрузка отсутствует
+  if (!$query_qty && $query_status_manager == 'deny' && !empty($array['volume'])) {
+    $query_qty = $array['volume'];
+  }
+
+  // проверить наличие исходной Заявки по id и сменить статус менеджера
+  if ($old_query_id) {
+    try {
+      $old_query_wr = entity_metadata_wrapper('query', $old_query_id);
+      if ($old_query_wr->value()) {
+        // проверить, совпадает ли артикул из новой заявки со старой (просили одинэсники)
+        $old_artikul_1c = $old_query_wr->field_nomenklatura->field_oc_artikul->value();
+        if ($old_artikul_1c != $artikul) {
+          watchdog('import', 'Артикул из старой Заявки: ' . $old_artikul_1c . ' не совпадает с артикулом из ответа: ' . $artikul . '. (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+          return false;
+        }
+        // может быть approved или deny
+        $old_query_wr->field_query_status_manager = $query_status_manager;
+        $old_query_wr->save();
+      }
+    } catch (Exception $e) {}
+  }
+
+  // найти заявку по ID_1c, если передан
+  $date_arr = explode('.', $month_value);
+  $month_start = gmmktime(0, 0, 0, $date_arr[1], 1, $date_arr[2]);
+  if ($query_oc_id && $month_start) {
+    $query = production_get_query_by_oc_id($query_oc_id, $month_start);
+  }
+
+  // если нет Заявки, создать
+  if (!$query) {
+    $query = entity_create('query', [
+      'type' => 'query',
+      'created' => $query_import_time,
+      'uid' => 0,
+    ]);
+    entity_save('query', $query);
+  }
+
+  // подготовить поля
+  $query_comment = empty($array['comment']) ? '' : $array['comment'];
+  $query_period_value = empty($array['period_begin']) ? 0 : strtotime($array['period_begin']);
+  $query_period_value2 = empty($array['period_end']) ? 0 : strtotime($array['period_end']);
+
+  $query_reason_tid = 0;
+  $query_reason_1c = empty($array['reason_1c']) ? '' : $array['reason_1c'];
+  if ($query_reason_1c && $query_reason = production_get_reason_by_oc_id($query_reason_1c)) {
+    $query_reason_tid = $query_reason->tid;
+  }
+
+
+  // есть ли утверждённый план
+  $efquery = new EntityFieldQuery();
+  $has_approved_plan = $efquery
+    ->entityCondition('entity_type', 'query')
+    ->fieldCondition('field_month', 'value', $month_start)
+    ->fieldCondition('field_query_type', 'value', 'main')
+    ->fieldCondition('field_query_status_client', 'value', 'approved')
+    ->fieldCondition('field_query_status_manager', 'value', 'approved')
+    ->execute();
+
+  // заполнить поля
+  try {
+    $query_wr = entity_metadata_wrapper('query', $query);
+    $query_wr->changed = $query_import_time;
+    $query_wr->field_month = $month_start;
+    $query_wr->field_nomenklatura = $nom->tid;
+    $query_wr->field_query_type = 'correction';
+    $query_wr->field_qty = $query_qty;
+    $query_wr->field_query_status_client = $has_approved_plan ? 'approved' : 'processing';
+    $query_wr->field_query_status_manager = $query_status_manager;
+    if ($query_reason_tid) $query_wr->field_query_reason = $query_reason_tid;
+    $query_wr->field_comment = $query_comment;
+    $query_wr->field_oc_id = $query_oc_id;
+    $query_wr->field_query_period = ['value' => $query_period_value, 'value2' => $query_period_value2 ];
+    $query_wr->save();
+
+    // уведомления по Установкам
+    // удалить старые, на случай, если правим существующую
+    foreach($query_wr->field_query_notifications->getIterator() as $old_notif_wr) {
+      $old_notif_wr->delete();
+    }
+    $query_wr->field_query_notifications->set([]);
+
+    // зададим новые
+    if ($array['notification']) {
+      foreach ($array['notification'] as $notification) {
+        if ($produce_unit = production_get_produce_unit_by_1cID($notification['unit_id_1c'])) {
+          $notification_field = entity_create('field_collection_item', ['field_name' => 'field_query_notifications']);
+          $notification_field_wr = entity_metadata_wrapper('field_collection_item', $notification_field);
+          $notification_field->setHostEntity('query', $query);
+          $notification_field_wr->field_qn_produce_unit->set($produce_unit->tid);
+          $notification_field_wr->field_qn_notification->set($notification['message']);
+          $notification_field_wr->save();
+        }
+      }
+    }
+
+    // Загрузка импортируется только для Заявок, пришедших после утверждения плана
+    // в Заявках до утверждения берём только переписку, так как Загрузка отображается в предварительном плане
+    if ($load_arr && $has_approved_plan) {
+      production_query_load_update($query->id, $load_arr);
+    }
+
+  } catch (Exception $e) {
+    watchdog('import', 'Ошибка при сохранении заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
     return false;
   }
+
+  // если пришёл отказ, сделать копию последней актуальной заявки (созданной до отказа)
+  // тк актуальная заявка должна быть всегда сверху
+  if ($query_status_manager == 'deny') {
+    $efquery = new EntityFieldQuery();
+    $efquery
+      ->entityCondition('entity_type', 'query')
+      ->propertyCondition('created', $query_wr->created->value(), '<')
+      ->fieldCondition('field_month', 'value', $month_start)
+      ->fieldCondition('field_nomenklatura', 'target_id', $nom->tid)
+      ->fieldCondition('field_query_status_client', 'value', 'approved')
+      ->fieldCondition('field_query_status_manager', 'value', 'approved')
+      ->propertyOrderBy('id', 'DESC');
+    $result = $efquery->execute();
+    if ($result) {
+      production_query_make_copy(current($result['query']));
+    }
+  }
+
+  // если пришла Занятость
+  if (!empty($array['service'])) {
+    $zan_load_arr = [];
+    foreach($array['service'] as $item) {
+      if ($produce_unit = production_get_produce_unit_by_1cID($item['unit_id_1c'])) {
+        $date_arr = explode('.', $item['date']);
+        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        $zan_load_arr[] = [
+          'field_produce_unit' => $produce_unit->tid,
+          'field_produce_date' => $day_start,
+          'field_produce_output' => 0,
+        ];
+      } else {
+        watchdog('import', 'Импорт занятости. Не найдена установка "' . $item['unit_id_1c'] . '". (' . $query_oc_id . ')', [],WATCHDOG_ERROR);
+        //return false;
+      }
+    }
+
+    if ($zan_load_arr) {
+      $query_zan = entity_create('query', [
+        'type' => 'query',
+        'created' => $query_import_time,
+        'uid' => 0,
+      ]);
+      entity_save('query', $query_zan);
+
+      $query_zan_wr = entity_metadata_wrapper('query', $query_zan);
+      $query_zan_wr->field_month = $month_start;
+      $query_zan_wr->field_nomenklatura = TID_SERVICE_WORK; // tid Технических работ
+      $query_zan_wr->field_query_type = 'service';
+      $query_zan_wr->save();
+
+      production_query_load_update($query_zan->id, $zan_load_arr);
+    }
+  }
+
+  // сразу уведомить клиента о новой заявке, если не установлена отправка раз в сутки
+  try {
+    $params = [
+      'qid' => $query_wr->getIdentifier(),
+      'month' => t(date('F', $query_wr->field_month->value())),
+      'product' => $query_wr->field_nomenklatura->name->value(),
+      'volume' => $query_wr->field_qty->value(),
+      'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
+      'status_client' => $query_wr->field_query_status_client->label(),
+      'status_manager' => $query_wr->field_query_status_manager->label(),
+      'client_approve' => $query_wr->field_query_client_approve->value(),
+      'type' => $query_wr->field_query_type->value(),
+      'reason' => $query_wr->field_query_reason->value() ? $query_wr->field_query_reason->name->value() : '',
+      'comment' => $query_wr->field_comment->value(),
+    ];
+
+    // Уведомления по Установкам
+    $params['notification'] =  '';
+    if ($query_wr->field_query_notifications->count()) {
+      $params['notification'] =  '<br />ВНИМАНИЕ!<br />';
+      foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
+        $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = [
+          'name' => $notif_wr->field_qn_produce_unit->name->value(),
+          'message' => $notif_wr->field_qn_notification->value(),
+        ];
+        $params['notification'] .=  '<strong>' . $notif_wr->field_qn_produce_unit->name->value() . '</strong>. ' . $notif_wr->field_qn_notification->value() . '<br />';
+      }
+    }
+
+    if ($users = ext_user_get_managers_by_company_uid($params['product_owner_account']->uid)) {
+      foreach ($users as $manager_account) {
+        if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
+          drupal_mail('mailer', 'client_notify_query_correction_new', $manager_account->mail, user_preferred_language($manager_account), $params);
+        }
+      }
+    }
+
+  } catch (Exception $e) {
+    watchdog('mail', 'Ошибка при отправке письма заявки. ' . $e->getMessage(), [],WATCHDOG_ERROR);
+    return false;
+  }
+
+  return true;
 }
 

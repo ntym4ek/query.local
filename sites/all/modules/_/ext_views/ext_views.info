@@ -1,14 +1,14 @@
-name = Query
-description = Базовый модуль кастомных настроек
+name = Ext Views
+description = ""
 package = Custom
 core = 7.x
 
-scripts[] = js/query.js
+dependencies[] = ctools
 
-files[] = includes/query.import.inc
-
+; Views Handlers
 files[] = views/query_handler_field_produce_units_form.inc
 files[] = views/query_handler_field_actions.inc
 files[] = views/query_handler_field_produce_unit_load.inc
 files[] = views/query_handler_field_produce_unit_load_amount.inc
 files[] = views/query_handler_field_comment.inc
+

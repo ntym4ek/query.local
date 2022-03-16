@@ -30,7 +30,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
 
     list($year, $month) = explode('-', $date);
     $month_start = gmmktime(0,0,0, $month, 1, $year);
-    $load = query_get_produce_unit_load($produce_unit_tid, $month_start);
+    $load = production_get_produce_unit_load($produce_unit_tid, $month_start);
     if ($load) {
       $volume = 0;
       foreach ($load as $load_item) {

@@ -35,8 +35,14 @@ function warehouse_menu()
  */
 function warehouse_cron()
 {
+  // выполнить импорт заявок
+  if (variable_get('import_wh_1с_enable', 0)) {
+    warehouse_process_incoming_files();
+  }
+
   warehouse_check_missed_queues();
 }
+
 
 /**
  * проверка просроченных заявок
@@ -1206,6 +1212,21 @@ function warehouse_entity_delete($entity, $type)
   }
 }
 
+//function warehouse_get_driver_by_1cID($driver_1cID)
+//{
+//  $vid = taxonomy_vocabulary_machine_name_load('drivers')->vid;
+//  $query = new EntityFieldQuery();
+//  $terms = $query
+//    ->entityCondition('entity_type', 'taxonomy_term')
+//    ->propertyCondition('vid', $vid)
+//    ->fieldCondition('field_oc_driver_id', 'value', $driver_1cID)
+//    ->execute();
+//
+//  if ($terms) {
+//    $entities = entity_load('taxonomy_term', [current($terms['taxonomy_term'])->tid]);
+//  }
+//  return empty($entities) ? false: current($entities);
+//}
 
 /**
  * Implements hook_views_api().

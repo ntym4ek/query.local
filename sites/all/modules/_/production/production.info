@@ -1,0 +1,9 @@
+name = Production
+description = Модуль Производство
+package = Custom
+core = 7.x
+
+scripts[] = js/production.js
+
+files[] = includes/production.import.inc
+

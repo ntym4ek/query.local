@@ -29,7 +29,7 @@ class query_handler_field_produce_unit_load_amount extends views_handler_field
     $stop = false;
     $output = 0;
     do {
-      $load_arr = query_get_produce_unit_load($values->taxonomy_term_data_field_data_field_produce_unit_tid, $current_month_start);
+      $load_arr = production_get_produce_unit_load($values->taxonomy_term_data_field_data_field_produce_unit_tid, $current_month_start);
 
       foreach($load_arr as $day_start => $load) {
         if (($load['nomenklatura']['tid'] == $values->tid) && $day_start > $today_start) {
