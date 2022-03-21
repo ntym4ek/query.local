@@ -20,8 +20,8 @@ class query_handler_field_actions extends views_handler_field
     // вывести формы выбора дат для каждой установки
     $query_id = $values->id;
     $month_start = $values->field_field_month[0]["raw"]["value"];
-    $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-    $deadline_start = gmmktime(0, 0, 0, date('n', $month_start)-1, 26, date('Y', $month_start));
+//    $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+//    $deadline_start = gmmktime(0, 0, 0, date('n', $month_start)-1, 26, date('Y', $month_start));
 
     // новая корректировка только при утверждённой основной и отсутствии созданных позже
     $has_corrections_after = $has_corrections_before = false;
@@ -50,15 +50,15 @@ class query_handler_field_actions extends views_handler_field
 //            $output .= '<a class="btn btn-danger btn-xs" href="/admin/structure/entity-type/query/query/add?type=cancel&last_query_id=' . $query_id . '">отменить производство</a>';
 //          }
           // если есть заявки до, добавить кнопку архива
-          if ($has_corrections_before) {
-            $output .= '<a class="btn btn-default btn-xs" role="button" data-toggle="collapse" href="#collapse-' . $query_id . '">архив</a>';
-          }
           if (true) {
             $output .= '<a class="btn btn-info btn-xs" href="/admin/structure/entity-type/query/query/add?type=correction&last_query_id=' . $query_id . '">создать корректировку</a>';
           }
 
           // для менеджера
         } else {
+          if ($has_corrections_before) {
+            $output .= '<a class="btn btn-default btn-xs" role="button" data-toggle="collapse" href="#collapse-' . $query_id . '">архив</a>';
+          }
 //          if ($values->field_field_query_status_manager[0]["raw"]["value"] != 'approved') {
 //            $output .= '<a class="btn btn-success btn-xs" href="/query/' . $query_id . '/approve">утвердить</a>';
 ////            $output .= '<a class="btn btn-default btn-xs" href="/admin/structure/entity-type/query/query/' . $query_id . '/edit">редактировать</a>';

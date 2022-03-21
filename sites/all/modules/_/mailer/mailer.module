@@ -42,7 +42,7 @@ function mailer_mail($key, &$message, $params)
         '<h2>Здравствуйте!</h2>' .
         '<p>Новая корректировка на сайте "Управление заказами":</p>' .
         'Номер: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
+        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
         ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
@@ -56,7 +56,7 @@ function mailer_mail($key, &$message, $params)
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте "Управление заказами" пользователь запросил отмену производства:</p>' .
 //        'Номер заявки: ' . $params["qid"] . '<br />' .
-//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
 //        ($params["comment"] ? 'Комментарий: ' . $params["comment"] . '<br />' : '') .
@@ -70,7 +70,7 @@ function mailer_mail($key, &$message, $params)
         '<h2>Здравствуйте!</h2>' .
         '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> внесена корректирующая заявка в план производства на ' . $params['month'] . '. </p>' .
         'Номер заявки: ' . $params["qid"] . '<br />' .
-        'Месяц: ' . $params["month"] . '<br />' .
+        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         'Количество: ' . $params["volume"] .  '<br />' .
         (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
@@ -99,7 +99,7 @@ function mailer_mail($key, &$message, $params)
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> изменился статус заявки.</p>' .
 //        'Номер заявки: ' . $params["qid"] . '<br />' .
-//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        'Новый статус: ' . $params["status_manager"] .  '<br />' .
 //        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
@@ -113,7 +113,7 @@ function mailer_mail($key, &$message, $params)
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте "Управление заказами" пользователь изменил статус заявки:</p>' .
 //        'Номер заявки: ' . $params["qid"] . '<br />' .
-//        'Месяц: ' . $params["month"] . '<br />' .
+//        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        'Новый статус: ' . $params["status_client"] .  '<br />' .
 //        (!empty($params["reason"]) ? 'Причина: ' . $params["reason"] . '<br />' : '') .
@@ -140,9 +140,9 @@ function mailer_mail_alter(&$message)
 {
   if (strpos($_SERVER['HTTP_HOST'], '.local') !== FALSE || !variable_get('client_email_enable', 1)) {
     $message['send'] = false;
-    watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
+    watchdog('mailer', 'Эмуляция отправки E-Mail.<br />Почта: %mail<br />Тема: %subject<br />Текст: %body', ['%mail' => $message['to'], '%subject' => $message['subject'], '%body' => var_export($message['body'], true)], WATCHDOG_DEBUG);
   } else {
-    watchdog('mailer', 'Отправка E-Mail.<br />Почта: ' . $message['to'] . '<br />Тема: ' . $message['subject'] . '<br />Текст: ' . var_export($message['body'], true), [], WATCHDOG_DEBUG);
+    watchdog('mailer', 'Отправка E-Mail.<br />Почта: %mail <br />Тема: %subject<br />Текст: %body', ['%mail' => $message['to'], '%subject' => $message['subject'], '%body' => var_export($message['body'], true)], WATCHDOG_DEBUG);
   }
 }
 
@@ -205,7 +205,7 @@ function mailer_batch_mail_production()
 
         if ($query_wr->field_query_type->value() == 'correction') {
           $params['text'] .= 'Номер заявки: ' . $query_wr->getIdentifier() . '<br />' .
-            'Месяц: ' . date('F', $query_wr->field_month->value()) . '<br />' .
+            'Месяц: ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
             'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
             'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
             ($query_wr->field_query_reason->value() ? 'Причина: ' . $query_wr->field_query_reason->name->value() . '<br />' : '') .
@@ -215,19 +215,19 @@ function mailer_batch_mail_production()
         } elseif ($query_wr->field_query_type->value() == 'main') {
           if ($query_wr->field_query_status_client->value() == 'approved' && !$main_plan_flag) {
             // основной план
-            $params['text'] .= 'Внесён основной план на ' . date('F', $query_wr->field_month->value()) . ' месяц.' . '<br />' .
+            $params['text'] .= 'Внесён основной план на ' . t(date('F', $query_wr->field_month->value())) . ' месяц.' . '<br />' .
               '<br />';
             $main_plan_flag = true;
           } elseif ($query_wr->field_query_status_client->value() == 'processing' && !$pred_plan_flag) {
             // предварительный план
-            $params['text'] .= 'Внесён/изменён предварительный план на ' . date('F', $query_wr->field_month->value()) . ' месяц.' . '<br />' .
+            $params['text'] .= 'Внесён/изменён предварительный план на ' . t(date('F', $query_wr->field_month->value())) . ' месяц.' . '<br />' .
               '<br />';
             $pred_plan_flag = true;
           }
         }
       }
 
-      if ($users = ext_user_get_managers_by_company_uid($value['company_uid'])) {
+      if ($users = ext_user_managers_get_by_company_id($value['company_uid'])) {
         foreach ($users as $manager_account) {
           if (!empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
             $params['mail'] = $manager_account->mail;

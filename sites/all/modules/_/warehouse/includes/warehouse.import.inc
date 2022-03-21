@@ -1,30 +1,6 @@
 <?php
 
 
-function warehouse_process_incoming_files()
-{
-  $directory = 'private://exchange/';
-
-  // -- Заявки на Погрузку
-  // получить список файлов по шаблону
-  $mask = '/^wwork_import.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (warehouse_wwork_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-}
-
 function warehouse_wwork_import($array)
 {
   $is_ok = false;
@@ -66,7 +42,7 @@ function warehouse_wwork_import($array)
   }
 
   if ($is_ok) {
-    watchdog('import', 'Заявка на Погрузку ID ' . $array['id'] . ' обновлена.', [], WATCHDOG_INFO);
+    watchdog('import', 'Заявка на Погрузку ID %id обновлена.', ['%id' => $array['id']], WATCHDOG_INFO);
     return true;
   } else {
     watchdog('import', 'Заявка на Погрузку не обновлена.', [], WATCHDOG_ERROR);

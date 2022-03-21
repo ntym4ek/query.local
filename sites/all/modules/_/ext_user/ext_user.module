@@ -1,10 +1,10 @@
 <?
 
 define('ROLE_ADMIN', '3');
-define('ROLE_MANAGER_PRODUCTION', 4);
-define('ROLE_USER_PRODUCTION', 6);
-define('ROLE_MANAGER_WAREHOUSE', 7);
-define('ROLE_USER_WAREHOUSE', 5);
+define('ROLE_MANAGER_PRODUCTION', '4');
+define('ROLE_USER_PRODUCTION', '6');
+define('ROLE_MANAGER_WAREHOUSE', '7');
+define('ROLE_USER_WAREHOUSE', '5');
 
 define('COMPANY_TD', 80);
 
@@ -172,14 +172,14 @@ function ext_user_user_load_by_login($login)
   return user_load(0);
 }
 
-function ext_user_get_managers_by_company_uid($company_uid)
+function ext_user_managers_get_by_company_id($company_id)
 {
   $users = [];
-  if (is_numeric($company_uid)) {
+  if (is_numeric($company_id)) {
     $query = db_select('users', 'u');
     $query ->fields('u', ['uid']);
     $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
-    $query ->condition('fc.field_company_target_id', $company_uid);
+    $query ->condition('fc.field_company_target_id', $company_id);
     $query ->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
     $query ->condition('ur.rid', ROLE_USER_PRODUCTION);
     $uids = $query->execute()->fetchCol();
@@ -222,9 +222,9 @@ function ext_user_transfer_range($ids)
     }
 
     if ($success) {
-      watchdog('transfer', 'Удачно (' . $id . ')');
+      watchdog('transfer', 'Удачно (%id)', ['%id' => $id]);
     } else {
-      watchdog('transfer', 'Недачно. ' . $error . ' (' . $id . ')', [], WATCHDOG_ERROR);
+      watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $id, '%error' => $error], WATCHDOG_ERROR);
     }
   }
 }

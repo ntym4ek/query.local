@@ -24,21 +24,19 @@ class query_handler_field_produce_units_form extends views_handler_field
     $month_start = $query_wr->field_month->value();
     $notif_arr = [];
     foreach($query_wr->field_query_notifications->getIterator() as $notif_wr) {
-      $notif_arr[$notif_wr->field_qn_produce_unit->tid->value()] = $notif_wr->field_qn_notification->value();
+      $notif_arr[$notif_wr->field_qn_produce_unit->getIdentifier()] = $notif_wr->field_qn_notification->value();
     }
 
     // вывести комментарий, если заявка от клиента
     // вывести установки, если есть
     if ($query_load = drupal_json_decode($query_wr->field_load_json->value())) {
-//    if ($produce_units = production_produce_units_get_from_query1($query_wr->value())) {
       $output .=
         '<div class="produce-units">' .
           '<div class="produce-units-list">';
 
       foreach ($query_load as $pu_tid => $query_pu_load) {
-        //$load = production_produce_unit_get_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->value());
         $pu_wr = entity_metadata_wrapper('taxonomy_term', $pu_tid);
-        $load = production_produce_unit_get_load1($pu_tid, $month_start, $query_wr->created->value(), $query_wr->getIdentifier());
+        $load = production_produce_unit_get_load($pu_tid, $month_start, $query_wr->created->value(), $query_wr->getIdentifier());
 
         $output .=
           '<div class="produce-unit">' .

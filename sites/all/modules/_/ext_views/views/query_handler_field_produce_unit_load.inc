@@ -30,7 +30,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
 
     list($year, $month) = explode('-', $date);
     $month_start = gmmktime(0,0,0, $month, 1, $year);
-    $load = production_get_produce_unit_load($produce_unit_tid, $month_start);
+    $load = production_produce_unit_get_load($produce_unit_tid, $month_start);
     if ($load) {
       $volume = 0;
       foreach ($load as $load_item) {
@@ -41,7 +41,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
         // список номенклатуры
         $nom_tid = $load_item["nomenklatura"]["tid"];
         if ($nom_tid && $load_item["is_busy_same_company"] && empty($nomenklatura[$nom_tid])) {
-          $nomenklatura[$nom_tid] = $load_item["nomenklatura"]["name"];
+          $nomenklatura[$nom_tid] = $load_item["nomenklatura"]["label"];
 //          $nom .= '<div>' . $load_item["nomenklatura"]["name"] . '</div>';
         }
       }
@@ -68,13 +68,8 @@ class query_handler_field_produce_unit_load extends views_handler_field
 //      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
           $tooltip = '';
           if (!empty($load[$day_start]) && (!empty($load[$day_start]['is_busy_same_company']) || user_has_role(ROLE_MANAGER_PRODUCTION)|| user_has_role(ROLE_ADMIN))) {
-            $name = $load[$day_start]['nomenklatura']['name'];
-            $name_arr = [];
-            if (!empty($load[$day_start]["nomenklatura"]["name_d"])) {
-              $name_arr[] = $load[$day_start]["nomenklatura"]["artikul_d"];
-              $name_arr[] = $load[$day_start]["nomenklatura"]["name_d"];
-            }
-            $name = str_replace('"', "'", trim(implode(' ', $name_arr)) ? implode(' ', $name_arr) : $name);
+            $name = $load[$day_start]['nomenklatura']['label'];
+            $name = str_replace('"', "'", $name);
             $tooltip = ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $name . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
           }
           $output .= '<span class="c-box' . $class . '"' . $tooltip . '>' . $i . '</span>';

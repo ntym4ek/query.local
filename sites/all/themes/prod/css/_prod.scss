@@ -279,6 +279,16 @@ form {
 }
 
 
+.view-nomenklatura {
+  .views-exposed-form {
+    .views-widget {
+      display: flex;
+      .form-type-date-select label { display: none; }
+      .form-item-month-min { margin-right: 30px; }
+    }
+  }
+}
+
 .view-weekends {
   .views-exposed-form { display: none; }
   .views-field-field-date {
