@@ -7,25 +7,40 @@
 
 function ext_user_transfer_callback()
 {
-  $queue = DrupalQueue::get('ext_user_transfer_queue');
+//  db_delete('locales_source')
+//    ->condition('location', '/admin/reports/dblog')
+//    ->execute();
+//
+//  db_delete('locales_source')
+//    ->condition('location', '%' . db_like('/update.php?') . '%')
+//    ->execute();
+
+  $queue = DrupalQueue::get('ext_user_queue_worker');
   $queue->deleteQueue();
-  // разбить весь массив ID на диапазоны и выполнить через Queue API, чтобы не превышать время выполнения скрипта
+
+
+  // todo переназначить типы request и plan
+  $ids = [];
   $dbr = db_select('eck_query', 'q');
   $dbr->addField('q', 'id');
+//  $dbr->condition('q.id',2425);
   if ($results = $dbr->execute()->fetchCol()) {
 
     $i = 1;
     foreach ($results as $key => $result) {
+//      if ($result != 40239) continue;
       $ids[] = $result;
 
-      if ($key > $i*100) {
+      if ($key > $i*5000) {
         $queue->createItem($ids);
         $i++;
         $ids = [];
       }
+
     }
   }
   drupal_set_message('Done ' . $i . ' iterations');
+
 
   $dest = strpos($_SERVER["HTTP_REFERER"], $GLOBALS["base_url"]) !== false ? $_SERVER["HTTP_REFERER"] : false;
   if ($dest) {

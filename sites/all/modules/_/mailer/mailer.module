@@ -41,7 +41,6 @@ function mailer_mail($key, &$message, $params)
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
         '<p>Новая корректировка на сайте "Управление заказами":</p>' .
-        'Номер: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
@@ -55,7 +54,6 @@ function mailer_mail($key, &$message, $params)
 //      $message['body'][] =
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте "Управление заказами" пользователь запросил отмену производства:</p>' .
-//        'Номер заявки: ' . $params["qid"] . '<br />' .
 //        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        ($params["reason"] ? 'Причина: ' . $params["reason"] . '<br />' : '') .
@@ -69,7 +67,6 @@ function mailer_mail($key, &$message, $params)
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
         '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> внесена корректирующая заявка в план производства на ' . $params['month'] . '. </p>' .
-        'Номер заявки: ' . $params["qid"] . '<br />' .
         'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
         'Продукт: ' . $params["product"] .  '<br />' .
         'Количество: ' . $params["volume"] .  '<br />' .
@@ -98,7 +95,6 @@ function mailer_mail($key, &$message, $params)
 //      $message['body'][] =
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="' . $front_url . '">"Управление заказами"</a> изменился статус заявки.</p>' .
-//        'Номер заявки: ' . $params["qid"] . '<br />' .
 //        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        'Новый статус: ' . $params["status_manager"] .  '<br />' .
@@ -112,7 +108,6 @@ function mailer_mail($key, &$message, $params)
 //      $message['body'][] =
 //        '<h2>Здравствуйте!</h2>' .
 //        '<p>На сайте "Управление заказами" пользователь изменил статус заявки:</p>' .
-//        'Номер заявки: ' . $params["qid"] . '<br />' .
 //        'Месяц: ' . $params["month"] . ' ' . $params["year"] . '<br />' .
 //        'Продукт: ' . $params["product"] .  '<br />' .
 //        'Новый статус: ' . $params["status_client"] .  '<br />' .
@@ -125,7 +120,7 @@ function mailer_mail($key, &$message, $params)
       $message['subject'] = 'Импортирован план на ' . $params['month'];
       $message['body'][] =
         '<h2>Здравствуйте!</h2>' .
-        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="http://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . '. </p>' .
+        '<p>На сайте компании ООО "Кирово-Чепецкий завод Агрохимикат" <a href="http://prod.kccc.ru">"Управление заказами"</a> внесён план производства на ' . $params['month'] . ' ' . $params["year"] . '. </p>' .
         '<p>Ознакомиться с планом можно в <a href="http://prod.kccc.ru">Личном кабинете</a></p>';
 
       break;
@@ -203,8 +198,8 @@ function mailer_batch_mail_production()
           }
         }
 
-        if ($query_wr->field_query_type->value() == 'correction') {
-          $params['text'] .= 'Номер заявки: ' . $query_wr->getIdentifier() . '<br />' .
+        if (in_array($query_wr->field_query_type->value(), ['correction', 'request'])) {
+          $params['text'] .=
             'Месяц: ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
             'Продукт: ' . $query_wr->field_nomenklatura->name->value() . '<br />' .
             'Количество: ' . $query_wr->field_qty->value() .  '<br />' .
@@ -212,15 +207,15 @@ function mailer_batch_mail_production()
             ($query_wr->field_comment->value() ? 'Комментарий: ' . $query_wr->field_comment->value() . '<br />' : '') .
             $notification .
             '<br />';
-        } elseif ($query_wr->field_query_type->value() == 'main') {
+        } elseif ($query_wr->field_query_type->value() == 'plan') {
           if ($query_wr->field_query_status_client->value() == 'approved' && !$main_plan_flag) {
             // основной план
-            $params['text'] .= 'Внесён основной план на ' . t(date('F', $query_wr->field_month->value())) . ' месяц.' . '<br />' .
+            $params['text'] .= 'Внесён основной план на ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
               '<br />';
             $main_plan_flag = true;
           } elseif ($query_wr->field_query_status_client->value() == 'processing' && !$pred_plan_flag) {
             // предварительный план
-            $params['text'] .= 'Внесён/изменён предварительный план на ' . t(date('F', $query_wr->field_month->value())) . ' месяц.' . '<br />' .
+            $params['text'] .= 'Внесён/изменён предварительный план на ' . t(date('F', $query_wr->field_month->value())) . ' ' . date('Y', $query_wr->field_month->value()) . '<br />' .
               '<br />';
             $pred_plan_flag = true;
           }

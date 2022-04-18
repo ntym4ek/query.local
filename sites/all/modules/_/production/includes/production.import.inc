@@ -296,18 +296,10 @@ function production_produce_plan_import($array)
     $plan = [];
     $month_arr = explode('.', $array['month']);
     $month_start = gmmktime(0, 0, 0, $month_arr[1], 1, $month_arr[2]);
-    $plan_import_time = time();
+    $plan_import_time = REQUEST_TIME;
 
     //  если есть утверждённый план, импорт запретить
-    $efquery = new EntityFieldQuery();
-    $efquery
-      ->entityCondition('entity_type', 'query')
-      ->fieldCondition('field_month', 'value', $month_start)
-      ->fieldCondition('field_query_type', 'value', 'main')
-      ->fieldCondition('field_query_status_client', 'value', 'approved')
-      ->fieldCondition('field_query_status_manager', 'value', 'approved');
-    $result = $efquery->execute();
-    if ($result) {
+    if ($has_approved_plan = production_query_approved_plan_get($month_start)) {
       watchdog('import', 'Утверждённый план уже загружен. Импорт плана не выполнен.', [], WATCHDOG_ERROR);
       return false;
     }
@@ -326,16 +318,15 @@ function production_produce_plan_import($array)
               'field_nomenklatura' => $nom->tid,
               'uid' => $nom->field_user['und'][0]['target_id'],
               'field_qty' => 0,
-              'field_load' => [],
+              'load' => [],
             ];
           }
           $plan[$nom->tid]['field_qty'] += $item['output'];
-          if (!isset($plan[$nom->tid]['field_load'][$produce_unit->tid])) $plan[$nom->tid]['field_load'][$produce_unit->tid] = [];
-          $plan[$nom->tid]['field_load'][$produce_unit->tid][] = [
+          if (!isset($plan[$nom->tid]['load'][$produce_unit->tid])) $plan[$nom->tid]['load'][$produce_unit->tid] = [
             'pu_tid' => $produce_unit->tid,
-            'date' => $day_start,
-            'output' => $item['output'],
+            'pu_load' => [],
           ];
+          $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
 
           $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
           $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
@@ -370,15 +361,12 @@ function production_produce_plan_import($array)
       $query_wr->field_month = $plan_item['field_month'];
       $query_wr->field_nomenklatura = $plan_item['field_nomenklatura'];
       $query_wr->field_qty = $plan_item['field_qty'];
-      $query_wr->field_query_type = 'main';
-      $query_wr->field_query_status_client = ($array['type'] == 'main' ? 'approved' : 'processing');
+      $query_wr->field_query_type = 'plan';
+      $query_wr->field_query_status_client = ($array['type'] == 'main' ? 'approved' : 'processing'); // план может быть предварительным "pred" и утверждённым "main"
       $query_wr->field_query_status_manager = 'approved';
       $query_wr->field_query_period = ['value' => 0, 'value2' => 0];
-      $query_wr->field_load_json = drupal_json_encode($plan_item['field_load']);
+      $query_wr->field_load_json = drupal_json_encode($plan_item['load']);
       $query_wr->save();
-
-      // todo устарело
-      production_query_load_update($query->id, $plan_item['field_load']);
 
       if (empty($user_mails[$plan_item['uid']])) {
         $user_mails[$plan_item['uid']] = [
@@ -394,12 +382,11 @@ function production_produce_plan_import($array)
         if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-          if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [];
-          $service_load_arr[$produce_unit->tid][] = [
+          if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
             'pu_tid' => $produce_unit->tid,
-            'date' => $day_start,
-            'output' => 0,
+            'pu_load' => [],
           ];
+          $service_load_arr[$produce_unit->tid]['pu_load'][$day_start] = 0;
         } else {
           watchdog('import', 'Импорт занятости при импорте плана. Не найдена установка "%unit_id_1c". ', ['%unit_id_1c' => $item['unit_id_1c']], WATCHDOG_ERROR);
           //return false;
@@ -420,9 +407,6 @@ function production_produce_plan_import($array)
         $query_zan_wr->field_query_type = 'service';
         $query_zan_wr->field_load_json = drupal_json_encode($service_load_arr);
         $query_zan_wr->save();
-
-        // todo устарело
-        production_query_load_update($query_zan->id, $service_load_arr);
       }
     }
 
@@ -453,13 +437,18 @@ function production_produce_plan_import($array)
   }
 }
 
+
+// типы заявок (query_type)
+//  request - согласования до принятия плана
+//  plan - согласованный план
+//  correction - корректировки после принятия
 function production_query_import($array)
 {
   $query = null;
   $old_query_id = empty($array['ID']) ? 0 : $array['ID'];
   $query_oc_id = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
   $month_value = empty($array['month']) ? '' : $array['month'];
-  $query_import_time = time();
+  $query_import_time = REQUEST_TIME;
 
   if (!$month_value) {
     watchdog('import', 'Пустое поле меcяца в файле экспорта. (%query_oc_id)', ['%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
@@ -486,12 +475,11 @@ function production_query_import($array)
       if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-        if (!isset($load_arr[$produce_unit->tid])) $load_arr[$produce_unit->tid] = [];
-        $load_arr[$produce_unit->tid][] = [
+        if (!isset($load_arr[$produce_unit->tid])) $load_arr[$produce_unit->tid] = [
           'pu_tid' => $produce_unit->tid,
-          'date' => $day_start,
-          'output' => $item['output'],
+          'pu_load' => [],
         ];
+        $load_arr[$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
 
         $query_qty += $item['output'];
       } else {
@@ -552,16 +540,11 @@ function production_query_import($array)
     $query_reason_tid = $query_reason->tid;
   }
 
-
-  // есть ли утверждённый план
-  $efquery = new EntityFieldQuery();
-  $has_approved_plan = $efquery
-    ->entityCondition('entity_type', 'query')
-    ->fieldCondition('field_month', 'value', $month_start)
-    ->fieldCondition('field_query_type', 'value', 'main')
-    ->fieldCondition('field_query_status_client', 'value', 'approved')
-    ->fieldCondition('field_query_status_manager', 'value', 'approved')
-    ->execute();
+  $has_approved_plan = production_query_approved_plan_get($month_start);
+  if ($has_approved_plan && $array['type'] == 'pred') {
+    watchdog('import', 'Импорт занятости. Попытка импорта предварительной заявки при наличии утверждённого плана. (%query_oc_id)', ['%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
+    return false;
+  }
 
   // заполнить поля
   try {
@@ -569,7 +552,7 @@ function production_query_import($array)
     $query_wr->changed = $query_import_time;
     $query_wr->field_month = $month_start;
     $query_wr->field_nomenklatura = $nom->tid;
-    $query_wr->field_query_type = 'correction';
+    $query_wr->field_query_type = $array['type'] == 'pred'? 'request' : 'correction';
     $query_wr->field_qty = $query_qty;
     $query_wr->field_query_status_client = $has_approved_plan ? 'approved' : 'processing';
     $query_wr->field_query_status_manager = $query_status_manager;
@@ -577,6 +560,7 @@ function production_query_import($array)
     $query_wr->field_comment = $query_comment;
     $query_wr->field_oc_id = $query_oc_id;
     $query_wr->field_query_period = ['value' => $query_period_value, 'value2' => $query_period_value2 ];
+    $query_wr->field_load_json = drupal_json_encode($load_arr);
     $query_wr->save();
 
     // уведомления по Установкам
@@ -598,15 +582,6 @@ function production_query_import($array)
           $notification_field_wr->save();
         }
       }
-    }
-
-    // Загрузка импортируется только для Заявок, пришедших после утверждения плана
-    // в Заявках до утверждения берём только переписку, так как Загрузка отображается в предварительном плане
-    if ($load_arr && $has_approved_plan) {
-      $query_wr->field_load_json = drupal_json_encode($load_arr);
-
-      // todo устарело
-      production_query_load_update($query->id, $load_arr);
     }
 
   } catch (Exception $e) {
@@ -639,12 +614,11 @@ function production_query_import($array)
       if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-        if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [];
-        $service_load_arr[$produce_unit->tid][] = [
+        if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
           'pu_tid' => $produce_unit->tid,
-          'date' => $day_start,
-          'output' => 0,
+          'pu_load' => [],
         ];
+        $service_load_arr[$produce_unit->tid]['pu_load'][$day_start] = 0;
       } else {
         watchdog('import', 'Импорт занятости. Не найдена установка "%unit_id_1c". (%query_oc_id)', ['%unit_id_1c' => $item['unit_id_1c'], '%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
         //return false;
@@ -665,9 +639,6 @@ function production_query_import($array)
       $query_zan_wr->field_query_type = 'service';
       $query_zan_wr->field_load_json = drupal_json_encode($service_load_arr);
       $query_zan_wr->save();
-
-      // todo устарело
-      production_query_load_update($query_zan->id, $service_load_arr);
     }
   }
 

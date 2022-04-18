@@ -67,8 +67,8 @@ function ext_user_menu_alter(&$items)
  */
 function ext_user_cron_queue_info()
 {
-  $queues['ext_user_transfer_queue'] = array(
-    'worker callback' => 'ext_user_transfer_range',
+  $queues['ext_user_queue_worker'] = array(
+    'worker callback' => 'ext_user_queue_callback',
   );
 
   return $queues;
@@ -191,35 +191,35 @@ function ext_user_managers_get_by_company_id($company_id)
   return $users;
 }
 
-function ext_user_transfer_range($ids)
+function ext_user_queue_callback($params)
 {
-  foreach ($ids as $id) {
+  foreach ($params as $id) {
     $success = false; $error = '';
     $query_wr = entity_metadata_wrapper('query', $id);
-    if ($query_wr->field_load->value()) {
-      $load = [];
-      foreach ($query_wr->field_load->getIterator() as $load_wr) {
-        if ($load_wr->value() && $load_wr->field_produce_unit->value() && $load_wr->field_produce_date->value()) {
-          $pu_tid = $load_wr->field_produce_unit->getIdentifier();
-          if (!isset($load[$pu_tid])) $load[$pu_tid] = [];
-          $load[$pu_tid][] = [
-            'pu_tid' => $pu_tid,
-            'date' => $load_wr->field_produce_date->value(),
-            'output' => $load_wr->field_produce_output->value(),
-          ];
-        } else {
-          if (!$load_wr->value()) $error = 'Пустая загрузка';
-          if (!$load_wr->field_produce_unit->value()) $error = 'Пустая установка';
-          if (!$load_wr->field_produce_date->value()) $error = 'Пустая дата';
+    if ($query_wr->value()) {
+
+//      if ($query_wr->field_query_type->value() == 'main') {
+//        $query_wr->field_query_type = 'plan';
+//      }
+
+      if ($query_wr->field_query_type->value() == 'correction') {
+        $query_plan = production_query_approved_plan_get($query_wr->field_month->value());
+        if (!$query_plan                                                        // если в месяце нет утв. Плана
+            || $query_plan->id > $query_wr->getIdentifier())                   // или если есть утверждённый План после заявки
+        {
+          $query_wr->field_query_type = 'request';                              // значит она типа request
         }
-      }
-      $query_wr->field_load_json = drupal_json_encode($load);
-      if ($query_wr->save()) {
         $success = true;
       }
+
+      if ($success) {
+        $query_wr->save();
+      }
+
     } else {
-      $error = 'Пустой массив загрузки';
+      $error = 'Пустая заявка';
     }
+
 
     if ($success) {
       watchdog('transfer', 'Удачно (%id)', ['%id' => $id]);
@@ -227,4 +227,22 @@ function ext_user_transfer_range($ids)
       watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $id, '%error' => $error], WATCHDOG_ERROR);
     }
   }
+}
+
+function _op0($params)
+{
+  foreach ($params as $id) {
+    $success = false; $error = '';
+    $query_wr = entity_metadata_wrapper('query', $id);
+
+    if ($success) {
+      watchdog('transfer', 'Удачно (%id)', ['%id' => $id]);
+    } else {
+      watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $id, '%error' => $error], WATCHDOG_ERROR);
+    }
+  }
+}
+function _op1($id)
+{
+
 }

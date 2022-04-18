@@ -97,7 +97,7 @@ form {
   }
   .views-field-created { flex: 0 0 120px; justify-content: center; }
   .views-field-field-qty { flex: 0 0 80px; justify-content: flex-end; }
-  .views-field-field-query-reason { flex: 0 0 200px; }
+  .views-field-field-query-reason { flex: 1 0 240px; }
   .views-field-field-query-status-manager { flex: 0 0 140px; }
   .views-field-actions {
     justify-content: flex-end; align-items: center;
@@ -128,15 +128,23 @@ form {
     display: flex; justify-content: space-between; flex-wrap: wrap;
     margin-bottom: $grid-gutter-width/2;
     position: relative;
-    .views-field-id {
-      flex: 0 0 140px;
+    .views-field-created {
+      flex: 0 0 150px;
       margin-bottom: $grid-gutter-width/2;
+      a {
+        color: inherit; font-size: inherit; cursor: pointer;
+        &:hover { text-decoration: none; }
+      }
     }
-    .views-field-created { flex: 0 0 150px; }
-    .views-field-field-qty { flex: 150px; }
-    .views-field-field-query-reason { flex: 0 0 300px; }
+
+    .views-field-field-qty { flex: 0 0 120px; }
+    .views-field-field-query-reason { flex: 300px; }
     .views-field-field-query-status-manager { flex: 0 0 220px; }
     .views-field-field-query-type { flex-basis: 100px; }
+    .views-field-uid {
+      flex: 100px;
+      text-align: right;
+    }
 
     .views-field-produce-units-form {
       flex: 100%;
@@ -299,18 +307,30 @@ form {
   }
 }
 
+#pu-load-form-wrapper {
+  .date-wrapper {
+    display: flex; align-items: flex-end;
+    .form-item { margin: 0 5px 15px 0; }
+  }
+}
 .produce-units {
   display: flex;
   .produce-units-list { flex: auto; }
 }
 .produce-unit {
-  display: flex;
+  display: flex; flex-wrap: wrap;
   margin-bottom: $grid-gutter-width/2;
-  .views-field-produce-unit-load & { flex-wrap: wrap; }
+
+  .view-item & { flex-wrap: nowrap;}
   //margin-bottom: 0; // если установок две, то между ними нет интервала
   h3 {
     font-size: 20px;
     margin: 0 0 2px 0;
+  }
+  .label {
+    display: inline-block;
+    color: $text-muted; font-weight: 400; font-size: 12px;
+    margin-bottom: 10px; padding: 0;
   }
   .produce-unit-name {
     flex: 0 1 130px;
@@ -452,6 +472,10 @@ form {
     margin-left: 162px;
     margin-bottom: 15px;
   }
+  &.top {
+    margin: 0 0 20px 130px;
+    > div { margin-right: 30px; }
+  }
 }
 
 
@@ -516,4 +540,13 @@ form.query-form {
   }
   > div:nth-child(2) {  }
   > div:nth-child(3) { flex: 0 0 300px; }
+}
+
+.table-year-plan {
+  font-size: 10px;
+  th:first-child { width: 300px; }
+  th[align=right] { text-align: right; }
+  th[align=center] { text-align: center; }
+  .red { color: $brand-danger; }
+  .green { color: $brand-success; }
 }
