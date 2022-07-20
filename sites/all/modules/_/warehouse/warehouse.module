@@ -232,7 +232,7 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
       $day_start = gmmktime(0, 0, 0, $month, $day_arr['day'], $year);
       $busyness = $day_arr['wwork_qty'] * 100/16;
       // при занятости дня менее 50% выделить зелёным цветом, более - жёлтым, выходной красным
-      $day_color = $day_arr['is_weekend'] ? ' color-wend' : ($busyness <= 50 ? ' color-free' : ' color-lack');
+      $day_color = $day_arr['is_weekend'] ? ' color-wend' : (_warehouse_is_cargo_add_allowed($year, $month, $day_arr['day']) ? ($busyness <= 50 ? ' color-free' : ' color-lack') : ' color-off');
       $day_active =  $day_arr['day'] == $day ? ' active' : '';
       $calendar .=
         '<li class="day' . $day_color . $day_active . '" data-date="' . $day_start . '">' .
@@ -352,6 +352,16 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
         $add_not_allowed_text = 'Добавление погрузок в кабинете менеджера недоступно.';
       }
 
+      // возможно добавление на этот день недоступно
+      if (!_warehouse_is_cargo_add_allowed($year, $month, $day)) {
+        $is_add_allowed = false;
+        $add_not_allowed_text = 'Добавление погрузок на текущую дату недоступно.';
+      }
+
+      if ($is_add_allowed && !$offset) {
+        $add_not_allowed_text = 'Для добавления погрузки выберите время в расписании.';
+      }
+
       // добавление сборных грузов недоступно реньше, чем обычных грузов ( с HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL вместо HOUR_ADD_AVAILABLE_TILL)
       $is_combined_cargo_add_allowed = false;
       if ($is_add_allowed) {
@@ -435,9 +445,9 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
                         '</div>' .
                       '</div>' .
                     '</div>';
-      } elseif ($offset) {
+      } else {
         $output .= '<div class="add-actions">';
-        $output .= $is_add_allowed ?
+        $output .= $is_add_allowed && $offset ?
           '<p>Подготовка сборного груза требует перепаллетирования и поэтому занимает больше времени. При планировании на следующий день, заявка на погрузку, состоящая только из целых паллет ' .
           'подаётся до ' . HOUR_ADD_AVAILABLE_TILL . '<sup>00</sup> текущего, а заявка, требующая подготовки и перепаллетирования, до ' . HOUR_COMBINED_CARGO_ADD_AVAILABLE_TILL . '<sup>00</sup>.'.
           '</p>' .
@@ -455,8 +465,6 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
           : $add_not_allowed_text ;
 
         $output .= '</div>';
-      } else {
-        $output .= '<p>Выберите время в расписании</p>';
       }
     } else {
         $output .= '<p>Выберите дату</p>';
@@ -648,7 +656,6 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
   }
 }
 
-
 function warehouse_inline_entity_form_reference_form_alter(&$entity_form, &$form_state)
 {
   $entity_form["entity_id"]["#title"] = 'Водительское удостоверение или фамилия';
@@ -657,7 +664,6 @@ function warehouse_inline_entity_form_reference_form_alter(&$entity_form, &$form
   $entity_form["actions"]["ief_reference_cancel"]["#attributes"]["class"][] = 'btn-link';
   $entity_form["actions"]["ief_reference_cancel"]["#value"] = 'убрать из заявки';
 }
-
 
 function warehouse_inline_entity_form_entity_form_alter(&$entity_form, &$form_state)
 {
@@ -729,6 +735,15 @@ function warehouse_eck__entity__form_warehouse_work_warehouse_work_validate($for
     form_set_error('field_wwork_time', 'Выберите время погрузки');
     return false;
   } elseif ($form["#form_id"] == 'eck__entity__form_add_warehouse_work_warehouse_work') {
+    // проверка возможности добаления в заданную дату (на случай подмены значения time формы)
+    $year = date('Y', $form_state["input"]["time"]);
+    $month = date('m', $form_state["input"]["time"]);
+    $day = date('d', $form_state["input"]["time"]);
+    if (!_warehouse_is_cargo_add_allowed($year, $month, $day)) {
+      form_set_error('field_wwork_time', 'Добавление на выбранное время невозможно. Если вы считаете, что это ошибка, сообщите администратору сайта (<a href="mailto:support@kccc.ru">support@kccc.ru</a>).');
+      return false;
+    }
+
     // проверка на предмет занятости данного времени (заняли другие, пока заполняли форму)
     $dbr = db_select('eck_warehouse_work', 'w');
     $dbr->addField('w', 'id');
@@ -1087,7 +1102,7 @@ function warehouse_get_day_schedule($month, $day, $year)
     // условие, при котором на заданный день запись уже недоступна
     // - текущий день и ранее
     // - на следующий день запись доступна до HOUR_ADD_AVAILABLE_TILL текущего
-    $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + HOUR_ADD_AVAILABLE_TILL * 60 * 60);
+    $is_day_blocked = !_warehouse_is_cargo_add_allowed($year, $month, $day);
 
     // определить, открываем дополнительное время или резервное
     $is_quarter_locked = true;  // открывать ли резерв
@@ -1152,7 +1167,6 @@ function warehouse_get_day_schedule($month, $day, $year)
   return $schedule;
 }
 
-
 function warehouse_taxonomy_term_presave($term)
 {
   if ($term->vocabulary_machine_name == 'drivers') {
@@ -1197,8 +1211,6 @@ function warehouse_get_text_for_order_status($status)
 
   return $text;}
 
-
-
 function date_field_prepare_view($entity_type, $entities, $field, $instances, $langcode, &$items)
 {
   // todo переделать
@@ -1214,6 +1226,23 @@ function date_field_prepare_view($entity_type, $entities, $field, $instances, $l
   }
 }
 
+// условие, при котором на заданный день добавление загрузки уже недоступна
+// - текущий день и ранее
+// - на следующий день запись доступна до HOUR_ADD_AVAILABLE_TILL текущего
+function _warehouse_is_cargo_add_allowed($year, $month, $day)
+{
+  $day_start = gmmktime(0, 0, 0, $month, $day, $year);
+  $day_current = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
+  $day_after_current = gmmktime(0, 0, 0, date('n'), date('j')+1, date('Y'));
+  $timestamp_gmt = time() + 180*60;
+
+  $is_day_blocked = $day_start < $day_after_current || ($day_start == $day_after_current && $timestamp_gmt > $day_current + HOUR_ADD_AVAILABLE_TILL * 60 * 60);
+
+  return !$is_day_blocked;
+}
+// условие, при котором на заданный день добавление сборной загрузки уже недоступна
+// - текущий день и ранее
+// - на следующий день запись доступна до HOUR_ADD_AVAILABLE_TILL текущего
 function _warehouse_is_combined_cargo_add_allowed($year, $month, $day)
 {
   $day_start = gmmktime(0, 0, 0, $month, $day, $year);

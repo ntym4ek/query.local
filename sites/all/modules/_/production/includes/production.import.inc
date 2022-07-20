@@ -300,7 +300,15 @@ function production_produce_plan_import($array)
 
     //  если есть утверждённый план, импорт запретить
     if ($has_approved_plan = production_query_approved_plan_get($month_start)) {
-      watchdog('import', 'Утверждённый план уже загружен. Импорт плана не выполнен.', [], WATCHDOG_ERROR);
+      watchdog('import', 'Утверждённый план уже загружен. Импорт плана %month не выполнен.', ['%month' => $array['month']], WATCHDOG_ERROR);
+
+      // уведомить об ошибке для устранения причин
+      drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
+        'context' => array(
+          'subject' => 'Производство Агрохимикат. Ошибка импорта',
+          'message' => 'Утверждённый план уже загружен. Импорт плана ' . $array['month'] . ' не выполнен. Возможно, в базе есть ошибочные утверждённые заявки плана, которые не дают импортировать реальный план.',
+        )
+      ));
       return false;
     }
 
@@ -321,12 +329,14 @@ function production_produce_plan_import($array)
               'load' => [],
             ];
           }
-          $plan[$nom->tid]['field_qty'] += $item['output'];
+
+          $output = round($item['output']); // общее количество в заявке - целочисленное поле
+          $plan[$nom->tid]['field_qty'] += $output;
           if (!isset($plan[$nom->tid]['load'][$produce_unit->tid])) $plan[$nom->tid]['load'][$produce_unit->tid] = [
             'pu_tid' => $produce_unit->tid,
             'pu_load' => [],
           ];
-          $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
+          $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $output;
 
           $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
           $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
@@ -414,6 +424,7 @@ function production_produce_plan_import($array)
     if ($user_mails) {
       foreach ($user_mails as $user_id => $data) {
         $params['month'] = t(date('F', $data['month']));
+        $params['year'] = date('Y', $data['month']);
         try {
           if ($users = ext_user_managers_get_by_company_id($data['company_uid'])) {
             foreach ($users as $manager_account) {
@@ -479,9 +490,10 @@ function production_query_import($array)
           'pu_tid' => $produce_unit->tid,
           'pu_load' => [],
         ];
-        $load_arr[$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
+        $output = round($item['output']); // общее количество в заявке - целочисленное поле
+        $load_arr[$produce_unit->tid]['pu_load'][$day_start] = $output;
 
-        $query_qty += $item['output'];
+        $query_qty += $output;
       } else {
         watchdog('import', 'Импорт заявки. Не найдена установка "%unit_id_1c". (%query_oc_id)', ['%unit_id_1c' => $item['unit_id_1c'], '%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
         return false;
@@ -543,6 +555,15 @@ function production_query_import($array)
   $has_approved_plan = production_query_approved_plan_get($month_start);
   if ($has_approved_plan && $array['type'] == 'pred') {
     watchdog('import', 'Импорт занятости. Попытка импорта предварительной заявки при наличии утверждённого плана. (%query_oc_id)', ['%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
+
+    // уведомить об ошибке для устранения причин
+    drupal_mail('system', 'mail', 'mega_comp@mail.ru', language_default(), array(
+      'context' => array(
+        'subject' => 'Производство Агрохимикат. Ошибка импорта',
+        'message' => 'Импорт занятости. Попытка импорта предварительной заявки при наличии утверждённого плана ' . $array['month'] . '.',
+      )
+    ));
+
     return false;
   }
 
@@ -647,6 +668,7 @@ function production_query_import($array)
     $params = [
       'qid' => $query_wr->getIdentifier(),
       'month' => t(date('F', $query_wr->field_month->value())),
+      'year' => date('Y', $query_wr->field_month->value()),
       'product' => $query_wr->field_nomenklatura->name->value(),
       'volume' => $query_wr->field_qty->value(),
       'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),

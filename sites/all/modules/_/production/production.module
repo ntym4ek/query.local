@@ -1146,7 +1146,7 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
 
   // определяем Установки и их Загрузку
   // если актуальная Заявка или пустой слепок (состояние установок для Заявки на момент когда она была актуальной)
-  if ((isset($curr_query_actual) && $curr_query_actual->id == $curr_query_id) || !$curr_pu_snapshot) {
+  if ((!empty($curr_query_actual) && $curr_query_actual->id == $curr_query_id) || !$curr_pu_snapshot) {
 
     // определить Номенклатуру на месяц
     $nom_list = production_nomenklatura_get($month_start, $produce_unit_tid, $curr_query_date);
@@ -1174,6 +1174,7 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
     }
 
     // определить Установки
+  /** структура массива
     $produce_units = [
       '%putid' => [
         'info' => '%pu_info',
@@ -1189,6 +1190,8 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
         ],
       ],
     ];
+ */
+
     $produce_units = [];
     $produce_units_client = [];
     $produce_units_labels = [];
