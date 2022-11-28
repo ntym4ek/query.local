@@ -73,10 +73,77 @@ function production_pu_load_form_callback($form, $form_values)
   return $form;
 }
 
+
+
+
+
 function production_year_page()
 {
-  $year = date('n') < 9 ? date('Y') : date('Y')+1;
+  $html = '';
+  // для кого выводим
   $client_id = production_company_id_get_by_user($GLOBALS['user']->uid);
+
+  // форма выбора давальца для наших менеджеров
+  if (user_has_role(ROLE_MANAGER_PRODUCTION)) {
+    $filter_form = drupal_get_form('production_year_client_form');
+    $html .= drupal_render($filter_form);
+    $client_id = empty($_REQUEST['client']) ? $filter_form['client']['#default_value'] : $_REQUEST['client'];
+  }
+
+  $html .= production_year_table($client_id);
+
+  return $html;
+}
+
+function production_year_client_form($form, $form_state)
+{
+  $options = [];
+  $year = date('n') < 9 ? date('Y') : date('Y')+1;
+  $month_start = gmmktime(0, 0, 0, 9, 1, $year-1);
+
+  $query = db_select('users', 'u');
+  $query ->fields('u', ['uid', 'name']);
+  $query ->innerJoin('field_data_field_user', 'fu', 'fu.field_user_target_id = u.uid');
+  $query ->condition('fu.bundle', 'nomenklatura');
+  $query ->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.field_nomenklatura_target_id = fu.entity_id');
+  $query ->innerJoin('eck_query', 'q', 'q.id = fn.entity_id');
+  $query ->condition('q.created', $month_start, '>=');
+  if ($clients = $query->execute()->fetchAllAssoc('uid')) {
+    foreach ($clients as $uid => $client) {
+      $options[$uid] = $client -> name;
+    }
+  }
+
+  $form['client'] = array(
+    '#title' => 'Клиент',
+    '#type' => 'select',
+    '#options' => $options,
+    '#default_value' => array_key_first($options),
+    '#required' => true,
+    '#ajax' => [
+      'callback' => 'production_year_select_callback',
+      'wrapper' => 'table-wrapper',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ],
+    '#prefix' => '<div class="row"><div class="col-xs-4">',
+    '#suffix' => '</div></div>',
+  );
+
+  return $form;
+}
+function production_year_client_form_submit($form, &$form_state)
+{
+  $form_state['redirect'] = FALSE;
+}
+function production_year_select_callback($form, $form_state)
+{
+  return production_year_table($form_state['values']['client']);
+}
+
+function production_year_table($client_id)
+{
+  $year = date('n') < 9 ? date('Y') : date('Y')+1;
 
   $nom_arr = [
     '%nom_id' => [
@@ -139,10 +206,10 @@ function production_year_page()
     $rows[] = $row;
   }
 
-  $html = theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => 'table-year-plan']]);
-
-
-  return $html;
+  return  '<div id="table-wrapper">' .
+            '<h5>Таблица носит ознакомительный характер и может содержать неактуальные данные. За точной информацией обратитесь к нашему менеджеру.</h5>' .
+            theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => 'table-year-plan']]) .
+          '</div>';
 }
 
 function production_nomenklatura_get_list($client_id)
@@ -172,7 +239,6 @@ function production_query_get_info($query)
       }
     }
   }
-
 
   return [
     'id' => $query_wr->getIdentifier(),
