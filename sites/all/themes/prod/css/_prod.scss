@@ -106,7 +106,13 @@ form {
   }
 }
 
-.view.view-display-id-page_1 {
+.view {
+  .view-filters {
+    .views-exposed-form {
+      .date-padding { display: flex; }
+    }
+  }
+  &.view-display-id-page_1 {
   position: relative;
   .attachment-before,
   .view-filters,
@@ -242,6 +248,7 @@ form {
   &.view-nomenklatura .table td {
     font-size: 16px;
   }
+}
 }
 
 .view.view-display-id-page_2 {

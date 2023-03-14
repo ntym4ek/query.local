@@ -177,6 +177,7 @@ function ext_user_managers_get_by_company_id($company_id)
   $users = [];
   if (is_numeric($company_id)) {
     $query = db_select('users', 'u');
+    $query ->condition('u.status', 1);
     $query ->fields('u', ['uid']);
     $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
     $query ->condition('fc.field_company_target_id', $company_id);
