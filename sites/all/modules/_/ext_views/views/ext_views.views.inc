@@ -255,12 +255,7 @@ function ext_views_preprocess_views_view_field(&$vars)
 
   if ($vars["view"]->name == 'queries' && isset($vars["field"]->field_info["field_name"])) {
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_get_nomenklatura_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
-      $vars["output"] = $nom_info['label'];
-    }
-
-    if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_get_nomenklatura_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
+      $nom_info = production_get_nomenklatura_info($vars["row"]->field_field_nomenklatura[0]["raw"]["target_id"]);
       $vars["output"] = $nom_info['label'];
     }
 

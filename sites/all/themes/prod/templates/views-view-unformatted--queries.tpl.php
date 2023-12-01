@@ -14,14 +14,14 @@ $first = $last = false;
 <?php endif; ?>
 <?php foreach ($rows as $index => $row): ?>
   <?php
-    if ($nom != $variables["view"]->result[$index]->field_data_field_nomenklatura_field_nomenklatura_target_id) {
-      $nom = $variables["view"]->result[$index]->field_data_field_nomenklatura_field_nomenklatura_target_id;
+    if ($nom != $view->result[$index]->field_field_nomenklatura[0]["raw"]["target_id"]) {
+      $nom = $view->result[$index]->field_field_nomenklatura[0]["raw"]["target_id"];
       $first = true; $last = false;
-      $id = $variables["view"]->result[$index]->id;
+      $id = $view->result[$index]->id;
     } else {
       $first = false;
     }
-    if (empty($variables["view"]->result[$index+1]) || $nom != $variables["view"]->result[$index+1]->field_data_field_nomenklatura_field_nomenklatura_target_id) {
+    if (empty($view->result[$index+1]) || $nom != $view->result[$index+1]->field_field_nomenklatura[0]["raw"]["target_id"]) {
       $last = true;
     }
   ?>
