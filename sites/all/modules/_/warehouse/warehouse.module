@@ -1,4 +1,4 @@
-<?
+<?php
 
 define('DAY_STATUS_FREE', 'free');
 define('DAY_STATUS_BUSY', 'busy');
@@ -333,10 +333,9 @@ function warehouse_calendar_template($month = null, $day = null, $offset = null,
 
     if (!empty($day)) {
       // проверить, возможно клиент уже выбрал квоту погрузок на день (по умолчанию - DEFAULT_CLIENT_LOADS_LIMIT)
-      $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
       $company_wwork_limit = DEFAULT_CLIENT_LOADS_LIMIT;
-      if ($user_wr->value() && $user_wr->field_company->value() && $user_wr->field_company->field_wwork_limit->value()) {
-        $company_wwork_limit = $user_wr->field_company->field_wwork_limit->value();
+      if ($company = ext_user_get_company_by_user()) {
+        $company_wwork_limit = $company['wwork_limit'];
       }
       $is_add_allowed = $calendar_arr[(int)$day]['wwork_qty_own'] < $company_wwork_limit;
       $add_not_allowed_text = 'Вы уже выбрали квоту погрузок на этот день. Добавить сверх квоты можно в течение суток перед погрузкой при наличии свободных мест.<br>Также вы можете запланировать их на другой день.';
@@ -594,15 +593,15 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
 
       // скрыть служебные поле
       $form['field_service']["#access"] = false;
-      $form["field_company"]["#access"] = false;
+      if (isset($form["field_company"]["#access"])) $form["field_company"]["#access"] = false; // уст.
+      $form["field_client"]["#access"] = false;
       $form["field_checkin_time"]["#access"] = false;
       $form["field_onload_time"]["#access"] = false;
       $form["field_gone_time"]["#access"] = false;
       $form["field_processing"]["#access"] = false;
       $form["field_cancel_reason"]["#access"] = false;
 
-      $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
-      $company_id = $user_wr->field_company->getIdentifier();
+      $company = ext_user_get_company_by_user();
 
       if ($form_id == 'eck__entity__form_add_warehouse_work_warehouse_work') {
         if (empty($form_state['date']['complex_cargo'])) {
@@ -612,7 +611,7 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
         }
         // указываем компанию клиента
 
-        $form["field_company"]["und"]["#default_value"] = $company_id;
+        $form["field_client"]["und"]["#default_value"] = $company['id'];
       }
       if ($form_id == 'eck__entity__form_edit_warehouse_work_warehouse_work') {
         if ($form["field_combined_cargo"]["und"]["#default_value"]) {
@@ -626,7 +625,7 @@ function warehouse_form_alter(&$form, &$form_state, $form_id)
         $timestamp_gmt = time() + 180*60;
         if (!empty($form["entity"]["#value"]->field_processing["und"][0]["value"]
           || $timestamp_gmt > $wwork_time_unix - MINS_BEFORE_EDIT_ORDER_AVAILABLE*60*60)
-          || ($company_id == COMPANY_TD && $timestamp_gmt > $wwork_time_unix - 1*60*60)) {
+          || ($company['id'] == COMPANY_TD && $timestamp_gmt > $wwork_time_unix - 1*60*60)) {
           $form["field_file_wwork_order"]['#disabled'] = true;
           $form["field_file_wwork_order"]["und"][0]["#description"] = '<span class="text-danger">ВНИМАНИЕ!</span> Заявка уже обрабатывается и накладная может быть изменена только по согласованию со складом.';
         }
@@ -669,11 +668,12 @@ function warehouse_inline_entity_form_entity_form_alter(&$entity_form, &$form_st
 {
   $entity_form["name"]["#access"] = false;
   $entity_form["description"]["#access"] = false;
-  $entity_form["field_contractor"]["#access"] = false;
+  if (isset($entity_form["field_contractor"]["#access"])) $entity_form["field_contractor"]["#access"] = false; // уст.
+  $entity_form["field_client"]["#access"] = false;
 
-  $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
-  if ($user_wr->value() && $user_wr->field_company->value()) {
-    $entity_form["field_contractor"]["und"]["#default_value"] = $user_wr->field_company->getIdentifier();
+  ;
+  if ($company = ext_user_get_company_by_user()) {
+    $entity_form["field_client"]["und"]["#default_value"] = $company['id'];
   }
 
   // оформление
@@ -813,9 +813,8 @@ function warehouse_wwork_export($wwork_wr, $delete = null)
     }
 
     $davalec_id = 0;
-    $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']);
-    if ($user_wr->field_company->value()) {
-      $davalec_id = $user_wr->field_company->field_oc_davalec_id->value();
+    if ($company = ext_user_get_company_by_user()) {
+      $davalec_id = $company['1c_id'];
     }
 
     if ($davalec_id) {
@@ -938,13 +937,11 @@ function warehouse_get_month_dates($month, $year)
       $load = $dbr->execute()->fetchCol();
 
       // проверить наличие погрузок пользователя в этот день
-      $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
-      if ($user_wr->field_company->value()) {
-        $company_id = $user_wr->field_company->getIdentifier();
+      if ($company = ext_user_get_company_by_user()) {
         $dbr = db_select('eck_warehouse_work', 'w');
         $dbr->addField('w', 'id');
-        $dbr->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = w.id');
-        $dbr->condition('fc.field_company_target_id', $company_id);
+        $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = w.id');
+        $dbr->condition('fc.field_client_tid', $company['id']);
         $dbr->innerJoin('field_data_field_wwork_time', 'ft', 'ft.entity_id = w.id');
         $dbr->condition('ft.field_wwork_time_value', [$day_start, $day_finish], 'between');
         $busy_same = $dbr->execute()->fetchCol();
@@ -1021,9 +1018,8 @@ function warehouse_get_day_schedule($month, $day, $year)
     $timestamp_gmt = time() + 180 * 60;
 
     $company_id = -1;
-    $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
-    if ($user_wr->field_company->value()) {
-      $company_id = $user_wr->field_company->getIdentifier();
+    if ($company = ext_user_get_company_by_user()) {
+      $company_id = $company['id'];
     }
 
     // найти погрузки в этот день
@@ -1044,8 +1040,8 @@ function warehouse_get_day_schedule($month, $day, $year)
     $dbr->leftJoin('field_data_field_combined_cargo', 'fcc', 'fcc.entity_id = w.id');
     $dbr->addField('fcc', 'field_combined_cargo_value', 'combined_cargo');
 
-    $dbr->leftJoin('field_data_field_company', 'fc', 'fc.entity_id = w.id');
-    $dbr->addField('fc', 'field_company_target_id', 'company_id');
+    $dbr->leftJoin('field_data_field_client', 'fc', 'fc.entity_id = w.id');
+    $dbr->addField('fc', 'field_client_tid', 'company_id');
 
     $dbr->leftJoin('field_data_field_checkin_time', 'fct', 'fct.entity_id = w.id');
     $dbr->addField('fct', 'field_checkin_time_value', 'checkin_time');
@@ -1069,7 +1065,7 @@ function warehouse_get_day_schedule($month, $day, $year)
 
       // статусы только для "своих" погрузок
       if ($item_l->company_id == $company_id || user_has_role(ROLE_MANAGER_WAREHOUSE)) {
-        // если отсутсвует информация
+        // если отсутствует информация
         if (!$item_l->truck_driver) {
           $item_l->status = 'lack';
         }
@@ -1180,9 +1176,8 @@ function warehouse_entity_query_alter(&$query)
 {
   // добавить фильтр по Подрядчикам для Водителей (у каждого клиента свой список)
   if (isset($query->metaData["field"]) && $query->metaData["field"]["field_name"] == 'field_driver') {
-    $user_wr = entity_metadata_wrapper('user', $GLOBALS['user']->uid);
-    if ($user_wr->value() && $user_wr->field_company->value()) {
-      $query->fieldCondition('field_contractor', 'target_id', $user_wr->field_company->getIdentifier());
+    if ($company = ext_user_get_company_by_user()) {
+      $query->fieldCondition('field_client', 'tid', $company['id']);
     }
   }
 }

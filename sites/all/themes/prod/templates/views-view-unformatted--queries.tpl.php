@@ -13,7 +13,7 @@ $first = $last = false;
   <h3><?php print $title; ?></h3>
 <?php endif; ?>
 <?php foreach ($rows as $index => $row): ?>
-  <?
+  <?php
     if ($nom != $variables["view"]->result[$index]->field_data_field_nomenklatura_field_nomenklatura_target_id) {
       $nom = $variables["view"]->result[$index]->field_data_field_nomenklatura_field_nomenklatura_target_id;
       $first = true; $last = false;

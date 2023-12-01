@@ -81,7 +81,8 @@ function production_year_page()
 {
   $html = '';
   // для кого выводим
-  $client_id = production_company_id_get_by_user($GLOBALS['user']->uid);
+  $company = ext_user_get_company_by_user();
+  $client_id = $company['id'];
 
   // форма выбора давальца для наших менеджеров
   if (user_has_role(ROLE_MANAGER_PRODUCTION)) {
@@ -101,16 +102,17 @@ function production_year_client_form($form, $form_state)
   $year = date('n') < 9 ? date('Y') : date('Y')+1;
   $month_start = gmmktime(0, 0, 0, 9, 1, $year-1);
 
-  $query = db_select('users', 'u');
-  $query ->fields('u', ['uid', 'name']);
-  $query ->innerJoin('field_data_field_user', 'fu', 'fu.field_user_target_id = u.uid');
-  $query ->condition('fu.bundle', 'nomenklatura');
-  $query ->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.field_nomenklatura_target_id = fu.entity_id');
+  $query = db_select('taxonomy_term_data', 't');
+  $query ->fields('t', ['tid', 'name']);
+  $query ->orderBy('name');
+  $query ->innerJoin('field_data_field_client', 'fc', 'fc.field_client_tid = t.tid');
+  $query ->condition('fc.bundle', 'nomenklatura');
+  $query ->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.field_nomenklatura_target_id = fc.entity_id');
   $query ->innerJoin('eck_query', 'q', 'q.id = fn.entity_id');
   $query ->condition('q.created', $month_start, '>=');
-  if ($clients = $query->execute()->fetchAllAssoc('uid')) {
-    foreach ($clients as $uid => $client) {
-      $options[$uid] = $client -> name;
+  if ($clients = $query->execute()->fetchAllAssoc('tid')) {
+    foreach ($clients as $tid => $client) {
+      $options[$tid] = $client->name;
     }
   }
 
@@ -154,9 +156,9 @@ function production_year_table($client_id)
   ];
   $nom_arr = [];
   // получить список номенклатуры
-  $nom_id_list = production_nomenklatura_get_list($client_id);
+  $nom_id_list = production_get_nomenklatura_list_by_client_id($client_id);
   foreach($nom_id_list as $index => $nom_id) {
-    $nom_info = production_nomenklatura_get_info($nom_id);
+    $nom_info = production_get_nomenklatura_info($nom_id);
     $nom_item = [
       'year' => ['plan' => 0, 'fact' => 0],
       'months' => [],
@@ -167,7 +169,7 @@ function production_year_table($client_id)
       $month_start = gmmktime(0, 0, 0, 9+$i-1, 1, $year-1);
       $month_num = date('n', $month_start);
       $nom_item['months'][$month_num] = 0;
-      if ($query_actual = production_query_actual_get($month_start, $nom_id)) {
+      if ($query_actual = production_get_query_actual($month_start, $nom_id)) {
         $query_info = production_query_get_info($query_actual);
         $nom_item['months'][$month_num] = $query_info['output'];
         $nom_item['year']['plan'] += $query_info['output']['plan'];
@@ -188,16 +190,16 @@ function production_year_table($client_id)
 
   // табличная часть
   foreach ($nom_arr as $n_tid => $n_item) {
-    $row = [$n_item['label'], ['data' => number_format($n_item['year']['plan'], 0, ',', ' '), 'align' => 'right'], ['data' => number_format($n_item['year']['fact'], 0, ',', ' '), 'align' => 'right']];
+    $row = [$n_item['label'], ['data' => number_format($n_item['year']['plan'], 1, ',', ' '), 'align' => 'right'], ['data' => number_format($n_item['year']['fact'], 1, ',', ' '), 'align' => 'right']];
     foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
       $month_start = gmmktime(0, 0, 0, $m_num, 1, $m_num < 9 ? $year : $year-1);
       $class = 'green'; $align = 'right';
       if ($month_start > REQUEST_TIME) $class = 'red';
       if (date('n', $month_start) == date('n')) {
         $class = ''; $align = 'center';
-        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 0, ',', ' ') . ' / ' . number_format($n_item['months'][$m_num]['fact'], 0, ',', ' ') : '';
+        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 1, ',', ' ') . ' / ' . number_format($n_item['months'][$m_num]['fact'], 1, ',', ' ') : '';
       } else {
-        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 0, ',', ' ') : '';
+        $output = $n_item['months'][$m_num]['plan'] ? number_format($n_item['months'][$m_num]['plan'], 1, ',', ' ') : '';
       }
 
 
@@ -208,18 +210,17 @@ function production_year_table($client_id)
 
   return  '<div id="table-wrapper">' .
             '<h5>Таблица носит ознакомительный характер и может содержать неактуальные данные. За точной информацией обратитесь к нашему менеджеру.</h5>' .
-            theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => 'table-year-plan']]) .
+            theme('table', ['header' => $header, 'rows' => $rows, 'attributes' => ['class' => ['table-year-plan']]]) .
           '</div>';
 }
 
-function production_nomenklatura_get_list($client_id)
+function production_get_nomenklatura_list_by_client_id($client_id)
 {
-  // field_user
   $dbr = db_select('taxonomy_term_data', 't');
   $dbr->condition('t.vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid);
   $dbr->addField('t', 'tid');
-  $dbr->innerJoin('field_data_field_user', 'fu', 'fu.entity_id = t.tid');
-  $dbr->condition('fu.field_user_target_id', $client_id);
+  $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = t.tid');
+  $dbr->condition('fc.field_client_tid', $client_id);
   $dbr->orderBy('t.name');
   $result = $dbr->execute()->fetchCol();
 

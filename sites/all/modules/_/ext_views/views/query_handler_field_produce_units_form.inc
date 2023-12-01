@@ -41,17 +41,21 @@ class query_handler_field_produce_units_form extends views_handler_field
       }
 
       $output .=
-        '</div>' .
-        '<div class="produce-unit-legenda"><div><span></span>- установка свободна</div><div><span class="loaded"></span>- установка занята</div><div><span class="company-loaded"></span>- другая продукция компании</div><div><span class="selected"></span>- выбранные даты</div></div>' .
+          '</div>' .
+          '<div class="produce-unit-legenda">' .
+            '<div><span></span>- установка свободна</div>' .
+            '<div><span class="loaded"></span>- ' . (user_has_role(ROLE_MANAGER_PRODUCTION) ? 'тех. работы' : 'установка занята') . '</div>' .
+            '<div><span class="company-loaded"></span>- другая продукция' . (user_has_role(ROLE_MANAGER_PRODUCTION) ? '' : ' компании') . '</div>' .
+            '<div><span class="selected"></span>- даты производства</div></div>' .
         '</div>';
     }
 
     if (!empty($values->field_field_comment[0]["raw"]["value"])) {
       $output .=
-        '<div class="query-comment">' .
-        '<div class="alert alert-warning" role="alert">' .
-        $values->field_field_comment[0]["raw"]["value"] .
-        '</div>' .
+        '<div class="query-comment" data-query-id="' . $query_id . '">' .
+          '<div class="alert alert-warning" role="alert">' .
+            $values->field_field_comment[0]["raw"]["value"] .
+          '</div>' .
         '</div>';
     }
 

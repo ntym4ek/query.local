@@ -1,7 +1,5 @@
 <?php
 
-// This file must be at mymodule/views directory.
-
 /**
  * Implements hook_views_data_alter().
  */
@@ -56,18 +54,6 @@ function ext_views_views_pre_render(&$view)
     $view->attachment_before = (empty($view->attachment_before) ? '' : $view->attachment_before) . '<a href="/admin/structure/entity-type/query/query/add" class="btn btn-info">Новая заявка</a>';
   }
 }
-
-/**
- * Implements hook_views_pre_render().
- */
-function ext_views_views_view_fields(&$a, &$b, &$c)
-{
-  if ($view->name == 'queries' && $view->current_display == 'page_1') {
-    // добавить кнопку Новая заявка
-
-  }
-}
-
 
 /**
  * hook_preprocess_views_view_unformatted()
@@ -153,13 +139,14 @@ function ext_views_preprocess_views_view_unformatted(&$vars)
 //      }
 
       // если нет плана, то последняя Processing, остальные в архив
-      $query_actual = production_query_actual_get($query_month_start, $query_nom_tid);
+      $query_actual = production_get_query_actual($query_month_start, $query_nom_tid);
       $query_approved_plan = production_query_approved_plan_get($query_month_start);
       if ($query_actual && $query_id == $query_actual->id) {
         $vars["classes_array"][$key] .= $query_approved_plan ? ' actual' : ' processing';
       }
 
-      if (empty($vars["view"]->result[$key]->field_data_field_load_field_load_target_id)) {
+      if (empty($vars["view"]->result[$key]->_field_data["id_1"]["entity"]->field_load_json["und"][0]["value"])
+          || $vars["view"]->result[$key]->_field_data["id_1"]["entity"]->field_load_json["und"][0]["value"] == '[]') {
         $vars["classes_array"][$key] .= ' no-load';
       }
 
@@ -187,7 +174,9 @@ function ext_views_preprocess_views_view_unformatted(&$vars)
   }
 
   if ($vars['view']->name == 'produce_units_load_client' && $vars['view']->current_display == 'page') {
-    $vars["view"]->attachment_before = '<div class="produce-unit-legenda"><span></span>- установка свободна <span class="loaded"></span>- установка загружена <span class="selected"></span>- производство продукции</div>';
+    $vars["view"]->attachment_before =  '<div class="produce-unit-legenda">' .
+                                          '<span></span>- установка свободна <span class="loaded"></span>- установка загружена <span class="selected"></span>- производство продукции' .
+                                        '</div>';
 
     // исключить пустые строки
 //    $rows = [];
@@ -210,7 +199,7 @@ function ext_views_preprocess_views_view_table(&$vars)
     $rows = [];
     foreach ($vars["rows"] as $key => $row) {
       // заменить на артикул и название давальца
-      $nom_info = production_nomenklatura_get_info($vars["result"][$key]->tid);
+      $nom_info = production_get_nomenklatura_info($vars["result"][$key]->tid);
       $row["name"] = $nom_info['label'];
 
       if ($row['produce_unit_load_amount']) $rows[] = $row;
@@ -258,7 +247,7 @@ function ext_views_preprocess_views_view_table(&$vars)
 function ext_views_preprocess_views_view_field(&$vars)
 {
   if (in_array($vars["view"]->name, ['queries', 'manager_queries']) && isset($vars["field"]->field_alias) && $vars["field"]->field_alias == 'eck_query_uid') {
-    if (!$vars["row"]->_field_data["id_1"]["entity"]->uid)
+    if (empty($vars["row"]->eck_query_uid))
       $vars["output"] = 'Производство';
     else
       $vars["output"] = 'Клиент';
@@ -266,12 +255,12 @@ function ext_views_preprocess_views_view_field(&$vars)
 
   if ($vars["view"]->name == 'queries' && isset($vars["field"]->field_info["field_name"])) {
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_nomenklatura_get_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
+      $nom_info = production_get_nomenklatura_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
       $vars["output"] = $nom_info['label'];
     }
 
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_nomenklatura_get_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
+      $nom_info = production_get_nomenklatura_info($vars["row"]->field_data_field_nomenklatura_field_nomenklatura_target_id);
       $vars["output"] = $nom_info['label'];
     }
 
@@ -304,7 +293,7 @@ function ext_views_preprocess_views_view_field(&$vars)
 
   if ($vars["view"]->name == 'report' && isset($vars["field"]->field_info["field_name"])) {
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_nomenklatura_get_info($vars["row"]->taxonomy_term_data_field_data_field_nomenklatura_tid);
+      $nom_info = production_get_nomenklatura_info($vars["row"]->taxonomy_term_data_field_data_field_nomenklatura_tid);
       $vars["output"] = $nom_info['label'];
     }
   }

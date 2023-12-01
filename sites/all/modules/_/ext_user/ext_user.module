@@ -1,4 +1,4 @@
-<?
+<?php
 
 define('ROLE_ADMIN', '3');
 define('ROLE_MANAGER_PRODUCTION', '4');
@@ -6,52 +6,8 @@ define('ROLE_USER_PRODUCTION', '6');
 define('ROLE_MANAGER_WAREHOUSE', '7');
 define('ROLE_USER_WAREHOUSE', '5');
 
-define('COMPANY_TD', 80);
+define('COMPANY_TD', 3151);
 
-/**
- * Implementation of hook_menu().
- */
-function ext_user_menu()
-{
-//  $items['admin/config/custom'] = array(
-//    'title' => 'Custom',
-//    'page callback' => 'drupal_get_form',
-//    'page arguments' => array('ext_user_settings_form'),
-//    'access arguments' => array('access manager settings'),
-//    'file' => 'includes/ext_user.admin.inc',
-//  );
-//  $items['admin/config/custom/settings'] = array(
-//    'title' => 'Настройки',
-//    'type' => MENU_DEFAULT_LOCAL_TASK,
-//  );
-
-  $items['admin/config/custom'] = array(
-    'title' => 'Custom',
-    'position' => 'left',
-    'weight' => -100,
-    'page callback' => 'system_admin_menu_block_page',
-    'access arguments' => array('access administration pages'),
-    'file' => 'system.admin.inc',
-    'file path' => drupal_get_path('module', 'system'),
-  );
-  $items['admin/config/custom/settings'] = array(
-    'title' => 'Настройки',
-    'weight' => -1,
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('ext_user_settings_form'),
-    'access arguments' => array('access manager settings'),
-    'file' => 'includes/ext_user.admin.inc',
-  );
-  $items['admin/config/custom/transfer'] = array(
-    'title' => 'Запустить перенос данных',
-    'weight' => 5,
-    'page callback' => 'ext_user_transfer_callback',
-    'access arguments' => array('access manager settings'),
-    'file' => 'includes/ext_user.admin.inc',
-  );
-
-  return $items;
-}
 
 /**
  * Implementation of hook_menu_alter().
@@ -61,20 +17,6 @@ function ext_user_menu_alter(&$items)
   // убрать восстановление пароля со страницы входа
 //  $items['user/password']['access callback'] = false;
 }
-
-/**
- * Implements hook_cron_queue_info().
- */
-function ext_user_cron_queue_info()
-{
-  $queues['ext_user_queue_worker'] = array(
-    'worker callback' => 'ext_user_queue_callback',
-  );
-
-  return $queues;
-}
-
-
 
 /**
  * hook_module_implements_alter
@@ -137,9 +79,10 @@ function ext_user_form_user_profile_form_alter(&$form, &$form_state)
     $form["account"]["pass"]["#type"] = 'password';
 
 
-    $form["field_wwork_limit"]["#access"] = false;
-    $form["field_company"]["#access"] = false;
-    $form["field_oc_davalec_id"]["#access"] = false;
+    if (isset($form["field_wwork_limit"]["#access"])) $form["field_wwork_limit"]["#access"] = false; // уст.
+    if (isset($form["field_company"]["#access"])) $form["field_company"]["#access"] = false; // уст.
+    if (isset($form["field_oc_davalec_id"]["#access"])) $form["field_oc_davalec_id"]["#access"] = false; // уст.
+    $form["field_user_company"]["#access"] = false;
     $form["locale"]["#access"] = false;
     $form["mimemail"]["#access"] = false;
     $form["timezone"]["#access"] = false;
@@ -172,17 +115,24 @@ function ext_user_user_load_by_login($login)
   return user_load(0);
 }
 
-function ext_user_managers_get_by_company_id($company_id)
+/**
+ * @param $company_id
+ * @param $role - можно задать только для Производства или Склада
+ * @return array
+ */
+function ext_user_get_managers_by_client_id($company_id, $role = null)
 {
   $users = [];
   if (is_numeric($company_id)) {
     $query = db_select('users', 'u');
     $query ->condition('u.status', 1);
     $query ->fields('u', ['uid']);
-    $query ->innerJoin('field_data_field_company', 'fc', 'fc.entity_id = u.uid');
-    $query ->condition('fc.field_company_target_id', $company_id);
-    $query ->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
-    $query ->condition('ur.rid', ROLE_USER_PRODUCTION);
+    $query ->innerJoin('field_data_field_user_company', 'fc', 'fc.entity_id = u.uid');
+    $query ->condition('fc.field_user_company_tid', $company_id);
+    if ($role) {
+      $query->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
+      $query->condition('ur.rid', $role);
+    }
     $uids = $query->execute()->fetchCol();
     if ($uids) {
       $users = user_load_multiple($uids);
@@ -192,58 +142,22 @@ function ext_user_managers_get_by_company_id($company_id)
   return $users;
 }
 
-function ext_user_queue_callback($params)
+function ext_user_get_company_by_user($user = null)
 {
-  foreach ($params as $id) {
-    $success = false; $error = '';
-    $query_wr = entity_metadata_wrapper('query', $id);
-    if ($query_wr->value()) {
-
-//      if ($query_wr->field_query_type->value() == 'main') {
-//        $query_wr->field_query_type = 'plan';
-//      }
-
-      if ($query_wr->field_query_type->value() == 'correction') {
-        $query_plan = production_query_approved_plan_get($query_wr->field_month->value());
-        if (!$query_plan                                                        // если в месяце нет утв. Плана
-            || $query_plan->id > $query_wr->getIdentifier())                   // или если есть утверждённый План после заявки
-        {
-          $query_wr->field_query_type = 'request';                              // значит она типа request
-        }
-        $success = true;
-      }
-
-      if ($success) {
-        $query_wr->save();
-      }
-
-    } else {
-      $error = 'Пустая заявка';
-    }
-
-
-    if ($success) {
-      watchdog('transfer', 'Удачно (%id)', ['%id' => $id]);
-    } else {
-      watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $id, '%error' => $error], WATCHDOG_ERROR);
-    }
+  if (!$user) $user = user_load($GLOBALS['user']->uid);
+  if (is_numeric($user)) {
+    $user = user_load($user);
   }
-}
 
-function _op0($params)
-{
-  foreach ($params as $id) {
-    $success = false; $error = '';
-    $query_wr = entity_metadata_wrapper('query', $id);
-
-    if ($success) {
-      watchdog('transfer', 'Удачно (%id)', ['%id' => $id]);
-    } else {
-      watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $id, '%error' => $error], WATCHDOG_ERROR);
-    }
+  $company = false;
+  $user_wr = entity_metadata_wrapper('user', $user);
+  if ($user_wr->field_user_company->value()) {
+    $company = [
+      'id' => $user_wr->field_user_company->getIdentifier(),
+      'name' => $user_wr->field_user_company->label(),
+      'wwork_limit' => $user_wr->field_user_company->field_wwork_limit->value(),
+      '1c_id' => $user_wr->field_user_company->field_1c_id->value(),
+    ];
   }
-}
-function _op1($id)
-{
-
+  return $company;
 }

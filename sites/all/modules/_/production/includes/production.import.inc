@@ -11,7 +11,7 @@ function production_queries_delete($month_start = null)
   $result = $efquery->execute();
   if ($result) {
     entity_delete_multiple('query', array_keys($result['query']));
-    drupal_set_message('Заявки удалены.');
+    // drupal_set_message('Заявки удалены.');
   }
 
   // техработы теперь в отдельных заявках типа service
@@ -26,68 +26,59 @@ function production_queries_delete($month_start = null)
   $result = $efquery->execute();
   if ($result) {
     entity_delete_multiple('load', array_keys($result['load']));
-    drupal_set_message('Загрузка удалена.');
+    // drupal_set_message('Загрузка удалена.');
   }
 }
 
 function production_davalec_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
+    $vid = taxonomy_vocabulary_machine_name_load('clients')->vid;
     $got = [];
-    foreach ($array['load'] as $key => $davalec) {
-        if ($davalec['dav_id'] && $davalec['dav_name']) {
-          $query = new EntityFieldQuery();
-          $users = $query
-            ->entityCondition('entity_type', 'user')
-            ->fieldCondition('field_oc_davalec_id', 'value', $davalec['dav_id'])
-            ->execute();
+    foreach ($array['load'] as $item) {
+      if ($item['dav_id'] && $item['dav_name']) {
+        $client = production_get_company_by_1c_id($item['dav_id']);
 
-          if (!$users) {
-            $user = user_save(NULL, [
-              'name' => $davalec['dav_name'],
-              'pass' => user_password(8),
-              'status' => 1,
-              'roles' => [DRUPAL_AUTHENTICATED_RID => TRUE],
-            ]);
-          } else {
-            $user = current($users['user']);
-          }
-
-          $user_wr = entity_metadata_wrapper('user', $user->uid);
-          $user_wr->name = $davalec['dav_name'];
-          $user_wr->field_oc_davalec_id = $davalec['dav_id'];
-          $user_wr->status = 1;
-          $user_wr->save();
-
-          $got[] = $user_wr->getIdentifier();
+        if (!$client) {
+          $client = (object)array(
+            'vid' => $vid,
+            'name' => $item['dav_name'],
+          );
+          taxonomy_term_save($client);
         }
+
+        $client_wr = entity_metadata_wrapper('taxonomy_term', $client);
+        $client_wr->name = $item['dav_name'];
+        $client_wr->field_1c_id = $item['dav_id'];
+        $client_wr->field_status = 1;
+        $client_wr->save();
+
+        $got[] = $client_wr->getIdentifier();
+      }
     }
 
     // если полное обновление справочника, то запомнить отсутствующие записи и сделать их неактивными
     if ($array['reload']) {
-      $query = new EntityFieldQuery();
-      $users = $query
-        ->entityCondition('entity_type', 'user')
-        ->fieldCondition('field_oc_davalec_id', 'value', '', '<>')
-        ->execute();
+      $dbr = db_select('taxonomy_term_data', 't');
+      $dbr->condition('t.vid', $vid);
+      $dbr->addField('t', 'tid');
+      $client_old = $dbr->execute()->fetchAllAssoc('tid');
 
-      if ($users) {
-        foreach ($users['user'] as $uid => $user) {
-          if (!in_array($uid, $got)) {
-            $old_term_wr = entity_metadata_wrapper('user', $user->uid);
-            $old_term_wr->status = 0;
-            $old_term_wr->save();
-          }
+      foreach ($client_old as $tid => $client) {
+        if (!in_array($tid, $got)) {
+          $term_wr = entity_metadata_wrapper('taxonomy_term', $tid);
+          $term_wr->field_status = 0;
+          $term_wr->save();
         }
       }
     }
 
-    drupal_set_message('Давальцы импортированы.');
-    watchdog('import', 'Давальцы импортированы.', [], WATCHDOG_INFO);
+    // drupal_set_message('Клиенты импортированы.');
+    watchdog('import', 'Клиенты импортированы.', [], WATCHDOG_INFO);
     return true;
   } else {
-    drupal_set_message('Импорт давальцев не выполнен.', 'warning');
-    watchdog('import', 'Импорт давальцев не выполнен.', [], WATCHDOG_ERROR);
+    // drupal_set_message('Импорт клиентов не выполнен.', 'warning');
+    watchdog('import', 'Импорт клиентов не выполнен.', [], WATCHDOG_ERROR);
     return false;
   }
 }
@@ -100,7 +91,7 @@ function production_produce_units_import($array)
     $punits_got = [];
     foreach($array['load'] as $key => $punit) {
         if ($punit['ust_id'] && $punit['ust_name']) {
-          $produce_unit = production_produce_unit_get_by_1cID($punit['ust_id']);
+          $produce_unit = production_get_produce_unit_by_1c_id($punit['ust_id']);
 
           if (!$produce_unit) {
             $produce_unit = (object)array(
@@ -137,11 +128,11 @@ function production_produce_units_import($array)
       }
     }
 
-    drupal_set_message('Установки импортированы.');
+    // drupal_set_message('Установки импортированы.');
     watchdog('import', 'Установки импортированы.', [], WATCHDOG_INFO);
     return true;
   } else {
-    drupal_set_message('Импорт установок не выполнен.', 'warning');
+    // drupal_set_message('Импорт установок не выполнен.', 'warning');
     watchdog('import', 'Импорт установок не выполнен.', [], WATCHDOG_ERROR);
     return false;
   }
@@ -155,7 +146,7 @@ function production_reasons_import($array)
     $got = [];
     foreach($array['load'] as $key => $item) {
       if ($item['cause_id'] && $item['cause_name']) {
-        $reason = production_reason_get_by_oc_id($item['cause_id']);
+        $reason = production_get_reason_by_1c_id($item['cause_id']);
 
         if (!$reason) {
           $reason = (object)array(
@@ -197,11 +188,11 @@ function production_reasons_import($array)
       }
     }
 
-    drupal_set_message('Причины импортированы.');
+    // drupal_set_message('Причины импортированы.');
     watchdog('import', 'Причины импортированы.', [], WATCHDOG_INFO);
     return true;
   } else {
-    drupal_set_message('Импорт справочника причин не выполнен.', 'warning');
+    // drupal_set_message('Импорт справочника причин не выполнен.', 'warning');
     watchdog('import', 'Импорт справочника причин не выполнен.', [], WATCHDOG_ERROR);
     return false;
   }
@@ -213,49 +204,36 @@ function production_nomenklatura_import($array)
     $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
 
     $got = [];
-    foreach($array['load'] as $key => $nom) {
+    foreach($array['load'] as $nom) {
         if ($nom['name'] && $nom['art'] && $nom['dav_id']) {
           // найти пользователя
-          $query = new EntityFieldQuery();
-          $users = $query
-            ->entityCondition('entity_type', 'user')
-            ->fieldCondition('field_oc_davalec_id', 'value', $nom['dav_id'])
-            ->execute();
-          if ($users) {
+          $company_id = production_get_company_by_1c_id($nom['dav_id']);
+          if ($company_id) {
             // проверить наличие записи Номенклатуры
-            $query = new EntityFieldQuery();
-            $terms = $query
-              ->entityCondition('entity_type', 'taxonomy_term')
-              ->propertyCondition('vid', $vid)
-              ->fieldCondition('field_oc_artikul', 'value', $nom['art'])
-              ->execute();
+            $term = production_get_nomenklatura_by_artikul($nom['art']);
 
-            if (!$terms) {
+            if (!$term) {
               $term = (object)array(
                 'vid' => $vid,
                 'name' => $nom['name'],
               );
               taxonomy_term_save($term);
-            } else {
-              $term = current($terms['taxonomy_term']);
             }
 
             // обновить значения полей
-            if ($user = current($users['user'])) {
-              $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
-              $term_wr->name = $nom['name'];
-              $term_wr->field_oc_artikul = $nom['art'];
-              $term_wr->field_oc_name_davalec = $nom['nnd'];
-              $term_wr->field_oc_artikul_davalec = $nom['anr'];
-              $term_wr->field_user = $user->uid;
-              $term_wr->field_status = 1;
-              $term_wr->save();
+            $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
+            $term_wr->name = $nom['name'];
+            $term_wr->field_oc_artikul = $nom['art'];
+            $term_wr->field_oc_name_davalec = $nom['nnd'];
+            $term_wr->field_oc_artikul_davalec = $nom['anr'];
+            $term_wr->field_client = $company_id;
+            $term_wr->field_status = 1;
+            $term_wr->save();
 
-              $got[] = $term_wr->getIdentifier();
-            }
+            $got[] = $term_wr->getIdentifier();
 
           } else {
-            drupal_set_message('Не найден давалец с ID: ' . $nom['dav_id'], 'error');
+            // drupal_set_message('Не найден давалец с ID: ' . $nom['dav_id'], 'error');
             watchdog('import', 'Импорт номенклатуры не выполнен. Не найден давалец с ID: %dav_id', ['%dav_id' => $nom['dav_id']], WATCHDOG_ERROR);
             return false;
           }
@@ -278,11 +256,11 @@ function production_nomenklatura_import($array)
       }
     }
 
-    drupal_set_message('Номенклатура импортирована.');
+    // drupal_set_message('Номенклатура импортирована.');
     watchdog('import', 'Номенклатура импортирована.', [], WATCHDOG_INFO);
     return true;
   } else {
-    drupal_set_message('Импорт номенклатуры не выполнен.', 'warning');
+    // drupal_set_message('Импорт номенклатуры не выполнен.', 'warning');
     watchdog('import', 'Импорт номенклатуры не выполнен.', [], WATCHDOG_ERROR);
     return false;
   }
@@ -313,18 +291,20 @@ function production_produce_plan_import($array)
     }
 
     $produce_unit_id_arr = [];
-    foreach ($array['load'] as $key => $item) {
+    foreach ($array['load'] as $item) {
       if ($item['artikul_1c'] && $item['unit_id_1c'] && $item['date']) {
-        if (($nom = production_nomenklatura_get_by_artikul($item['artikul_1c']))
-          && ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c']))) {
+        if (($nom = production_get_nomenklatura_by_artikul($item['artikul_1c']))
+          && ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])))
+        {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+          $client_id = $nom->field_client['und'][0]['tid'];
 
           if (!isset($plan[$nom->tid])) {
             $plan[$nom->tid] = [
               'field_month' => $month_start,
               'field_nomenklatura' => $nom->tid,
-              'uid' => $nom->field_user['und'][0]['target_id'],
+              'client_id' => $client_id,
               'field_qty' => 0,
               'load' => [],
             ];
@@ -378,10 +358,10 @@ function production_produce_plan_import($array)
       $query_wr->field_load_json = drupal_json_encode($plan_item['load']);
       $query_wr->save();
 
-      if (empty($user_mails[$plan_item['uid']])) {
-        $user_mails[$plan_item['uid']] = [
+      if (empty($user_mails[$plan_item['client_id']])) {
+        $user_mails[$plan_item['client_id']] = [
           'month' => $plan_item['field_month'],
-          'company_uid' => $plan_item['uid']
+          'client_id' => $plan_item['client_id']
         ];
       }
     }
@@ -389,7 +369,7 @@ function production_produce_plan_import($array)
     if (!empty($array['service'])) {
       $service_load_arr = [];
       foreach ($array['service'] as $item) {
-        if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
+        if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
           if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
@@ -422,11 +402,11 @@ function production_produce_plan_import($array)
 
     // отправить письма об импорте плана
     if ($user_mails) {
-      foreach ($user_mails as $user_id => $data) {
+      foreach ($user_mails as $data) {
         $params['month'] = t(date('F', $data['month']));
         $params['year'] = date('Y', $data['month']);
         try {
-          if ($users = ext_user_managers_get_by_company_id($data['company_uid'])) {
+          if ($users = ext_user_get_managers_by_client_id($data['client_id'], ROLE_USER_PRODUCTION)) {
             foreach ($users as $manager_account) {
               if ($manager_account->mail && empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
                 drupal_mail('mailer', 'user_notify_plan_import', $manager_account->mail, user_preferred_language($manager_account), $params);
@@ -466,7 +446,7 @@ function production_query_import($array)
     return false;
   }
   $artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
-  $nom = production_nomenklatura_get_by_artikul($artikul);
+  $nom = production_get_nomenklatura_by_artikul($artikul);
   if (!$nom) {
     watchdog('import', 'Не найдена номенклатура по артикулу "%artikul". (%query_oc_id)', ['%artikul' => $artikul, '%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
     return false;
@@ -483,7 +463,7 @@ function production_query_import($array)
   $query_qty = 0;
   if (!empty($array['load'])) {
     foreach($array['load'] as $item) {
-      if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
+      if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         if (!isset($load_arr[$produce_unit->tid])) $load_arr[$produce_unit->tid] = [
@@ -548,7 +528,7 @@ function production_query_import($array)
 
   $query_reason_tid = 0;
   $query_reason_1c = empty($array['reason_1c']) ? '' : $array['reason_1c'];
-  if ($query_reason_1c && $query_reason = production_reason_get_by_oc_id($query_reason_1c)) {
+  if ($query_reason_1c && $query_reason = production_get_reason_by_1c_id($query_reason_1c)) {
     $query_reason_tid = $query_reason->tid;
   }
 
@@ -594,7 +574,7 @@ function production_query_import($array)
     // зададим новые
     if ($array['notification']) {
       foreach ($array['notification'] as $notification) {
-        if ($produce_unit = production_produce_unit_get_by_1cID($notification['unit_id_1c'])) {
+        if ($produce_unit = production_get_produce_unit_by_1c_id($notification['unit_id_1c'])) {
           $notification_field = entity_create('field_collection_item', ['field_name' => 'field_query_notifications']);
           $notification_field_wr = entity_metadata_wrapper('field_collection_item', $notification_field);
           $notification_field->setHostEntity('query', $query);
@@ -632,7 +612,7 @@ function production_query_import($array)
   if (!empty($array['service'])) {
     $service_load_arr = [];
     foreach($array['service'] as $item) {
-      if ($produce_unit = production_produce_unit_get_by_1cID($item['unit_id_1c'])) {
+      if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
@@ -671,7 +651,7 @@ function production_query_import($array)
       'year' => date('Y', $query_wr->field_month->value()),
       'product' => $query_wr->field_nomenklatura->name->value(),
       'volume' => $query_wr->field_qty->value(),
-      'product_owner_account' => $query_wr->field_nomenklatura->field_user->value(),
+      'product_owner_id' => $query_wr->field_nomenklatura->field_client->getIdentifier(),
       'status_client' => $query_wr->field_query_status_client->label(),
       'status_manager' => $query_wr->field_query_status_manager->label(),
       'client_approve' => $query_wr->field_query_client_approve->value(),
@@ -693,7 +673,7 @@ function production_query_import($array)
       }
     }
 
-    if ($users = ext_user_managers_get_by_company_id($params['product_owner_account']->uid)) {
+    if ($users = ext_user_get_managers_by_client_id($params['product_owner_id'], ROLE_USER_PRODUCTION)) {
       foreach ($users as $manager_account) {
         if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
           drupal_mail('mailer', 'client_notify_query_correction_new', $manager_account->mail, user_preferred_language($manager_account), $params);
