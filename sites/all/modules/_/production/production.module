@@ -125,9 +125,9 @@ function production_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (production_davalec_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/prod' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -144,9 +144,9 @@ function production_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (production_produce_units_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -163,9 +163,9 @@ function production_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (production_reasons_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -182,9 +182,9 @@ function production_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (production_nomenklatura_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -203,9 +203,9 @@ function production_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if ($array['type'] == 'pred') {
         if (production_query_import($array)) {
-          $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+          $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
         } else {
-          $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+          $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
         }
         file_prepare_directory($path, FILE_CREATE_DIRECTORY);
         file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -223,9 +223,9 @@ function production_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (production_produce_plan_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);
@@ -244,9 +244,9 @@ function production_process_incoming_files()
       $array = drupal_json_decode(file_get_contents($file->uri));
       if ($array['type'] == 'main') {
         if (production_query_import($array)) {
-          $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+          $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
         } else {
-          $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+          $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
         }
         file_prepare_directory($path, FILE_CREATE_DIRECTORY);
         file_unmanaged_move($file->uri, $path . '/' . $file->filename);

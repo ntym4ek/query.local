@@ -59,9 +59,9 @@ function warehouse_process_incoming_files()
     foreach($files as $file) {
       $array = drupal_json_decode(file_get_contents($file->uri));
       if (warehouse_wwork_import($array)) {
-        $path = $directory . 'success/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'success/prod/ware/' . date('Y') . '/' . date('m') . '/' . date('d');
       } else {
-        $path = $directory . 'fail/' . date('Y') . '/' . date('m') . '/' . date('d');
+        $path = $directory . 'fail/prod/ware/' . date('Y') . '/' . date('m') . '/' . date('d');
       }
       file_prepare_directory($path, FILE_CREATE_DIRECTORY);
       file_unmanaged_move($file->uri, $path . '/' . $file->filename);

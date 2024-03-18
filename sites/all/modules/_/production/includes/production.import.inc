@@ -223,6 +223,7 @@ function production_nomenklatura_import($array)
             // обновить значения полей
             $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
             $term_wr->name = $nom['name'];
+            if (!empty($nom['id'])) $term_wr->field_1c_id = $nom['id'];
             $term_wr->field_oc_artikul = $nom['art'];
             $term_wr->field_oc_name_davalec = $nom['nnd'];
             $term_wr->field_oc_artikul_davalec = $nom['anr'];
