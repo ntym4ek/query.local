@@ -82,7 +82,8 @@ function ext_user_form_user_profile_form_alter(&$form, &$form_state)
     if (isset($form["field_wwork_limit"]["#access"])) $form["field_wwork_limit"]["#access"] = false; // уст.
     if (isset($form["field_company"]["#access"])) $form["field_company"]["#access"] = false; // уст.
     if (isset($form["field_oc_davalec_id"]["#access"])) $form["field_oc_davalec_id"]["#access"] = false; // уст.
-    $form["field_user_company"]["#access"] = false;
+    $form["field_user_company"]["#access"] = false; // уст.
+    $form["field_user_companies"]["#access"] = false;
     $form["locale"]["#access"] = false;
     $form["mimemail"]["#access"] = false;
     $form["timezone"]["#access"] = false;
@@ -127,8 +128,10 @@ function ext_user_get_managers_by_client_id($company_id, $role = null)
     $query = db_select('users', 'u');
     $query ->condition('u.status', 1);
     $query ->fields('u', ['uid']);
-    $query ->innerJoin('field_data_field_user_company', 'fc', 'fc.entity_id = u.uid');
-    $query ->condition('fc.field_user_company_tid', $company_id);
+//    $query ->innerJoin('field_data_field_user_company', 'fc', 'fc.entity_id = u.uid');
+//    $query ->condition('fc.field_user_company_tid', $company_id);
+    $query ->innerJoin('field_data_field_user_companies', 'fc', 'fc.entity_id = u.uid');
+    $query ->condition('fc.field_user_companies_tid', $company_id);
     if ($role) {
       $query->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
       $query->condition('ur.rid', $role);
@@ -160,4 +163,24 @@ function ext_user_get_company_by_user($user = null)
     ];
   }
   return $company;
+}
+
+function ext_user_get_companies_by_user($user = null)
+{
+  if (!$user) $user = user_load($GLOBALS['user']->uid);
+  if (is_numeric($user)) {
+    $user = user_load($user);
+  }
+
+  $companies = false;
+  $user_wr = entity_metadata_wrapper('user', $user);
+  foreach ($user_wr->field_user_companies->getIterator() as $company_wr) {
+    $companies[$company_wr->getIdentifier()] = [
+      'id' => $company_wr->getIdentifier(),
+      'name' => $company_wr->label(),
+      'wwork_limit' => $company_wr->field_wwork_limit->value(),
+      '1c_id' => $company_wr->field_1c_id->value(),
+    ];
+  }
+  return $companies;
 }

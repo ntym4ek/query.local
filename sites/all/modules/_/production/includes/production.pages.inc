@@ -80,16 +80,10 @@ function production_pu_load_form_callback($form, $form_values)
 function production_year_page()
 {
   $html = '';
-  // для кого выводим
-  $company = ext_user_get_company_by_user();
-  $client_id = $company['id'];
 
-  // форма выбора давальца для наших менеджеров
-  if (user_has_role(ROLE_MANAGER_PRODUCTION)) {
-    $filter_form = drupal_get_form('production_year_client_form');
-    $html .= drupal_render($filter_form);
-    $client_id = empty($_REQUEST['client']) ? $filter_form['client']['#default_value'] : $_REQUEST['client'];
-  }
+  $filter_form = drupal_get_form('production_year_client_form');
+  $html .= drupal_render($filter_form);
+  $client_id = empty($_REQUEST['client']) ? $filter_form['client']['#default_value'] : $_REQUEST['client'];
 
   $html .= production_year_table($client_id);
 
@@ -102,10 +96,16 @@ function production_year_client_form($form, $form_state)
   $year = date('n') < 9 ? date('Y') : date('Y')+1;
   $month_start = gmmktime(0, 0, 0, 9, 1, $year-1);
 
+
   $query = db_select('taxonomy_term_data', 't');
   $query ->fields('t', ['tid', 'name']);
   $query ->orderBy('name');
   $query ->innerJoin('field_data_field_client', 'fc', 'fc.field_client_tid = t.tid');
+  // клиенту ограничиваем выбор его компаниями
+  if (user_has_role(ROLE_USER_PRODUCTION)) {
+    $companies = ext_user_get_companies_by_user();
+    $query ->condition('fc.field_client_tid', array_keys($companies),'IN');
+  }
   $query ->condition('fc.bundle', 'nomenklatura');
   $query ->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.field_nomenklatura_target_id = fc.entity_id');
   $query ->innerJoin('eck_query', 'q', 'q.id = fn.entity_id');
@@ -117,7 +117,7 @@ function production_year_client_form($form, $form_state)
   }
 
   $form['client'] = array(
-    '#title' => 'Клиент',
+    '#title' => 'Компания',
     '#type' => 'select',
     '#options' => $options,
     '#default_value' => array_key_first($options),

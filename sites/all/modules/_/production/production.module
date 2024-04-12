@@ -298,8 +298,8 @@ function production_form_alter(&$form, &$form_state, $form_id)
       $form_state['data']['query']['type'] = $_GET['type'];
     }
 
-    if ($company = ext_user_get_company_by_user()) {
-      $form_state['data']['company_id'] = $company['id'];
+    if ($companies = ext_user_get_companies_by_user()) {
+      $form_state['data']['companies'] = array_keys($companies);
     }
 
     $filter = [];
@@ -488,13 +488,13 @@ function production_form_alter(&$form, &$form_state, $form_id)
 
         // ограничить Номенклатуру текущим юзером
         $options = [];
-        $company = ext_user_get_company_by_user();
+        $companies = ext_user_get_companies_by_user();
         $query = new EntityFieldQuery();
         $result = $query
           ->entityCondition('entity_type', 'taxonomy_term')
           ->propertyOrderBy('name')
           ->propertyCondition('vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid)
-          ->fieldCondition('field_client', 'tid', $company['id'])
+          ->fieldCondition('field_client', 'tid', array_keys($companies), 'IN')
           ->execute();
         if ($result) {
           foreach (array_keys($result['taxonomy_term']) as $nom_tid) {
@@ -720,7 +720,7 @@ function production_form_eck__entity__form_query_query_validate(&$form, &$form_s
 
     // Номенклатура Пользователя из Заявок текущего Месяца
     // чтобы исколючить выбор Номенклатуры по которой есть Заявки
-    if (empty($form_state["data"]["nom_tid"]) && !empty($form_state['data']['company_id'])) {
+    if (empty($form_state["data"]["nom_tid"]) && !empty($form_state['data']['companies'])) {
       $dbr = db_select('eck_query', 'q');
       $dbr->addField('q', 'id');
       $dbr->innerJoin('field_data_field_nomenklatura', 'fn', 'fn.entity_id = q.id');
@@ -1144,7 +1144,7 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
 {
   $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
   $nom_array = [];
-  $company = ext_user_get_company_by_user();
+  $companies = ext_user_get_companies_by_user();
 
   $curr_query_date = null;
   $curr_pu_snapshot = [];
@@ -1249,7 +1249,7 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
                   'nom_tid' => $nom_tid,
                 ];
               }
-              if ($nom['client_id'] == $company['id'] || user_has_role(ROLE_MANAGER_PRODUCTION)) {
+              if (in_array($nom['client_id'], array_keys( $companies)) || user_has_role(ROLE_MANAGER_PRODUCTION)) {
                 $produce_units[$pu_tid]['load'][$day_start]['is_own'] = 1;
                 $produce_units[$pu_tid]['load'][$day_start]['is_current'] = empty($curr_query_load[$pu_tid]['pu_load'][$day_start]) ? 0 : 1;
                 $produce_units[$pu_tid]['amount'] += $output;
