@@ -1249,7 +1249,7 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
                   'nom_tid' => $nom_tid,
                 ];
               }
-              if (in_array($nom['client_id'], array_keys( $companies)) || user_has_role(ROLE_MANAGER_PRODUCTION)) {
+              if (user_has_role(ROLE_MANAGER_PRODUCTION) || in_array($nom['client_id'], array_keys($companies))) {
                 $produce_units[$pu_tid]['load'][$day_start]['is_own'] = 1;
                 $produce_units[$pu_tid]['load'][$day_start]['is_current'] = empty($curr_query_load[$pu_tid]['pu_load'][$day_start]) ? 0 : 1;
                 $produce_units[$pu_tid]['amount'] += $output;

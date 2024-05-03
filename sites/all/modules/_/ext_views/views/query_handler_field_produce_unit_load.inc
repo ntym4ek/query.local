@@ -67,7 +67,7 @@ class query_handler_field_produce_unit_load extends views_handler_field
           };
 //      $tooltip = empty($load[$day_start]) ? '' : ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $load[$day_start]['nomenklatura']['name'] . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
           $tooltip = '';
-          if (!empty($load[$day_start]) && (!empty($load[$day_start]['is_busy_same_company']) || user_has_role(ROLE_MANAGER_PRODUCTION)|| user_has_role(ROLE_ADMIN))) {
+          if (!empty($load[$day_start]) && (user_has_role(ROLE_MANAGER_PRODUCTION) || user_has_role(ROLE_ADMIN) || !empty($load[$day_start]['is_busy_same_company']))) {
             $name = $load[$day_start]['nomenklatura']['label'];
             $name = str_replace('"', "'", $name);
             $tooltip = ' data-toggle="tooltip" data-placement="top" data-html="true" title="' . $name . ($load[$day_start]['output'] ? '<br />' . $load[$day_start]['output'] : '') . '"';
