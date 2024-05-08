@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * Implements hook_cron()
+ */
+function import_cron()
+{
+  // поставить заявки в очередь на импорт
+  import_queue_incoming_exchange_files();
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function import_cron_queue_info()
+{
+  $queues['incoming_exchange_queue'] = array(
+    'worker callback' => 'import_process_incoming_exchange_file',
+  );
+
+  return $queues;
+}
+
+function import_queue_incoming_exchange_files()
+{
+  $directory = 'private://exchange/';
+  $queue_path = $directory . 'import_queue';
+
+  // формат массива обработчиков импорта
+  $processors = [
+    // первая очередь импорта данных, необходимых для второй очереди
+    'first_queue' => [
+//      [
+//        'mask'    => '/^scrum_td_region.*\.json/',    // маска поиска файла
+//        'include' => 'file.inc',                      // файл с функцией импорта
+//        'func'    => 'import_import_regions'          // название функции импорта
+//        'archive' => 'prod/prod'                      // путь для хранения обработанных файлов
+//      ],
+    ],
+    // вторая очередь
+    'last_queue' => [],
+  ];
+
+  // дать возможность модулям добавить свой импорт
+  drupal_alter('import_processors', $processors);
+
+  $ie_queue = DrupalQueue::get('incoming_exchange_queue');
+
+//  $ie_queue->deleteQueue();
+
+  // получить список файлов по шаблону и добавить в очередь
+  foreach($processors as $queue) {
+    if ($queue) {
+      foreach($queue as $processor) {
+        if ($files = file_scan_directory($directory, $processor['mask'], ['recurse' => false], 0)) {
+          foreach($files as $file) {
+            // перемещаем обнаруженные файлы в папку очереди, чтобы не обнаружить при следующем запуске крона
+            if (file_prepare_directory($queue_path, FILE_CREATE_DIRECTORY)) {
+              if ($new_uri = file_unmanaged_move($file->uri, $queue_path . '/' . $file->filename)) {
+                $file->uri = $new_uri;
+                $ie_queue->createItem(['file' => $file, 'processor' => $processor]);
+    //            watchdog('import', 'Файл @file поставлен в очередь на импорт.', ['@file' => $file->uri], WATCHDOG_INFO);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function import_process_incoming_exchange_file($options)
+{
+  $directory = 'private://exchange/';
+
+  // импортировать
+  $array = drupal_json_decode(file_get_contents($options['file']->uri));
+
+  if (!empty($options['processor']['include'])) require_once $options['processor']['include'];
+
+  if (call_user_func($options['processor']['func'], $array)) {
+    $path = $directory . 'success/' . $options['processor']['include'] . '/' . date('Y') . '/' . date('m') . '/' . date('d');
+  } else {
+    $path = $directory . 'fail/' . $options['processor']['include'] . '/' . date('Y') . '/' . date('m') . '/' . date('d');
+  }
+  file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+  file_unmanaged_move($options['file']->uri, $path . '/' . $options['file']->filename);
+}
+

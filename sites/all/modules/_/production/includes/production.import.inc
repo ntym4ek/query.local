@@ -39,17 +39,8 @@ function production_davalec_import($array)
       if ($item['dav_id'] && $item['dav_name']) {
         $client = production_get_company_by_1c_id($item['dav_id']);
 
-        if (!$client) {
-          $client = (object)array(
-            'vid' => $vid,
-            'name' => $item['dav_name'],
-          );
-          taxonomy_term_save($client);
-        }
-
         $client_wr = entity_metadata_wrapper('taxonomy_term', $client);
         $client_wr->name = $item['dav_name'];
-        $client_wr->field_1c_id = $item['dav_id'];
         $client_wr->field_status = 1;
         $client_wr->save();
 
@@ -93,18 +84,9 @@ function production_produce_units_import($array)
         if ($punit['ust_id'] && $punit['ust_name']) {
           $produce_unit = production_get_produce_unit_by_1c_id($punit['ust_id']);
 
-          if (!$produce_unit) {
-            $produce_unit = (object)array(
-              'vid' => $vid,
-              'name' => $punit['ust_name'],
-            );
-            taxonomy_term_save($produce_unit);
-          }
-
           // обновить значения полей
           $produce_unit_wr = entity_metadata_wrapper('taxonomy_term', $produce_unit);
           $produce_unit_wr->name = $punit['ust_name'];
-          $produce_unit_wr->field_oc_produce_unit_id = $punit['ust_id'];
           $produce_unit_wr->field_status = 1;
           $produce_unit_wr->save();
 
@@ -148,14 +130,6 @@ function production_reasons_import($array)
       if ($item['cause_id'] && $item['cause_name']) {
         $reason = production_get_reason_by_1c_id($item['cause_id']);
 
-        if (!$reason) {
-          $reason = (object)array(
-            'vid' => $vid,
-            'name' => $item['cause_name'],
-          );
-          taxonomy_term_save($reason);
-        }
-
         if (!is_numeric($item['cause_fault'])) {
           $item['cause_fault'] = 0;
         }
@@ -163,7 +137,6 @@ function production_reasons_import($array)
         // обновить значения полей
         $reason_wr = entity_metadata_wrapper('taxonomy_term', $reason);
         $reason_wr->name = $item['cause_name'];
-        $reason_wr->field_reason_oc_id = $item['cause_id'];
         $reason_wr->field_fault = $item['cause_fault'];
         $reason_wr->field_status = 1;
         $reason_wr->save();
@@ -205,40 +178,25 @@ function production_nomenklatura_import($array)
 
     $got = [];
     foreach($array['load'] as $nom) {
-        if ($nom['name'] && $nom['art'] && $nom['dav_id']) {
-          // найти пользователя
-          $company_id = production_get_company_by_1c_id($nom['dav_id']);
-          if ($company_id) {
-            // проверить наличие записи Номенклатуры
-            $term = production_get_nomenklatura_by_artikul($nom['art']);
+      if (($nom['art'] || !empty($nom['id'])) && $nom['name'] && $nom['dav_id']) {
+        // найти пользователя
+        $company_id = production_get_company_by_1c_id($nom['dav_id']);
+        // проверить наличие записи Номенклатуры
+        if (empty($nom['id'])) $nom['id'] = '';
+        $term = production_get_nomenklatura_by_1c_params($nom['id'], $nom['art']);
 
-            if (!$term) {
-              $term = (object)array(
-                'vid' => $vid,
-                'name' => $nom['name'],
-              );
-              taxonomy_term_save($term);
-            }
+        // обновить значения полей
+        $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
+        $term_wr->name = $nom['name'];
+        $term_wr->field_oc_artikul = $nom['art'];
+        $term_wr->field_oc_name_davalec = $nom['nnd'];
+        $term_wr->field_oc_artikul_davalec = $nom['anr'];
+        $term_wr->field_client = $company_id;
+        $term_wr->field_status = 1;
+        $term_wr->save();
 
-            // обновить значения полей
-            $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
-            $term_wr->name = $nom['name'];
-            if (!empty($nom['id'])) $term_wr->field_1c_id = $nom['id'];
-            $term_wr->field_oc_artikul = $nom['art'];
-            $term_wr->field_oc_name_davalec = $nom['nnd'];
-            $term_wr->field_oc_artikul_davalec = $nom['anr'];
-            $term_wr->field_client = $company_id;
-            $term_wr->field_status = 1;
-            $term_wr->save();
-
-            $got[] = $term_wr->getIdentifier();
-
-          } else {
-            // drupal_set_message('Не найден давалец с ID: ' . $nom['dav_id'], 'error');
-            watchdog('import', 'Импорт номенклатуры не выполнен. Не найден давалец с ID: %dav_id', ['%dav_id' => $nom['dav_id']], WATCHDOG_ERROR);
-            return false;
-          }
-        }
+        $got[] = $term_wr->getIdentifier();
+      }
     }
 
     // если полное обновление справочника, то запомнить отсутствующие записи и сделать их неактивными для клиента
@@ -293,44 +251,36 @@ function production_produce_plan_import($array)
 
     $produce_unit_id_arr = [];
     foreach ($array['load'] as $item) {
-      if ($item['artikul_1c'] && $item['unit_id_1c'] && $item['date']) {
-        if (($nom = production_get_nomenklatura_by_artikul($item['artikul_1c']))
-          && ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])))
-        {
-          $date_arr = explode('.', $item['date']);
-          $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
-          $client_id = $nom->field_client['und'][0]['tid'];
+      if ((!empty($item['nom_id']) || $item['artikul_1c']) && $item['unit_id_1c'] && $item['date']) {
+        if (empty($item['nom_id'])) $item['nom_id'] = '';
+        if (empty($item['artikul_1c'])) $item['artikul_1c'] = '';
+        $nom = production_get_nomenklatura_by_1c_params($item['nom_id'], $item['artikul_1c']);
 
-          if (!isset($plan[$nom->tid])) {
-            $plan[$nom->tid] = [
-              'field_month' => $month_start,
-              'field_nomenklatura' => $nom->tid,
-              'client_id' => $client_id,
-              'field_qty' => 0,
-              'load' => [],
-            ];
-          }
+        $produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c']);
+        $date_arr = explode('.', $item['date']);
+        $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+        $client_id = $nom->field_client['und'][0]['tid'];
 
-          $output = round($item['output']); // общее количество в заявке - целочисленное поле
-          $plan[$nom->tid]['field_qty'] += $output;
-          if (!isset($plan[$nom->tid]['load'][$produce_unit->tid])) $plan[$nom->tid]['load'][$produce_unit->tid] = [
-            'pu_tid' => $produce_unit->tid,
-            'pu_load' => [],
+        if (!isset($plan[$nom->tid])) {
+          $plan[$nom->tid] = [
+            'field_month' => $month_start,
+            'field_nomenklatura' => $nom->tid,
+            'client_id' => $client_id,
+            'field_qty' => 0,
+            'load' => [],
           ];
-          $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $output;
-
-          $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
-          $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
-
-        } else {
-          if (empty($nom)) {
-            watchdog('import', 'Импорт плана. Не найдена номенклатура с 1с ID: %artikul_1c', ['%artikul_1c' => $item['artikul_1c']], WATCHDOG_ERROR);
-          }
-          if (empty($produce_unit)) {
-            watchdog('import', 'Импорт плана. Не найдена установка с 1с ID: %unit_id_1c', ['%unit_id_1c' => $item['unit_id_1c']], WATCHDOG_ERROR);
-          }
-//          return false; продолжаем импорт
         }
+
+        $output = round($item['output']); // общее количество в заявке - целочисленное поле
+        $plan[$nom->tid]['field_qty'] += $output;
+        if (!isset($plan[$nom->tid]['load'][$produce_unit->tid])) $plan[$nom->tid]['load'][$produce_unit->tid] = [
+          'pu_tid' => $produce_unit->tid,
+          'pu_load' => [],
+        ];
+        $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $output;
+
+        $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
+        $produce_unit_id_arr[$item['unit_id_1c']] = $produce_unit->tid;
       }
     }
 
@@ -446,10 +396,11 @@ function production_query_import($array)
     watchdog('import', 'Пустое поле меcяца в файле экспорта. (%query_oc_id)', ['%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
     return false;
   }
-  $artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
-  $nom = production_get_nomenklatura_by_artikul($artikul);
+  $nom_id = empty($array['nom_id']) ? '' : $array['nom_id'];
+  $nom_artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
+  $nom = production_get_nomenklatura_by_1c_params($nom_id, $nom_artikul);
   if (!$nom) {
-    watchdog('import', 'Не найдена номенклатура по артикулу "%artikul". (%query_oc_id)', ['%artikul' => $artikul, '%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
+    watchdog('import', 'Не найдена номенклатура по артикулу "%artikul". (%query_oc_id)', ['%artikul' => $nom_artikul, '%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
     return false;
   }
 
@@ -494,8 +445,8 @@ function production_query_import($array)
       if ($old_query_wr->value()) {
         // проверить, совпадает ли артикул из новой заявки со старой (просили одинэсники)
         $old_artikul_1c = $old_query_wr->field_nomenklatura->field_oc_artikul->value();
-        if ($old_artikul_1c != $artikul) {
-          watchdog('import', 'Артикул из старой Заявки: %old_artikul_1c не совпадает с артикулом из ответа: %artikul. (%query_oc_id)', ['%old_artikul_1c' => $old_artikul_1c, '%artikul' => $artikul, '%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
+        if ($old_artikul_1c != $nom_artikul) {
+          watchdog('import', 'Артикул из старой Заявки: %old_artikul_1c не совпадает с артикулом из ответа: %artikul. (%query_oc_id)', ['%old_artikul_1c' => $old_artikul_1c, '%artikul' => $nom_artikul, '%query_oc_id' => $query_oc_id],WATCHDOG_ERROR);
           return false;
         }
         // может быть approved или deny

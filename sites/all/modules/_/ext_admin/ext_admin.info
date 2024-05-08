@@ -1,0 +1,4 @@
+name = Ext Admin
+description = ""
+package = Custom
+core = 7.x

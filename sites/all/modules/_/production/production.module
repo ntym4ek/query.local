@@ -1,4 +1,4 @@
-<?
+<?php
 
 define('DAYS_BEFORE_PRODUCE_START', 1);
 // Кол-во дней, которое начиная с текущей даты установка недоступна
@@ -97,11 +97,6 @@ function production_menu_alter(&$items)
  */
 function production_cron()
 {
-  // выполнить импорт заявок
-  if (variable_get('import_pr_1с_enable', 0)) {
-    production_process_incoming_files();
-  }
-
   // однократно после восьми отправить письмо с изменениями (при пятиминутном интервале крона)
   // todo кривое решение, может не сработать если сервер не дёрнет крон в этот промежуток
   if (REQUEST_TIME >= strtotime('07:27') && REQUEST_TIME < strtotime('07:34')) {
@@ -109,149 +104,21 @@ function production_cron()
   }
 }
 
-function production_process_incoming_files()
+/**
+ * hook_import_processors_alter
+ */
+function production_import_processors_alter(&$processors)
 {
-  require_once 'includes/production.import.inc';
+  if (variable_get('import_pr_1с_enable', 0)) {
+    $path = drupal_get_path('module', 'production') . '/includes/';
+    $processors['first_queue'][] =  ['mask' => '/^dav.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_davalec_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^ust.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_produce_units_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^cause.*\.json/',               'include' => $path . 'production.import.inc', 'func' => 'production_reasons_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^nom.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_nomenklatura_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^query_import_pred_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
 
-  $directory = 'private://exchange/';
-
-  // -- Справочник Давальцев
-  // получить список файлов по шаблону
-  $mask = '/^dav.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (production_davalec_import($array)) {
-        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/prod/prod' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-
-  // -- Справочник Установок
-  // получить список файлов по шаблону
-  $mask = '/^ust.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (production_produce_units_import($array)) {
-        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-
-  // -- Справочник Причин
-  // получить список файлов по шаблону
-  $mask = '/^cause.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (production_reasons_import($array)) {
-        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-
-  // -- Справочник Номенклатуры
-  // получить список файлов по шаблону
-  $mask = '/^nom.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (production_nomenklatura_import($array)) {
-        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-
-  // -- Заявки на Производство
-  // -- здесь грузим для предварительного плана, только с type: 'pred'
-  // получить список файлов по шаблону
-  $mask = '/^query_import_.*.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if ($array['type'] == 'pred') {
-        if (production_query_import($array)) {
-          $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-        } else {
-          $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-        }
-        file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-        file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-      }
-    }
-  }
-
-  // -- План
-  // получить список файлов по шаблону
-  $mask = '/^plan.*\.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if (production_produce_plan_import($array)) {
-        $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      } else {
-        $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-      }
-      file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-      file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-    }
-  }
-
-  // -- Заявки
-  // -- здесь грузим для утверждённого плана, только с type: 'main' (тип заявок 'plan')
-  // получить список файлов по шаблону
-  $mask = '/^query_import_.*.json/';
-  $files = file_scan_directory($directory, $mask, ['recurse' => false], 0);
-
-  // импортировать
-  if ($files) {
-    foreach($files as $file) {
-      $array = drupal_json_decode(file_get_contents($file->uri));
-      if ($array['type'] == 'main') {
-        if (production_query_import($array)) {
-          $path = $directory . 'success/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-        } else {
-          $path = $directory . 'fail/prod/prod/' . date('Y') . '/' . date('m') . '/' . date('d');
-        }
-        file_prepare_directory($path, FILE_CREATE_DIRECTORY);
-        file_unmanaged_move($file->uri, $path . '/' . $file->filename);
-      }
-    }
+    $processors['last_queue'][]  =  ['mask' => '/^plan.*\.json/',                'include' => $path . 'production.import.inc', 'func' => 'production_produce_plan_import', 'archive' => 'prod/prod'];
+    $processors['last_queue'][]  =  ['mask' => '/^query_import_main_.*\.json/',  'include' => $path . 'production.import.inc', 'func' => 'production_query_import', 'archive' => 'prod/prod'];
   }
 }
 
@@ -843,32 +710,58 @@ function production_form_redirect_submit(&$form, &$form_state)
 
 function production_get_reason_by_1c_id($oc_id)
 {
-  $r_vid = taxonomy_vocabulary_machine_name_load('reasons')->vid;
+  $vid = taxonomy_vocabulary_machine_name_load('reasons')->vid;
   $query = new EntityFieldQuery();
   $terms = $query
     ->entityCondition('entity_type', 'taxonomy_term')
-    ->propertyCondition('vid', $r_vid)
+    ->propertyCondition('vid', $vid)
     ->fieldCondition('field_reason_oc_id', 'value', $oc_id)
     ->execute();
   if ($terms) {
-    $entities = entity_load('taxonomy_term', [current($terms['taxonomy_term'])->tid]);
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Причин по 1с ID: @id', ['@id' => $oc_id], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Причина с 1c ID "' . $oc_id . '" не импортирована',
+      'field_reason_oc_id' => ['und' => [0 => ['value' => $oc_id]]],
+    );
+    taxonomy_term_save($term);
   }
-  return empty($entities) ? false: current($entities);
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
 }
 
 function production_get_company_by_1c_id($oc_id)
 {
-  $r_vid = taxonomy_vocabulary_machine_name_load('clients')->vid;
+  $vid = taxonomy_vocabulary_machine_name_load('clients')->vid;
   $query = new EntityFieldQuery();
   $terms = $query
     ->entityCondition('entity_type', 'taxonomy_term')
-    ->propertyCondition('vid', $r_vid)
+    ->propertyCondition('vid', $vid)
     ->fieldCondition('field_1c_id', 'value', $oc_id)
     ->execute();
   if ($terms) {
-    $entities = entity_load('taxonomy_term', [current($terms['taxonomy_term'])->tid]);
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Компании по 1с ID: @id', ['@id' => $oc_id], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Компания с 1c ID "' . $oc_id . '" не импортирована',
+      'field_1c_id' => ['und' => [0 => ['value' => $oc_id]]],
+    );
+    taxonomy_term_save($term);
   }
-  return empty($entities) ? false: current($entities);
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
 }
 
 function production_get_managers_to_notify()
@@ -883,19 +776,71 @@ function production_get_managers_to_notify()
   return ($result = $dbr->execute()->fetchCol()) ? user_load_multiple($result, []) : false;
 }
 
-function production_get_nomenklatura_by_artikul($articul)
+/**
+ * Найти номенклатуру по 1с ID, а если нет, то создать.
+ * Артикул приходится передавать на случай, если какой-то из импортируемых файлов всё ещё не передаёт ID номенклатуры.
+ * В таком случае, будет создана ном по артикулу, а затем для файла содержащего ID, ещё одна ном по ID.
+ * Добавляем дополнительную проверку наличие ном по артикулу и заполнять пустой ID при наличии в файле.
+ */
+function production_get_nomenklatura_by_1c_params($id_1c, $artikul_1c)
 {
-  $nom_vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
+  $term = production_get_nomenklatura_by_artikul($artikul_1c);
+  // если ном найдена, там пустой ID, а в файле ID есть, задать ID
+  if ($term && empty($term->field_1c_id['und'][0]['value']) && $id_1c) {
+    $term->field_1c_id['und'][0]['value'] = $id_1c;
+    taxonomy_term_save($term);
+  }
+
+  $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
+  if ($id_1c) {
+    $query = new EntityFieldQuery();
+    $terms = $query
+      ->entityCondition('entity_type', 'taxonomy_term')
+      ->propertyCondition('vid', $vid)
+      ->fieldCondition('field_1c_id', 'value', $id_1c)
+      ->execute();
+    if ($terms) {
+      // если найдено несколько, это ошибка. записать в лог
+      if (count($terms) > 1) {
+        watchdog('import', 'Найдено несколько записей Номенклатуры по 1c ID: @id', ['@id' => $id_1c], WATCHDOG_WARNING);
+      }
+      $term = reset($terms['taxonomy_term']);
+    }
+  }
+
+  if (!$term) {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Номенклатура с 1c ID "' . $id_1c . '" и артикулом "' . $artikul_1c . '" не импортирована',
+    );
+    if ($id_1c) $term->field_1c_id = ['und' => [0 => ['value' => $id_1c]]];
+    if ($artikul_1c) $term->field_oc_artikul = ['und' => [0 => ['value' => $artikul_1c]]];
+    taxonomy_term_save($term);
+  }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
+  return empty($entities) ? false: reset($entities);
+}
+
+function production_get_nomenklatura_by_artikul($artikul)
+{
+  $vid = taxonomy_vocabulary_machine_name_load('nomenklatura')->vid;
   $query = new EntityFieldQuery();
   $terms = $query
     ->entityCondition('entity_type', 'taxonomy_term')
-    ->propertyCondition('vid', $nom_vid)
-    ->fieldCondition('field_oc_artikul', 'value', $articul)
+    ->propertyCondition('vid', $vid)
+    ->fieldCondition('field_oc_artikul', 'value', $artikul)
     ->execute();
   if ($terms) {
-    $entities = entity_load('taxonomy_term', [current($terms['taxonomy_term'])->tid]);
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Номенклатуры по артикулу: @id', ['@id' => $artikul], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+    $entities = entity_load('taxonomy_term', [$term->tid]);
   }
-  return empty($entities) ? false: current($entities);
+
+  return empty($entities) ? false: reset($entities);
 }
 
 function production_get_nomenklatura_info($nom_tid)
@@ -920,6 +865,7 @@ function production_get_nomenklatura_info($nom_tid)
       if ($nom_wr->value()) {
         $name = $nom_wr->label();
         $client_id = $nom_wr->field_client->value() ? $nom_wr->field_client->getIdentifier() : 0;
+        $oc_id = $nom_wr->field_1c_id->value();
         $artikul = $nom_wr->field_oc_artikul->value();
         $label = $name . ($artikul && $client_id == COMPANY_TD ? ' (' . $artikul . ')' : '');
         $name_d = $nom_wr->field_oc_name_davalec->value();
@@ -932,6 +878,7 @@ function production_get_nomenklatura_info($nom_tid)
           'id' => $nom_tid,
           'label' => $label,
           'name' => $name,
+          'id_1c' => $oc_id,
           'artikul' => $artikul,
           'name_d' => $name_d,
           'artikul_d' => $artikul_d,
@@ -1386,10 +1333,22 @@ function production_get_produce_unit_by_1c_id($produce_unit_1cID)
     ->propertyCondition('vid', $vid)
     ->fieldCondition('field_oc_produce_unit_id', 'value', $produce_unit_1cID)
     ->execute();
-
   if ($terms) {
-    $entities = entity_load('taxonomy_term', [reset($terms['taxonomy_term'])->tid]);
+    // если найдено несколько, это ошибка. записать в лог
+    if (count($terms) > 1) {
+      watchdog('import', 'Найдено несколько записей Установок по 1с ID: @id', ['@id' => $produce_unit_1cID], WATCHDOG_WARNING);
+    }
+    $term = reset($terms['taxonomy_term']);
+  } else {
+    $term = (object)array(
+      'vid' => $vid,
+      'name' => 'Установка с 1с ID "' . $produce_unit_1cID . '" не импортирована',
+      'field_oc_produce_unit_id' => ['und' => [0 => ['value' => $produce_unit_1cID]]],
+    );
+    taxonomy_term_save($term);
   }
+  $entities = entity_load('taxonomy_term', [$term->tid]);
+
   return empty($entities) ? false: reset($entities);
 }
 
@@ -1488,6 +1447,7 @@ function production_query_export($query_wr)
     'id_1c' => '',
     'created' => date('d.m.Y H:i:s', $query_wr->created->value()),
     'month' => date('d.m.Y', $query_wr->field_month->value()),
+    'nom_id' => $query_wr->field_nomenklatura->field_1c_id->value(),
     'artikul_1c' => $query_wr->field_nomenklatura->field_oc_artikul->value(),
     'volume' => $query_wr->field_qty->value(),
     'status_manager' => $query_wr->field_query_status_manager->value(),
