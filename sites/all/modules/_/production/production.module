@@ -355,24 +355,25 @@ function production_form_alter(&$form, &$form_state, $form_id)
 
         // ограничить Номенклатуру текущим юзером
         $options = [];
-        $companies = ext_user_get_companies_by_user();
-        $query = new EntityFieldQuery();
-        $result = $query
-          ->entityCondition('entity_type', 'taxonomy_term')
-          ->propertyOrderBy('name')
-          ->propertyCondition('vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid)
-          ->fieldCondition('field_client', 'tid', array_keys($companies), 'IN')
-          ->execute();
-        if ($result) {
-          foreach (array_keys($result['taxonomy_term']) as $nom_tid) {
-            $nom_info = production_get_nomenklatura_info($nom_tid);
-            if (!empty($form["field_nomenklatura"]["und"]["#options"][$nom_tid])
-              && strpos($form["field_nomenklatura"]["und"]["#options"][$nom_tid], '_') !== 0) {
+        if ($companies = ext_user_get_companies_by_user()) {
+          $query = new EntityFieldQuery();
+          $result = $query
+            ->entityCondition('entity_type', 'taxonomy_term')
+            ->propertyOrderBy('name')
+            ->propertyCondition('vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid)
+            ->fieldCondition('field_client', 'tid', array_keys($companies), 'IN')
+            ->execute();
+          if ($result) {
+            foreach (array_keys($result['taxonomy_term']) as $nom_tid) {
+              $nom_info = production_get_nomenklatura_info($nom_tid);
+              if (!empty($form["field_nomenklatura"]["und"]["#options"][$nom_tid])
+                && strpos($form["field_nomenklatura"]["und"]["#options"][$nom_tid], '_') !== 0) {
 
-              // при добавлении новой Заявки исключить Номенклатуру, по которой есть Заявки
-              if (empty($form_state['data']['last_query']) && in_array($nom_tid, $nomenklatura_from_queries)) continue;
+                // при добавлении новой Заявки исключить Номенклатуру, по которой есть Заявки
+                if (empty($form_state['data']['last_query']) && in_array($nom_tid, $nomenklatura_from_queries)) continue;
 
-              $options[$nom_tid] = $nom_info['label'];
+                $options[$nom_tid] = $nom_info['label'];
+              }
             }
           }
         }
