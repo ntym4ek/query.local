@@ -21,27 +21,6 @@ function ext_views_views_data_alter(&$data)
       'handler' => 'query_handler_field_actions',
     ),
   );
-  // поле комментария для списка Заявок
-  $data['eck_query']['comment'] = array(
-    'field' => array(
-      'title' => t('Formatted Comment'),
-      'handler' => 'query_handler_field_comment',
-    ),
-  );
-  $data['taxonomy_term_data']['produce_unit_load'] = array(
-    'field' => array(
-      'title' => t('Produce Unit Load'),
-      'help' => t('Produce Unit Load'),
-      'handler' => 'query_handler_field_produce_unit_load',
-    ),
-  );
-  $data['taxonomy_term_data']['produce_unit_load_amount'] = array(
-    'field' => array(
-      'title' => t('Produce Unit Load Amount'),
-      'help' => t('Produce unit load amount by nomenklstura'),
-      'handler' => 'query_handler_field_produce_unit_load_amount',
-    ),
-  );
 }
 
 /**

@@ -380,10 +380,17 @@ function production_produce_plan_import($array)
 }
 
 
-// типы заявок (query_type)
-//  request - согласования до принятия плана
-//  plan - согласованный план
-//  correction - корректировки после принятия
+/**
+ * Импортировать входящее Сообщение
+ *
+ * @param $array - массив данных
+ *  типы Сообщений (query_type)
+ *    request - согласования до принятия плана
+ *    plan - согласованный план
+ *    correction - корректировки после принятия
+ *
+ * @return bool - результат выполнения
+ */
 function production_query_import($array)
 {
   $query = null;
