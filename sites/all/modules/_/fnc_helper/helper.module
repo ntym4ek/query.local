@@ -1,0 +1,50 @@
+<?php
+
+function helper_month_label_ru($month_index, $roditelniy = false)
+{
+  $months = $roditelniy ? explode('|', 'января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря') : explode('|', 'Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь');
+
+  return $months[$month_index-1];
+}
+
+/**
+ * Вернуть отформатированное число
+ */
+function helper_number_format($number, $decimals, $thousands_separator = '', $trailing_cut = true)
+{
+  // форматируем согласно заданному количеству знаков после запятой
+  $result = number_format($number, $decimals, ',', $thousands_separator);
+  // обрезаем ноли после запятой
+  if ($trailing_cut) {
+    $result = str_replace(',' . str_pad('', $decimals, '0'), '', $result);
+    $result = strpos($result, ',') ? rtrim($result, '0') : $result;
+  }
+
+  return $result;
+}
+
+/**
+ * Преобразовать текстовую дату или дату и время в unix
+ *
+ * @param $datetime - в формате d.m.Y H:i
+ * @return - unix timestamp
+ */
+function helper_datetime_to_timestamp($datetime)
+{
+  $timestamp = 0;
+  $datetime_arr = explode(' ', $datetime);
+
+  if ($datetime_arr[0]) {
+    $date_arr = explode('.', $datetime_arr[0]);
+    $hours = $minutes = 0;
+    if (!empty($datetime_arr[1])) {
+      $time_arr = explode(':', $datetime_arr[1]);
+      $hours = $time_arr[0];
+      $minutes = $time_arr[1];
+    }
+
+    $timestamp = gmmktime($hours, $minutes, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
+  }
+
+  return $timestamp;
+}

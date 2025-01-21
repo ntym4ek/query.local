@@ -78,10 +78,11 @@ function import_process_incoming_exchange_file($options)
 
   if (!empty($options['processor']['include'])) require_once $options['processor']['include'];
 
+  $archive = $options['processor']['archive'] ?? 'prod';
   if (call_user_func($options['processor']['func'], $array)) {
-    $path = $directory . 'success/' . $options['processor']['include'] . '/' . date('Y') . '/' . date('m') . '/' . date('d');
+    $path = $directory . 'success/' . $archive . '/' . date('Y') . '/' . date('m') . '/' . date('d');
   } else {
-    $path = $directory . 'fail/' . $options['processor']['include'] . '/' . date('Y') . '/' . date('m') . '/' . date('d');
+    $path = $directory . 'fail/' . $archive . '/' . date('Y') . '/' . date('m') . '/' . date('d');
   }
   file_prepare_directory($path, FILE_CREATE_DIRECTORY);
   file_unmanaged_move($options['file']->uri, $path . '/' . $options['file']->filename);

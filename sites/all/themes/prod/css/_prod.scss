@@ -557,3 +557,19 @@ form.query-form {
   .red { color: $brand-danger; }
   .green { color: $brand-success; }
 }
+
+.nomenklatura {
+  .filters { display: flex; }
+  .filter { flex: 0 0 auto; }
+  .date-wrapper {
+    display: flex;
+    .form-item-month { margin-right: .5rem; }
+  }
+  .form-item { margin-right: 1rem; }
+
+  .nom-item {
+    border: 1px solid $text-muted;
+    border-top-width: 3px;
+    margin-bottom: 1rem; padding: 1rem;
+  }
+}

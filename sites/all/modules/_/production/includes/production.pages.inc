@@ -2,6 +2,107 @@
 
 define ('MONTHS', [ 1 => 'Январь' , 'Февраль' , 'Март' , 'Апрель' , 'Май' , 'Июнь' , 'Июль' , 'Август' , 'Сентябрь' , 'Октябрь' , 'Ноябрь' , 'Декабрь' ]);
 
+
+function production_nom_list_form($form, $form_values)
+{
+  $month = empty($form_values["values"]["month"]) ? date('n') : $form_values["values"]['month'];
+  // todo исправить год по умолчанию
+  $year = empty($form_values["values"]['year']) ? date('Y')-1 : $form_values["values"]['year'];
+
+  $form = [
+    '#prefix' => '<div id="nom-list-form-wrapper" class="nomenklatura">',
+    '#suffix' => '</div>',
+    'filters' => [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['filters']],
+    ]
+  ];
+
+  $month_opts = [];
+  for($i = 1; $i <= 12; $i++) {
+    $month_opts[$i] = MONTHS[$i];
+  }
+  $form['filters']['month'] = [
+    '#title' => 'Месяц',
+    '#type' => 'select',
+    '#options' => $month_opts,
+    '#default_value' => [$month],
+    '#ajax' => [
+      'callback' => 'production_nom_list_form_callback',
+      'wrapper' => 'queries-list-form-wrapper',
+    ],
+    '#prefix' => '<div class="date-wrapper filter">',
+  ];
+  $year_opts = [];
+  for($i = -1; $i <= 1; $i++) {
+    $yr = date('Y') + $i;
+    $year_opts[$yr] = $yr;
+  }
+  $form['filters']['year'] = [
+    '#title' => 'Год',
+    '#type' => 'select',
+    '#options' => $year_opts,
+    '#default_value' => [$year],
+    '#ajax' => [
+      'callback' => 'production_nom_list_form_callback',
+      'wrapper' => 'nom-list-form-wrapper',
+    ],
+    '#suffix' => '</div>',
+  ];
+
+  $options = [];
+  if ($companies = ext_user_get_companies_by_user()) {
+    foreach ($companies as $tid => $company) {
+      $options[$tid] = $company['name'];
+    }
+  }
+
+  $company_default = array_key_first($options);
+
+  $form['filters']['company'] = [
+    '#title' => 'Компания',
+    '#type' => 'select',
+    '#options' => $options,
+    '#default_value' => $company_default,
+    '#required' => true,
+    '#ajax' => [
+      'callback' => 'production_nom_list_form_callback',
+      'wrapper' => 'nom-list-form-wrapper',
+    ],
+    '#prefix' => '<div class="filter">',
+    '#suffix' => '</div>',
+  ];
+
+
+  // todo получить список актуальных заявок по номенклатуре
+  $noms_arr = [];
+
+  // получить список номенклатуры
+  $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+  $nom_list = production_nomenklatura_get_list(['company_id' => $company_default, 'month_ts' => $month_start]);
+  foreach($nom_list as $nom_id => $nom) {
+    $noms_arr[] = production_nomenklatura_get_info($nom_id);
+  }
+
+
+  // todo вывести список
+  $output = '<div class="nom-list">';
+  foreach ($noms_arr as $nom_id => $nom_item) {
+    $output .= theme('nomenkaltura_teaser', ['nom_info' => $nom_item]);
+  }
+  $output .= '</div>';
+
+  $form['list'] = [
+    '#markup' => $output,
+  ];
+
+  return $form;
+}
+function production_nom_list_form_callback($form, $form_values)
+{
+  return $form;
+}
+
 function production_pu_load_form($form, $form_values)
 {
   $month = empty($form_values["values"]["month"]) ? date('n') : $form_values["values"]['month'];
@@ -72,10 +173,6 @@ function production_pu_load_form_callback($form, $form_values)
 {
   return $form;
 }
-
-
-
-
 
 function production_year_page()
 {
@@ -156,9 +253,9 @@ function production_year_table($client_id)
   ];
   $nom_arr = [];
   // получить список номенклатуры
-  $nom_id_list = production_get_nomenklatura_list_by_client_id($client_id);
+  $nom_id_list = production_nomenklatura_get_list_by_client_id($client_id);
   foreach($nom_id_list as $index => $nom_id) {
-    $nom_info = production_get_nomenklatura_info($nom_id);
+    $nom_info = production_nomenklatura_get_info($nom_id);
     $nom_item = [
       'year' => ['plan' => 0, 'fact' => 0],
       'months' => [],
@@ -169,7 +266,7 @@ function production_year_table($client_id)
       $month_start = gmmktime(0, 0, 0, 9+$i-1, 1, $year-1);
       $month_num = date('n', $month_start);
       $nom_item['months'][$month_num] = 0;
-      if ($query_actual = production_get_query_actual($month_start, $nom_id)) {
+      if ($query_actual = production_query_get_actual($month_start, $nom_id)) {
         $query_info = production_query_get_info($query_actual);
         $nom_item['months'][$month_num] = $query_info['output'];
         $nom_item['year']['plan'] += $query_info['output']['plan'];
@@ -189,6 +286,7 @@ function production_year_table($client_id)
   }
 
   // табличная часть
+  $rows = [];
   foreach ($nom_arr as $n_tid => $n_item) {
     $row = [$n_item['label'], ['data' => number_format($n_item['year']['plan'], 1, ',', ' '), 'align' => 'right'], ['data' => number_format($n_item['year']['fact'], 1, ',', ' '), 'align' => 'right']];
     foreach ([9,10,11,12,1,2,3,4,5,6,7,8] as $m_num) {
@@ -214,38 +312,3 @@ function production_year_table($client_id)
           '</div>';
 }
 
-function production_get_nomenklatura_list_by_client_id($client_id)
-{
-  $dbr = db_select('taxonomy_term_data', 't');
-  $dbr->condition('t.vid', taxonomy_vocabulary_machine_name_load('nomenklatura')->vid);
-  $dbr->addField('t', 'tid');
-  $dbr->innerJoin('field_data_field_client', 'fc', 'fc.entity_id = t.tid');
-  $dbr->condition('fc.field_client_tid', $client_id);
-  $dbr->orderBy('t.name');
-  $result = $dbr->execute()->fetchCol();
-
-  return $result;
-}
-
-function production_query_get_info($query)
-{
-  $query_wr = entity_metadata_wrapper('query', $query);
-  $plan = $fact = 0;
-  if ($load = drupal_json_decode($query_wr->field_load_json->value())) {
-    $today_start = gmmktime(0, 0, 0, date('n'), date('j'), date('Y'));
-    foreach ($load as $pu_tid => $pu_item) {
-      foreach ($pu_item['pu_load'] as $date_start => $output) {
-        $plan += $output;
-        if ($date_start < $today_start) $fact += $output;
-      }
-    }
-  }
-
-  return [
-    'id' => $query_wr->getIdentifier(),
-    'output' => [
-      'plan' => $plan,
-      'fact' => $fact,
-    ],
-  ];
-}

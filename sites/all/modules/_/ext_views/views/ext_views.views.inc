@@ -139,7 +139,7 @@ function ext_views_preprocess_views_view_unformatted(&$vars)
 //      }
 
       // если нет плана, то последняя Processing, остальные в архив
-      $query_actual = production_get_query_actual($query_month_start, $query_nom_tid);
+      $query_actual = production_query_get_actual($query_month_start, $query_nom_tid);
       $query_approved_plan = production_query_approved_plan_get($query_month_start);
       if ($query_actual && $query_id == $query_actual->id) {
         $vars["classes_array"][$key] .= $query_approved_plan ? ' actual' : ' processing';
@@ -199,7 +199,7 @@ function ext_views_preprocess_views_view_table(&$vars)
     $rows = [];
     foreach ($vars["rows"] as $key => $row) {
       // заменить на артикул и название давальца
-      $nom_info = production_get_nomenklatura_info($vars["result"][$key]->tid);
+      $nom_info = production_nomenklatura_get_info($vars["result"][$key]->tid);
       $row["name"] = $nom_info['label'];
 
       if ($row['produce_unit_load_amount']) $rows[] = $row;
@@ -255,7 +255,7 @@ function ext_views_preprocess_views_view_field(&$vars)
 
   if ($vars["view"]->name == 'queries' && isset($vars["field"]->field_info["field_name"])) {
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_get_nomenklatura_info($vars["row"]->field_field_nomenklatura[0]["raw"]["target_id"]);
+      $nom_info = production_nomenklatura_get_info($vars["row"]->field_field_nomenklatura[0]["raw"]["target_id"]);
       $vars["output"] = $nom_info['label'];
     }
 
@@ -288,7 +288,7 @@ function ext_views_preprocess_views_view_field(&$vars)
 
   if ($vars["view"]->name == 'report' && isset($vars["field"]->field_info["field_name"])) {
     if ($vars["field"]->field_info["field_name"] == 'field_nomenklatura') {
-      $nom_info = production_get_nomenklatura_info($vars["row"]->taxonomy_term_data_field_data_field_nomenklatura_tid);
+      $nom_info = production_nomenklatura_get_info($vars["row"]->taxonomy_term_data_field_data_field_nomenklatura_tid);
       $vars["output"] = $nom_info['label'];
     }
   }

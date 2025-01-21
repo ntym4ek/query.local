@@ -37,7 +37,7 @@ function production_davalec_import($array)
     $got = [];
     foreach ($array['load'] as $item) {
       if ($item['dav_id'] && $item['dav_name']) {
-        $client = production_get_company_by_1c_id($item['dav_id']);
+        $client = production_company_get_by_1c_id($item['dav_id']);
 
         $client_wr = entity_metadata_wrapper('taxonomy_term', $client);
         $client_wr->name = $item['dav_name'];
@@ -82,7 +82,7 @@ function production_produce_units_import($array)
     $punits_got = [];
     foreach($array['load'] as $key => $punit) {
         if ($punit['ust_id'] && $punit['ust_name']) {
-          $produce_unit = production_get_produce_unit_by_1c_id($punit['ust_id']);
+          $produce_unit = production_produce_unit_get_by_1c_id($punit['ust_id']);
 
           // обновить значения полей
           $produce_unit_wr = entity_metadata_wrapper('taxonomy_term', $produce_unit);
@@ -128,7 +128,7 @@ function production_reasons_import($array)
     $got = [];
     foreach($array['load'] as $key => $item) {
       if ($item['cause_id'] && $item['cause_name']) {
-        $reason = production_get_reason_by_1c_id($item['cause_id']);
+        $reason = production_reason_get_by_1c_id($item['cause_id']);
 
         if (!is_numeric($item['cause_fault'])) {
           $item['cause_fault'] = 0;
@@ -180,10 +180,10 @@ function production_nomenklatura_import($array)
     foreach($array['load'] as $nom) {
       if (($nom['art'] || !empty($nom['id'])) && $nom['name'] && $nom['dav_id']) {
         // найти пользователя
-        $company_id = production_get_company_by_1c_id($nom['dav_id']);
+        $company_id = production_company_get_by_1c_id($nom['dav_id']);
         // проверить наличие записи Номенклатуры
         if (empty($nom['id'])) $nom['id'] = '';
-        $term = production_get_nomenklatura_by_1c_params($nom['id'], $nom['art']);
+        $term = production_nomenklatura_get_by_1c_params($nom['id'], $nom['art']);
 
         // обновить значения полей
         $term_wr = entity_metadata_wrapper('taxonomy_term', $term);
@@ -254,9 +254,9 @@ function production_produce_plan_import($array)
       if ((!empty($item['nom_id']) || $item['artikul_1c']) && $item['unit_id_1c'] && $item['date']) {
         if (empty($item['nom_id'])) $item['nom_id'] = '';
         if (empty($item['artikul_1c'])) $item['artikul_1c'] = '';
-        $nom = production_get_nomenklatura_by_1c_params($item['nom_id'], $item['artikul_1c']);
+        $nom = production_nomenklatura_get_by_1c_params($item['nom_id'], $item['artikul_1c']);
 
-        $produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c']);
+        $produce_unit = production_produce_unit_get_by_1c_id($item['unit_id_1c']);
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         $client_id = $nom->field_client['und'][0]['tid'];
@@ -320,7 +320,7 @@ function production_produce_plan_import($array)
     if (!empty($array['service'])) {
       $service_load_arr = [];
       foreach ($array['service'] as $item) {
-        if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
+        if ($produce_unit = production_produce_unit_get_by_1c_id($item['unit_id_1c'])) {
           $date_arr = explode('.', $item['date']);
           $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
           if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
@@ -398,7 +398,7 @@ function production_query_import($array)
   }
   $nom_id = empty($array['nom_id']) ? '' : $array['nom_id'];
   $nom_artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
-  $nom = production_get_nomenklatura_by_1c_params($nom_id, $nom_artikul);
+  $nom = production_nomenklatura_get_by_1c_params($nom_id, $nom_artikul);
   if (!$nom) {
     watchdog('import', 'Не найдена номенклатура по артикулу "%artikul". (%query_oc_id)', ['%artikul' => $nom_artikul, '%query_oc_id' => $query_oc_id], WATCHDOG_ERROR);
     return false;
@@ -415,7 +415,7 @@ function production_query_import($array)
   $query_qty = 0;
   if (!empty($array['load'])) {
     foreach($array['load'] as $item) {
-      if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
+      if ($produce_unit = production_produce_unit_get_by_1c_id($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         if (!isset($load_arr[$produce_unit->tid])) $load_arr[$produce_unit->tid] = [
@@ -480,7 +480,7 @@ function production_query_import($array)
 
   $query_reason_tid = 0;
   $query_reason_1c = empty($array['reason_1c']) ? '' : $array['reason_1c'];
-  if ($query_reason_1c && $query_reason = production_get_reason_by_1c_id($query_reason_1c)) {
+  if ($query_reason_1c && $query_reason = production_reason_get_by_1c_id($query_reason_1c)) {
     $query_reason_tid = $query_reason->tid;
   }
 
@@ -526,7 +526,7 @@ function production_query_import($array)
     // зададим новые
     if ($array['notification']) {
       foreach ($array['notification'] as $notification) {
-        if ($produce_unit = production_get_produce_unit_by_1c_id($notification['unit_id_1c'])) {
+        if ($produce_unit = production_produce_unit_get_by_1c_id($notification['unit_id_1c'])) {
           $notification_field = entity_create('field_collection_item', ['field_name' => 'field_query_notifications']);
           $notification_field_wr = entity_metadata_wrapper('field_collection_item', $notification_field);
           $notification_field->setHostEntity('query', $query);
@@ -564,7 +564,7 @@ function production_query_import($array)
   if (!empty($array['service'])) {
     $service_load_arr = [];
     foreach($array['service'] as $item) {
-      if ($produce_unit = production_get_produce_unit_by_1c_id($item['unit_id_1c'])) {
+      if ($produce_unit = production_produce_unit_get_by_1c_id($item['unit_id_1c'])) {
         $date_arr = explode('.', $item['date']);
         $day_start = gmmktime(0, 0, 0, $date_arr[1], $date_arr[0], $date_arr[2]);
         if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
