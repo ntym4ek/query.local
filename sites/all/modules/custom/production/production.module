@@ -14,15 +14,6 @@ define('TID_SERVICE_WORK', 583);
  */
 function production_menu()
 {
-  $items['production/queries-list'] = array(
-    'title' => 'Список номенклатуры',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => ['production_nom_list_form'],
-    'access callback' => true,
-    'file' => 'includes/production.pages.inc',
-    'type' => MENU_NORMAL_ITEM,
-    'menu_name' => 'main-menu',
-  );
   $items['production/produce-units-load'] = array(
     'title' => 'Загрузка установок',
     'page callback' => 'drupal_get_form',
@@ -94,7 +85,7 @@ function production_import_processors_alter(&$processors)
 {
   if (variable_get('import_pr_1с_enable', 0)) {
     $path = drupal_get_path('module', 'production') . '/includes/';
-    $processors['first_queue'][] =  ['mask' => '/^dav.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_davalec_import', 'archive' => 'prod/prod'];
+    $processors['first_queue'][] =  ['mask' => '/^dav.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_client_import', 'archive' => 'prod/prod'];
     $processors['first_queue'][] =  ['mask' => '/^ust.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_produce_units_import', 'archive' => 'prod/prod'];
     $processors['first_queue'][] =  ['mask' => '/^cause.*\.json/',               'include' => $path . 'production.import.inc', 'func' => 'production_reasons_import', 'archive' => 'prod/prod'];
     $processors['first_queue'][] =  ['mask' => '/^nom.*\.json/',                 'include' => $path . 'production.import.inc', 'func' => 'production_nomenklatura_import', 'archive' => 'prod/prod'];
@@ -1578,16 +1569,10 @@ function production_produce_unit_get_load($month_start, $produce_unit_tid = null
   return $produce_units;
 }
 
-
-
-
-
-
-
 /**
  * ----- операции с ПЛАНом ---------------------------------------------------------------------------------------------
  */
-function production_plan_delete($month_start, $delete_approved = false)
+function production_plan_delete_all($month_start, $delete_approved = false)
 {
   if ($month_start) {
     $efquery = new EntityFieldQuery();

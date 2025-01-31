@@ -1,0 +1,6 @@
+name = Производство
+description = Новый модуль производства
+package = Custom
+core = 7.x
+
+files[] = includes/prod.import.inc

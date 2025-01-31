@@ -1,8 +1,5 @@
 <?php
 
-define ('MONTHS', [ 1 => 'Январь' , 'Февраль' , 'Март' , 'Апрель' , 'Май' , 'Июнь' , 'Июль' , 'Август' , 'Сентябрь' , 'Октябрь' , 'Ноябрь' , 'Декабрь' ]);
-
-
 function production_nom_list_form($form, $form_values)
 {
   $month = empty($form_values["values"]["month"]) ? date('n') : $form_values["values"]['month'];

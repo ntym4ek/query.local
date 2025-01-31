@@ -102,21 +102,56 @@ function ext_admin_process_migration()
 
   $counter = 0;
 
-  // список компаний-юзеров
-  $dbr = db_select('users', 'u');
-  $dbr->addField('u', 'uid');
-  if ($users = $dbr->execute()->fetchCol()) {
-    foreach ($users as $uid) {
-      $account = user_load($uid);
-      if ($account)
-      {
-        $queue->createItem($uid);
-        $counter++;
+  // список для очереди пока только за 2025
+  $month_start = helper_datetime_to_timestamp('01.01.2025');
+
+  prod_message_delete_all($month_start);
+  prod_plan_record_delete_all($month_start);
+
+  // получить список номенклатуры
+  $dbr = db_select('field_data_field_nomenklatura', 'fn');
+  $dbr->condition('fn.entity_type', 'query');
+  $dbr->innerJoin('field_data_field_month', 'fm', 'fm.entity_id = fn.entity_id');
+  $dbr->condition('fm.field_month_value', $month_start);
+  $dbr->distinct();
+  $dbr->addField('fn', 'field_nomenklatura_target_id', 'tid');
+  $nom_ids = $dbr->execute()->fetchCol();
+
+  if ($nom_ids) {
+    foreach ($nom_ids as $nom_id) {
+//      if ($nom_id != 291) continue; // пока только для одной номенклатуры
+//      if ($nom_id != 3977) continue; // пока только для одной номенклатуры
+//      if ($nom_id != 200) continue; // пока только для одной номенклатуры
+
+      $efQuery = new EntityFieldQuery();
+      $efQueries = $efQuery
+        ->entityCondition('entity_type', 'query')
+        ->fieldCondition('field_month', 'value', $month_start)
+        ->fieldCondition('field_nomenklatura', 'target_id', $nom_id)
+        ->propertyOrderBy('id')
+        ->execute();
+
+      // сервисную заявку только последнюю
+      $efQuery = new EntityFieldQuery();
+      $efService = $efQuery
+        ->entityCondition('entity_type', 'query')
+        ->fieldCondition('field_month', 'value', $month_start)
+        ->fieldCondition('field_query_type', 'value', 'service')
+        ->propertyOrderBy('id', 'DESC')
+        ->range(0, 1)
+        ->execute();
+
+      if ($efQueries) {
+        foreach ($efQueries['query'] as $query) {
+          $queue->createItem($query->id);
+          $counter++;
+        }
+        if ($efService) $queue->createItem(reset($efService['query'])->id);
       }
     }
-  }
 
-  drupal_set_message('Done ' . $counter . ' iterations');
+    drupal_set_message('Done ' . $counter . ' iterations');
+  }
 
   $dest = strpos($_SERVER["HTTP_REFERER"], $GLOBALS["base_url"]) !== false ? $_SERVER["HTTP_REFERER"] : false;
   if ($dest) {
@@ -124,24 +159,124 @@ function ext_admin_process_migration()
   }
 }
 
-function ext_admin_queue_callback($uid)
+function ext_admin_queue_callback($qid)
 {
-  if (!$uid) return;
+  if (!$qid) return;
 
   $success = false;
   $error = '';
 
-  $client_wr = entity_metadata_wrapper('user', $uid);
+  $transaction = db_transaction();
+  try {
+    $query_wr = entity_metadata_wrapper('query', $qid);
 
-  if ($company_tid = $client_wr->field_user_company->raw()) {
-    $client_wr->field_user_companies[] = $company_tid;
-    $client_wr->save();
+    $plan_rec = null;
+    $changes = [];
+    $reason = 0;
+
+    // определить автора
+    $author = PROD_MESSAGE_AUTHOR_PROD;
+    if ($query_wr->uid->raw()) {
+      $author = PROD_MESSAGE_AUTHOR_CLIENT;
+    }
+
+    // Запись плана создаётся только для Производства
+    if ($author == PROD_MESSAGE_AUTHOR_PROD) {
+      // если импортируется Сервисная запись, проверить,
+      // если есть в базе более поздняя, то не импортируем
+      if ($query_wr->field_nomenklatura->getIdentifier() == PROD_SERVICE_NOM_ID) {
+        if ($prod_rec_service = prod_plan_record_get_last($query_wr->field_month->value(), PROD_SERVICE_NOM_ID)) {
+          $prod_rec_service_info = prod_plan_record_get_info($prod_rec_service->id);
+          if ($query_wr->created->value() > $prod_rec_service_info['created']) {
+            return;
+          } else {
+            prod_plan_record_delete_service($query_wr->field_month->value());
+          }
+        }
+      }
+
+      // определить новый тип Записи плана
+      $query_type = $query_wr->field_query_type->value();
+      $query_client_status = $query_wr->field_query_status_client->value();
+      $type = PROD_PLAN_TYPE_PRED;
+      if ($query_type == 'plan' && $query_client_status == 'approved') {
+        $type = PROD_PLAN_TYPE_APPR;
+      }
+      if ($query_type == 'correction') {
+        $type = PROD_PLAN_TYPE_OPER;
+      }
+
+      // чтобы определить, какое изменение произошло, сравним с прошлым изменением плана
+      if ($plan_rec_prev = prod_plan_record_get_last($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier())) {
+        $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
+      }
+
+      // создать Запись плана
+      $plan_rec = prod_plan_record_create([
+        'import_time_ts' => $query_wr->created->value(),
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'type' => $type,
+        'load' => $query_wr->field_load_json->value(),
+      ]);
+      $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
+
+      // определить Изменение, если это не Сервисная запись
+      if ($query_wr->field_nomenklatura->getIdentifier() != PROD_SERVICE_NOM_ID) {
+        if (empty($plan_rec_prev_info)) {
+          $changes[] = 4738; // внесение в план
+        } elseif ($plan_rec_info['volume'] == 0) {
+          $changes[] = 4741; // отмена выпуска
+        } else {
+          if ($plan_rec_prev_info['volume'] != $plan_rec_info['volume']) {
+            $changes[] = 4740; // изменение объёма
+          }
+          if ($plan_rec_prev_info['date_start'] != $plan_rec_info['date_start']) {
+            $changes[] = 4739; // изменение даты начала
+          } elseif ($plan_rec_prev_info['load'] != $plan_rec_info['load']) {
+            $changes[] = 4742; // изменение графика выпуска
+          }
+        }
+
+        $reason = $query_wr->field_query_reason->getIdentifier();
+      }
+    }
+
+    // при необходимости создать системное сообщение для клиента
+    // причины:  - отсутствие сырья
+    //           - отсутствие материалов
+    if ($reason && in_array($reason, [551, 552])) {
+      prod_message_create([
+        'created' => $query_wr->created->value()-1,
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'comment' => $query_wr->field_query_reason->name->value(),
+        'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
+      ]);
+    }
+
+    // создать сообщение
+    prod_message_create([
+      'created' => $query_wr->created->value(),
+      'month_ts' => $query_wr->field_month->value(),
+      'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+      'comment' => $query_wr->field_comment->value(),
+      '1c_id' => $query_wr->field_oc_id->value(),
+      'changes' => $changes,
+      'reason' => $reason,
+      'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
+      'author' => $author,
+    ]);
+
     $success = true;
+  } catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception('migration', $e);
   }
 
   if ($success) {
-    watchdog('transfer', 'Удачно (%id)', ['%id' => $client_wr->label()]);
+    watchdog('migration', 'Удачно (%id)', ['%id' => $query_wr->getIdentifier()]);
   } else {
-    watchdog('transfer', 'Недачно. %error (%id)', ['%id' => $client_wr->label(), '%error' => $error], WATCHDOG_ERROR);
+    watchdog('migration', 'Неудачно. %error (%id)', ['%id' => $query_wr->getIdentifier(), '%error' => $error], WATCHDOG_ERROR);
   }
 }

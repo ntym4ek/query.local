@@ -30,7 +30,7 @@ function production_queries_delete($month_start = null)
   }
 }
 
-function production_davalec_import($array)
+function production_client_import($array)
 {
   if (is_array($array) && !empty($array['load'])) {
     $vid = taxonomy_vocabulary_machine_name_load('clients')->vid;
@@ -285,7 +285,7 @@ function production_produce_plan_import($array)
     }
 
     // удалить старый план на месяц
-    production_plan_delete($month_start);
+    production_plan_delete_all($month_start);
 
     // создание Заявок на месяц
     $user_mails = [];

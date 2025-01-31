@@ -1,9 +1,0 @@
-name = Warehouse
-description = Складская очередь на разгрузку/погрузку
-package = Custom
-core = 7.x
-
-files[] = includes/warehouse.import.inc
-files[] = views/warehouse_handler_field_status.inc
-
-
