@@ -1,6 +1,9 @@
 <?php
 
-const PROD_PLAN_TYPE_PRED = 1;        // типы Записей плана (поле field_pp_type)
+const PROD_DAYS_BEFORE_PRODUCE_START = 1;
+
+// типы Записей плана (поле field_pp_type)
+const PROD_PLAN_TYPE_PRED = 1;
 const PROD_PLAN_TYPE_APPR = 2;
 const PROD_PLAN_TYPE_OPER = 3;
 const PROD_SERVICE_NOM_ID = 583;     // id сервисных работ из справочника Номенклатуры
@@ -14,6 +17,19 @@ const PROD_MESSAGE_AUTHOR_SYS_CLIENT = 3;   // для добавления со�
 const PROD_MESSAGE_AUTHOR_PROD = 2;
 const PROD_MESSAGE_AUTHOR_SYS_PROD = 4;     // например, добавить сообщение об Утверждение плана, при импорте плана
 
+// список Изменений
+const  PROD_CHANGE_ADD_TO_PLAN = 4738;
+const  PROD_CHANGE_APPROVE = 4744;
+
+const  PROD_CHANGE_DENY = 4745;
+const  PROD_CHANGE_CANCEL = 4741;
+const  PROD_CHANGE_VOLUME = 4740;
+const  PROD_CHANGE_DATE = 4739;
+const  PROD_CHANGE_SCHEDULE = 4742;
+
+// варианты Предупреждений
+const PROD_WARNING_YELLOW = 1;
+const PROD_WARNING_RED = 2;
 /**
  * Implementation of hook_menu().
  */
@@ -26,7 +42,7 @@ function prod_menu()
     'access callback' => true,
     'file' => 'includes/prod.pages.inc',
     'type' => MENU_NORMAL_ITEM,
-    'menu_name' => 'main-menu',
+//    'menu_name' => 'main-menu',
   ];
   $items['production/nomenklatura/%/%'] = [
     'title' => 'Страница номенклатуры',
@@ -96,11 +112,19 @@ function prod_message_create($params)
     $message_wr->field_m_month = $params['month_ts'];
     $message_wr->field_m_nomenklatura = $params['nom_id'];
     $message_wr->field_m_author = $params['author'];
+    if (!empty($params['parent_id'])) $message_wr->field_m_parent = $params['parent_id'];
     if (!empty($params['1c_id'])) $message_wr->field_1c_id = $params['1c_id'];
     if (!empty($params['comment'])) $message_wr->field_comment = $params['comment'];
     if (!empty($params['changes'])) $message_wr->field_m_changes = $params['changes'];
     if (!empty($params['reason'])) $message_wr->field_m_reason = $params['reason'];
     if (!empty($params['plan_rec'])) $message_wr->field_m_plan_record = $params['plan_rec'];
+    if (!empty($params['warning'])) $message_wr->field_m_warning = $params['warning'];
+    if (!empty($params['params'])) $message_wr->field_m_params = drupal_json_encode($params['params']);
+    if (!empty($params['files'])) {
+      foreach($params['files'] as $file) {
+        $message_wr->field_files[] = (array)$file;
+      }
+    }
     $message_wr->save();
   } catch (Exception $e) {
     $transaction->rollback();
@@ -177,34 +201,46 @@ function prod_message_get_info($mid)
 {
   $message_wr = entity_metadata_wrapper('message', $mid);
 
+  $plan_rec_info = $message_wr->field_m_plan_record->value() ? prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier()) : null;
+
   $author = $message_wr->field_m_author->value();
+  $params = drupal_json_decode($message_wr->field_m_params->value());
 
   // обработка Изменения
   $changes = [];
-  if (in_array($author, [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
-    foreach ($message_wr->field_m_changes->getIterator() as $change_wr) {
-      $chid = $change_wr->getIdentifier();
-      $change = $change_wr->name->value();
-      // изменение объёма
-      if ($chid == 4740) {
-        $plan_rec_info = prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier());
-        $change = $change . ' ' . 'до ' . helper_number_format($plan_rec_info['volume'], 2, ' ') . ' л(кг)';
+  foreach ($message_wr->field_m_changes->getIterator() as $change_wr) {
+    $chid = $change_wr->getIdentifier();
+    $change = $change_wr->name->value();
+    $volume_from_formatted = $params['volume']['from'] ? helper_number_format($params['volume']['from'], 2, ' ') : '';
+    $volume_to_formatted = helper_number_format($params['volume']['to'], 2, ' ') . ' л(кг)';
+    $date_from_formatted = date('n', $params['date']['from']) == date('n', $params['date']['to']) ? date('j', $params['date']['from']) : date('j', $params['date']['from']) . ' ' . helper_month_label_ru(date('n', $params['date']['from']) , true);
+    $date_to_formatted = date('j', $params['date']['to']) . ' ' . helper_month_label_ru(date('n', $params['date']['to']) , true);
+    // внесение в план
+    if ($chid == 4738) {
+      if (!empty($params['volume'])) {
+        $change = $change . ' <span class="nowrap">' . $volume_to_formatted . '</span>' . ' <span class="nowrap">на ' . $date_to_formatted . '</span>';
       }
-      // внесение в план и перенос
-      if (in_array($chid, [4738, 4739])) {
-        $plan_rec_info = prod_plan_record_get_info($message_wr->field_m_plan_record->getIdentifier());
-        $change = $change . ' ' . 'на ' . date('d', $plan_rec_info['date_start']) . ' ' . helper_month_label_ru(date('n', $plan_rec_info['date_start']), true);
+    }
+    // изменение объёма
+    if ($chid == 4740) {
+      if (!empty($params['volume'])) {
+        $change = $change . ' <span class="nowrap">c ' . $volume_from_formatted . '</span>' . ' ' . '<span class="nowrap">до ' . $volume_to_formatted . '</span>';
       }
-      $changes[$chid] = $change;
     }
-  } elseif(in_array($author, [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
-    foreach ($message_wr->field_m_changes->getIterator() as $change_wr) {
-      $chid = $change_wr->getIdentifier();
-      $change = 'Запрос на ' . drupal_strtolower($change_wr->name->value());
-      $change = str_replace('отмена', 'отмену', $change);
-      $changes[$chid] = $change;
+    // перенос
+    if (in_array($chid, [4739])) {
+      if (!empty($params['date'])) {
+        $change = $change . ' <span class="nowrap">с ' . $date_from_formatted . ' на ' . $date_to_formatted . '</span>';
+      }
     }
+
+    if (in_array($author, [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
+      $change = str_replace('Отмена', 'отмену', $change);
+    }
+
+    $changes[$chid] = $change;
   }
+
 
   $changes_formatted = '';
   $connector = '';
@@ -217,6 +253,15 @@ function prod_message_get_info($mid)
     }
     $changes_formatted .= $connector . $change;
   }
+  if($changes_formatted && in_array($author, [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
+    $changes_formatted = 'Запрос на ' . drupal_strtolower($changes_formatted);
+  }
+
+  if (!$changes_formatted && in_array($author, [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
+    $changes_formatted = 'Без изменений';
+  }
+
+
 
   // причины
   $reason = $message_wr->field_m_reason->value() ? $message_wr->field_m_reason->name->value() : '';
@@ -224,6 +269,18 @@ function prod_message_get_info($mid)
     // если автор система, вывести в причинах "Системное сообщение"
   if (in_array($author, [PROD_MESSAGE_AUTHOR_SYS_CLIENT, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
     $reason = 'Системное сообщение';
+  }
+
+  // подготовить файлы
+  $files = [];
+  foreach($message_wr->field_files->getIterator() as $file_wr)
+  {
+    $fid = $file_wr->file->fid->value();
+    $files[$fid] = [
+      'id' => $fid,
+      'url' => $file_wr->file->url->value(),
+      'name' => $file_wr->file->name->value(),
+    ];
   }
 
   return [
@@ -236,7 +293,68 @@ function prod_message_get_info($mid)
     'reason' => $reason,
     'comment' => $message_wr->field_comment->value(),
     'created' => $message_wr->created->value(),
+    'plan_rec_id' => $plan_rec_info['id'] ?? null,
+    'params' => $params,
+    'warning' => $message_wr->field_m_warning->value() == PROD_WARNING_RED,
+    'files' => $files,
   ];
+}
+
+/**
+ * Вернуть последние значения Даты и Объёма выпуска запрошенные клиентом или включённые в план
+ * Используется в истории Сообщений
+ * @param $month_start
+ * @param $nom_id
+ * @return array
+ */
+function prod_message_get_last_date_volume($month_start, $nom_id)
+{
+  $date_last = null;
+  $volume_last = null;
+  if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
+    $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
+    $date_last = $plan_rec_last_info['date'];
+    $volume_last = $plan_rec_last_info['volume'];
+  }
+
+  $message_last = prod_message_get_last($month_start, $nom_id);
+  $message_last_info = prod_message_get_info($message_last->id);
+
+  if (!$plan_rec_last || $plan_rec_last_info['created'] < $message_last_info['created']) {
+
+    $date_last = $message_last_info['params']['date']['to'];
+    $volume_last = $message_last_info['params']['volume']['to'];
+  }
+
+  return [
+    'date' => $date_last,
+    'volume' => $volume_last,
+  ];
+}
+
+/**
+ * Вернуть тип Предупреждения из Сообщений для Номенклатуры, если есть
+ * @param $month_start
+ * @param $nom_id
+ */
+function prod_nomenklatura_get_warning($month_start, $nom_id)
+{
+  $warning = 0;
+
+  $dbr = db_select('field_data_field_m_warning', 'fw');
+  $dbr->condition('fw.field_m_warning_value', [PROD_WARNING_YELLOW, PROD_WARNING_RED], 'IN');
+  $dbr->innerJoin('field_data_field_m_month', 'fm', 'fm.entity_id = fw.entity_id');
+  $dbr->condition('fm.field_m_month_value', $month_start);
+  $dbr->innerJoin('field_data_field_m_nomenklatura', 'fn', 'fn.entity_id = fw.entity_id');
+  $dbr->condition('fn.field_m_nomenklatura_target_id', $nom_id);
+  $dbr->addField('fw', 'field_m_warning_value', 'warning');
+  $dbr->distinct();
+  if ($result = $dbr->execute()->fetchAllAssoc('warning')) {
+    if (isset($result[PROD_WARNING_RED])) $warning = PROD_WARNING_RED;
+    elseif (isset($result[PROD_WARNING_YELLOW])) $warning = PROD_WARNING_YELLOW;
+  }
+
+  return $warning;
 }
 
 /**
@@ -259,7 +377,7 @@ function prod_plan_record_create($fields)
     $plan_rec_wr->field_pp_month = $fields['month_ts'];
     $plan_rec_wr->field_pp_nomenklatura = $fields['nom_id'];
     $plan_rec_wr->field_pp_type = $fields['type'];
-    $plan_rec_wr->field_pp_load = $fields['load'];
+    $plan_rec_wr->field_pp_load = drupal_json_encode($fields['load']);
     $plan_rec_wr->save();
   } catch (Exception $e) {
     $transaction->rollback();
@@ -298,12 +416,12 @@ function prod_plan_record_get_info($id)
   $plan_rec_wr = entity_metadata_wrapper('plan', $id);
 
   $volume = 0;
-  $date_start = 0;
+  $date = 0;
   if ($load = drupal_json_decode($plan_rec_wr->field_pp_load->value())) {
     foreach ($load as $pu_id => $pu_item) {
       foreach ($pu_item['pu_load'] as $day => $output) {
         $volume += $output;
-        if (!$date_start || $date_start > $day) $date_start = $day;
+        if (!$date || $date > $day) $date = $day;
       }
     }
   }
@@ -323,7 +441,7 @@ function prod_plan_record_get_info($id)
     ],
     'type' => $plan_rec_wr->field_pp_type->value(),
     'volume' => $volume,
-    'date_start' => $date_start,
+    'date' => $date,                                // дата начала выпуска
     'load' => $load,
   ];
 }
@@ -497,9 +615,8 @@ function prod_nomenklatura_get_list_by_messages($params)
   }
   $dbr->addField('fc', 'field_client_tid', 'company_id');
   $dbr->distinct();
-  $result = $dbr->execute()->fetchAllAssoc('nom_id');
 
-  return $result;
+  return $dbr->execute()->fetchAllAssoc('nom_id');
 }
 
 /**
@@ -679,46 +796,49 @@ function prod_produce_unit_get_load($month_start, $produce_unit_id = null, $plan
       $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
       if ($plan_rec_info['load']) {
         foreach ($plan_rec_info['load'] as $puid => $pu) {
-          if (!isset($produce_units[$puid])) {
-            $produce_units[$puid] = [
-              'info' => prod_produce_unit_get_info($puid),
-              'nom' => [],
-              'load' => [],
-              'amount' => 0,
-            ];
-            $produce_units_labels[$produce_units[$puid]['info']['name']] = $puid;
-          };
-          if (!isset($produce_units[$puid]['nom'][$nom_id])) {
-            $produce_units[$puid]['nom'][$nom_id] = [
-              'info' => prod_nomenklatura_get_info($nom_id),
-              'load' => [],
-            ];
-          }
-
-          foreach ($pu['pu_load'] as $day_start => $output) {
-            // Заполняем информацию о Номенклатуре по дням,
-            // если информации ещё нет
-            // или если есть, но задана текущая номенклатура и информация не по ней.
-            // (в принципе это ошибка - наложение производства двух наименований в один день, но при возникновении выводить клиенту его Номенклатуру, а не параллельную)
-            if (!isset($produce_units[$puid]['load'][$day_start])
-                || ($nom_current_id && $produce_units[$puid]['load'][$day_start]['nom_id'] != $nom_current_id)) {
-              $produce_units[$puid]['load'][$day_start] = [
-                'output' => $output,
-                'is_own' => 0,
-                'is_current' => 0,
-                'nom_id' => $nom_id,
+          // собираем только по заданным
+          if (empty($pu_ids) || in_array($puid, $pu_ids)) {
+            if (!isset($produce_units[$puid])) {
+              $produce_units[$puid] = [
+                'info' => prod_produce_unit_get_info($puid),
+                'nom' => [],
+                'load' => [],
+                'amount' => 0,
+              ];
+              $produce_units_labels[$produce_units[$puid]['info']['name']] = $puid;
+            };
+            if (!isset($produce_units[$puid]['nom'][$nom_id])) {
+              $produce_units[$puid]['nom'][$nom_id] = [
+                'info' => prod_nomenklatura_get_info($nom_id),
+                'load' => [],
               ];
             }
-            // для менеджера показываем данные обо всей Номенклатуре
-            // а для клиента только о Номенклатуре его компаний
-            if (user_has_role(ROLE_MANAGER_PRODUCTION)
-                || in_array($nom_item->company_id, array_keys(ext_user_get_companies_by_user()))) {
-              $produce_units[$puid]['load'][$day_start]['is_own'] = 1;
-              $produce_units[$puid]['load'][$day_start]['is_current'] = $produce_units[$puid]['load'][$day_start]['nom_id'] == $nom_current_id ? 1 : 0;
-              if (!$nom_current_id || $nom_current_id == $nom_id) $produce_units[$puid]['amount'] += $output;
-              $produce_units[$puid]['nom']['list'][$nom_id] = $produce_units[$puid]['nom'][$nom_id]['info']['label'];
-              // для последующей фильтрации по клиенту
-              $produce_units_client[$puid] = 1;
+
+            foreach ($pu['pu_load'] as $day_start => $output) {
+              // Заполняем информацию о Номенклатуре по дням,
+              // если информации ещё нет
+              // или если есть, но задана текущая номенклатура и информация не по ней.
+              // (в принципе это ошибка - наложение производства двух наименований в один день, но при возникновении выводить клиенту его Номенклатуру, а не параллельную)
+              if (!isset($produce_units[$puid]['load'][$day_start])
+                  || ($nom_current_id && $produce_units[$puid]['load'][$day_start]['nom_id'] != $nom_current_id)) {
+                $produce_units[$puid]['load'][$day_start] = [
+                  'output' => $output,
+                  'is_own' => 0,
+                  'is_current' => 0,
+                  'nom_id' => $nom_id,
+                ];
+              }
+              // для менеджера показываем данные обо всей Номенклатуре
+              // а для клиента только о Номенклатуре его компаний
+              if (user_has_role(ROLE_MANAGER_PRODUCTION)
+                  || in_array($nom_item->company_id, array_keys(ext_user_get_companies_by_user()))) {
+                $produce_units[$puid]['load'][$day_start]['is_own'] = 1;
+                $produce_units[$puid]['load'][$day_start]['is_current'] = $produce_units[$puid]['load'][$day_start]['nom_id'] == $nom_current_id ? 1 : 0;
+                if (!$nom_current_id || $nom_current_id == $nom_id) $produce_units[$puid]['amount'] += $output;
+                $produce_units[$puid]['nom']['list'][$nom_id] = $produce_units[$puid]['nom'][$nom_id]['info']['label'];
+                // для последующей фильтрации по клиенту
+                $produce_units_client[$puid] = 1;
+              }
             }
           }
         }

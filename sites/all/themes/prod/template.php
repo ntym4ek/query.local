@@ -14,13 +14,13 @@ function prod_theme()
 {
   return [
     'nomenklatura_teaser' => [
-      'variables' => ['nom_info' => null, 'month_start' => null],
+      'variables' => ['nom_info' => null, 'month_start' => null, 'message_info' => null, 'plan_rec_info' => null, 'warning' => null],
     ],
     'message' => [
       'variables' => ['message_info' => null],
     ],
     'produce_unit' => [
-      'variables' => ['produce_unit' => NULL, 'month_start' => null, 'show_amount' => null, 'show_nomenklatura' => null],
+      'variables' => ['produce_unit' => NULL, 'month_start' => null, 'show_amount' => null, 'show_nomenklatura' => null, 'show_month' => null],
     ],
     'field_custom' => [
       'variables' => ['title' => null, 'content' => null],
@@ -37,6 +37,17 @@ function prod_message($vars)
     $row_class = ' m-prod';
   }
 
+  // подготовить файлы
+  $files = '';
+  if ($vars['message_info']['files']) {
+    $arr = [];
+    foreach ($vars['message_info']['files'] as $file) {
+      $arr[] = '<a class="" href="' . $file['url'] . '" title="Скачать файл" download>' . $file['name'] . '</a>';
+    }
+    $files = implode(', ', $arr);
+  }
+
+
   $message_class = '';
 
   $output  = "<div class=\"message-row$row_class\">";
@@ -47,7 +58,24 @@ function prod_message($vars)
     $output .=     '<div class="m-reason">' . $vars['message_info']['reason'] . '</div>';
   if ($vars['message_info']['comment'])
     $output .=     '<div class="m-comment">' . $vars['message_info']['comment'] . '</div>';
-  $output .=     '<div class="m-date">' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
+  if ($files) {
+    $output .=     '<div class="m-files">';
+    $output .=       $files;
+    $output .=     '</div>';
+  }
+  if ($vars['message_info']['warning']) {
+    $output .=     '<div class="m-warning"></div>';
+  }
+
+
+  if (true) {
+    // вывести отладочную информацию
+    $output .=      '<div class="m-date"><a title="id: ' . $vars['message_info']['id'] . '">' .
+                      date('d.m.Y H:i', $vars['message_info']['created']) .
+                    '</a></div>';
+  } else {
+    $output .=     '<div class="m-date">' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
+  }
   $output .=   '</div>';
   $output .= '</div>';
 
@@ -57,15 +85,15 @@ function prod_message($vars)
 function prod_nomenklatura_teaser($vars)
 {
   $output = '';
-  $title = theme('field_custom', ['title' => 'Номенклатура', 'content' => $vars['nom_info']['label']]);
-  $volume = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска л(кг)', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
-  $date = !empty($vars['plan_rec_info']['date_start']) ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m.Y', $vars['plan_rec_info']['date_start'])]) : '';
+  $title        = theme('field_custom', ['title' => 'Номенклатура', 'content' => $vars['nom_info']['label']]);
+  $volume       = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
+  $date         = !empty($vars['plan_rec_info']['date']) ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m.Y', $vars['plan_rec_info']['date'])]) : '';
 
-  $date_change = theme('field_custom', ['title' => 'Дата изменения', 'content' => date('d.m.Y', $vars['message_info']['created'])]);
-  $change = theme('field_custom', ['title' => 'Последнее изменение', 'content' => $vars['message_info']['changes']['formatted']]);
+  $date_change  = theme('field_custom', ['title' => 'Дата изменения', 'content' => date('d.m.Y', $vars['message_info']['created'])]);
+  $change       = theme('field_custom', ['title' => 'Последнее изменение', 'content' => $vars['message_info']['changes']['formatted']]);
 
-  $url = '/production/nomenklatura/' . $vars['nom_info']['id'] . '/' . $vars['month_start'];
-  $button = '<a class="btn btn-default" href="' . $url . '">подробнее</a>';
+  $url          = '/production/nomenklatura/' . $vars['nom_info']['id'] . '/' . $vars['month_start'];
+  $button       = '<a class="btn btn-default btn-xs" href="' . $url . '">подробнее</a>';
 
   $class = '';
   if (in_array($vars['message_info']['author'], [PROD_MESSAGE_AUTHOR_CLIENT, PROD_MESSAGE_AUTHOR_SYS_CLIENT])) {
@@ -75,8 +103,15 @@ function prod_nomenklatura_teaser($vars)
     $class = ' m-prod';
   }
 
+  $class_warn = '';
+  if (!empty($vars['warning'])) {
+    if ($vars['warning'] == PROD_WARNING_YELLOW) $class_warn = ' warn-yellow';
+    if ($vars['warning'] == PROD_WARNING_RED) $class_warn = ' warn-red';
+  }
+
+
   $output .='<a href="">';
-  $output .=  '<div class="nom-item">';
+  $output .=  '<div class="nom-item' . $class_warn . '">';
   $output .=    '<div class="n-header">';
   $output .=      '<div class="n-title"><a href="' . $url . '">' . $title . '</a></div>';
   $output .=      '<div class="n-volume">' . $volume . ' </div>';
@@ -119,30 +154,32 @@ function prod_produce_unit($vars)
     $days .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
   }
 
+  $month_label = empty($vars['show_month']) ? 'Даты' : helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start);
+
   $output =
     '<div class="produce-unit" data-putid="' . $produce_unit['info']['id'] . '">' .
-    '<div class="produce-unit-name">' .
-    '<label class="label" for="edit-name">Установка</label>' .
-    '<h3>' . $pu_name . '</h3>' .
-    '</div>' .
-    '<div class="produce-unit-dates">' .
-    '<label class="label">Даты</label>' .
-    '<div class="form-checkboxes">' .
-    $days .
-    '</div>' .
-    '</div>';
+      '<div class="produce-unit-name">' .
+        '<label class="label" for="edit-name">Установка</label>' .
+        '<h3>' . $pu_name . '</h3>' .
+      '</div>' .
+      '<div class="produce-unit-dates">' .
+        '<label class="label">' . $month_label . '</label>' .
+        '<div class="form-checkboxes">' .
+        $days .
+        '</div>' .
+      '</div>';
 
   if (!empty($vars['show_amount'])) {
     $output .=
       '<div class="produce-unit-aux">' .
-      '<label class="label">Объём выпуска</label>' .
-      '<h3>' . number_format($produce_unit['amount'], 0, ',', ' ') . '</h3>' .
+        '<label class="label">Объём выпуска</label>' .
+        '<h3>' . number_format($produce_unit['amount'], 0, ',', ' ') . '</h3>' .
       '</div>';
   }
   if (!empty($vars['show_nomenklatura'])) {
     $output .=
       '<div class="produce-unit-nom">' .
-      implode('; ', $produce_unit['nom']['list']) .
+        implode('; ', $produce_unit['nom']['list']) .
       '</div>';
   }
   $output .= '</div>';

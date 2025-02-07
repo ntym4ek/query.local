@@ -55,3 +55,13 @@ function helper_datetime_to_timestamp($datetime)
 
   return $timestamp;
 }
+
+/**
+ * Вернуть timestamp начала заданного дня
+ * @param $timestamp
+ * @return false|int - unix timastamp
+ */
+function helper_get_day_start_from_timestamp($timestamp = REQUEST_TIME)
+{
+  return gmmktime(0, 0, 0, date('n', $timestamp), date('j', $timestamp) , date('Y', $timestamp));
+}

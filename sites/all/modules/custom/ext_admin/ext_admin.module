@@ -103,7 +103,7 @@ function ext_admin_process_migration()
   $counter = 0;
 
   // список для очереди пока только за 2025
-  $month_start = helper_datetime_to_timestamp('01.01.2025');
+  $month_start = helper_datetime_to_timestamp('01.01.2024');
 
   prod_message_delete_all($month_start);
   prod_plan_record_delete_all($month_start);
@@ -119,9 +119,12 @@ function ext_admin_process_migration()
 
   if ($nom_ids) {
     foreach ($nom_ids as $nom_id) {
-//      if ($nom_id != 291) continue; // пока только для одной номенклатуры
-//      if ($nom_id != 3977) continue; // пока только для одной номенклатуры
-//      if ($nom_id != 200) continue; // пока только для одной номенклатуры
+      if (false && !in_array($nom_id, [
+          3047,
+//        3977,
+//        200,
+//        362
+      ])) continue; // пока только для одной номенклатуры
 
       $efQuery = new EntityFieldQuery();
       $efQueries = $efQuery
@@ -171,13 +174,23 @@ function ext_admin_queue_callback($qid)
     $query_wr = entity_metadata_wrapper('query', $qid);
 
     $plan_rec = null;
-    $changes = [];
+    $changes = $params = [];
     $reason = 0;
+    $no_message = false;   // на предварительный план сообщение не добавлять
 
     // определить автора
     $author = PROD_MESSAGE_AUTHOR_PROD;
     if ($query_wr->uid->raw()) {
       $author = PROD_MESSAGE_AUTHOR_CLIENT;
+    }
+
+
+    // загрузка установок
+    $load = drupal_json_decode($query_wr->field_load_json->value());
+
+    // чтобы определить, какое изменение произошло, сравним с прошлым изменением плана
+    if ($plan_rec_prev = prod_plan_record_get_last($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier())) {
+      $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
     }
 
     // Запись плана создаётся только для Производства
@@ -199,16 +212,16 @@ function ext_admin_queue_callback($qid)
       $query_type = $query_wr->field_query_type->value();
       $query_client_status = $query_wr->field_query_status_client->value();
       $type = PROD_PLAN_TYPE_PRED;
-      if ($query_type == 'plan' && $query_client_status == 'approved') {
-        $type = PROD_PLAN_TYPE_APPR;
+      if ($query_type == 'plan') {
+        if ($query_client_status == 'approved') {
+          $type = PROD_PLAN_TYPE_APPR;
+        } else {
+          // если это предварительный план, то сообщения не добавляются
+          $no_message = true;
+        }
       }
       if ($query_type == 'correction') {
         $type = PROD_PLAN_TYPE_OPER;
-      }
-
-      // чтобы определить, какое изменение произошло, сравним с прошлым изменением плана
-      if ($plan_rec_prev = prod_plan_record_get_last($query_wr->field_month->value(), $query_wr->field_nomenklatura->getIdentifier())) {
-        $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
       }
 
       // создать Запись плана
@@ -217,56 +230,113 @@ function ext_admin_queue_callback($qid)
         'month_ts' => $query_wr->field_month->value(),
         'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
         'type' => $type,
-        'load' => $query_wr->field_load_json->value(),
+        'load' => $load,
       ]);
       $plan_rec_info = prod_plan_record_get_info($plan_rec->id);
 
       // определить Изменение, если это не Сервисная запись
-      if ($query_wr->field_nomenklatura->getIdentifier() != PROD_SERVICE_NOM_ID) {
+      if ($type == PROD_PLAN_TYPE_APPR) {
+                                $changes[] = PROD_CHANGE_APPROVE;                 // утверждение плана
+      }
+      elseif (!$no_message && $query_wr->field_nomenklatura->getIdentifier() != PROD_SERVICE_NOM_ID) {
+        $reason = $query_wr->field_query_reason->getIdentifier();
+        $volume_from = $date_from = null;
+        // если нет Записей плана, то это Включение в план или Отказ
         if (empty($plan_rec_prev_info)) {
-          $changes[] = 4738; // внесение в план
-        } elseif ($plan_rec_info['volume'] == 0) {
-          $changes[] = 4741; // отмена выпуска
-        } else {
-          if ($plan_rec_prev_info['volume'] != $plan_rec_info['volume']) {
-            $changes[] = 4740; // изменение объёма
-          }
-          if ($plan_rec_prev_info['date_start'] != $plan_rec_info['date_start']) {
-            $changes[] = 4739; // изменение даты начала
-          } elseif ($plan_rec_prev_info['load'] != $plan_rec_info['load']) {
-            $changes[] = 4742; // изменение графика выпуска
+          if ($load)            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+          // если по инициативе клиента
+          elseif($reason == 553) {
+                                $changes[] = PROD_CHANGE_CANCEL;                  // отмена
+          } else                $changes[] = PROD_CHANGE_DENY;                    // отказ
+        }
+        // если есть Записи плана
+        else {
+          $volume_from = $plan_rec_prev_info['volume'];
+          $date_from = $plan_rec_prev_info['date'];
+          if ($plan_rec_info['volume'] == 0) {
+                                $changes[] = PROD_CHANGE_CANCEL;                  // отмена выпуска
+          } else {
+            if ($plan_rec_prev_info['volume'] == 0) {
+                                $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+            }
+            else {
+              if ($plan_rec_prev_info['volume'] != $plan_rec_info['volume']) {
+                                $changes[] = PROD_CHANGE_VOLUME;                  // изменение объёма
+              }
+              // вместе с изменением Объёма может быть изменение Даты или Графика
+              if ($plan_rec_info['date']) {
+                if ($plan_rec_prev_info['date'] != $plan_rec_info['date']) {
+                                  $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
+                }
+                elseif ($plan_rec_prev_info['load'] != $load) {
+                                  $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
+                }
+              }
+            }
           }
         }
 
-        $reason = $query_wr->field_query_reason->getIdentifier();
+        $params['volume'] = ['from' => $volume_from, 'to' => $plan_rec_info['volume']];
+        $params['date'] = ['from' => $date_from, 'to' => $plan_rec_info['date']];
       }
+    }
+    // для запроса Клиента попробовать определить Изменения
+    else {
+      $volume_from = $date_from = null;
+      $volume_to = $query_wr->field_qty->value();
+      $date_to = $query_wr->field_query_period->value->value();
+      if (!empty($plan_rec_prev_info)) {
+        $volume_from = $plan_rec_prev_info['volume'];
+        $date_from = $plan_rec_prev_info['date'];
+        if ($volume_to == 0) {
+              $changes[] = PROD_CHANGE_CANCEL;
+        }
+        else {
+          if ($volume_from == 0) {
+              $changes[] = PROD_CHANGE_ADD_TO_PLAN;
+          }
+          else {
+            if ($volume_to != $volume_from) {
+              $changes[] = PROD_CHANGE_VOLUME;
+            }
+            if (!empty($date_to) && $date_to != $date_from)
+              $changes[] = PROD_CHANGE_DATE;
+          }
+        }
+      }
+      $params['volume'] = ['from' => $volume_from, 'to' => $volume_to];
+      $params['date'] = ['from' => $date_from, 'to' => $date_to];
     }
 
     // при необходимости создать системное сообщение для клиента
     // причины:  - отсутствие сырья
     //           - отсутствие материалов
-    if ($reason && in_array($reason, [551, 552])) {
+    if (in_array($reason, [551, 552])) {
       prod_message_create([
         'created' => $query_wr->created->value()-1,
         'month_ts' => $query_wr->field_month->value(),
         'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
         'comment' => $query_wr->field_query_reason->name->value(),
         'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
+        'warning' => PROD_WARNING_RED,
       ]);
     }
 
     // создать сообщение
-    prod_message_create([
-      'created' => $query_wr->created->value(),
-      'month_ts' => $query_wr->field_month->value(),
-      'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
-      'comment' => $query_wr->field_comment->value(),
-      '1c_id' => $query_wr->field_oc_id->value(),
-      'changes' => $changes,
-      'reason' => $reason,
-      'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
-      'author' => $author,
-    ]);
+    if (!$no_message) {
+      prod_message_create([
+        'created' => $query_wr->created->value(),
+        'month_ts' => $query_wr->field_month->value(),
+        'nom_id' => $query_wr->field_nomenklatura->getIdentifier(),
+        'comment' => $query_wr->field_comment->value(),
+        '1c_id' => $query_wr->field_oc_id->value(),
+        'changes' => $changes,
+        'reason' => $reason,
+        'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
+        'author' => $author,
+        'params' => $params,
+      ]);
+    }
 
     $success = true;
   } catch (Exception $e) {

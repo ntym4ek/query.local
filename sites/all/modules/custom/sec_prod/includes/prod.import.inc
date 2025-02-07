@@ -254,26 +254,31 @@ function prod_plan_import($array)
     $plan = [];
     foreach ($array['load'] as $item) {
       if (!empty($item['nom_id']) && $item['unit_id_1c'] && $item['date']) {
-        $nom = prod_nomenklatura_get_by_1c_params($item['nom_id']);
+        $nom          = prod_nomenklatura_get_by_1c_params($item['nom_id']);
         $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
-        $day_start = helper_datetime_to_timestamp($item['date']);
-        $client_id = $nom->field_client['und'][0]['tid'];
+        $day_start    = helper_datetime_to_timestamp($item['date']);
+        $client_id    = $nom->field_client['und'][0]['tid'];
 
         if (!isset($plan[$nom->tid])) {
           $plan[$nom->tid] = [
             'month_ts' => $month_start,
             'nom_id' => $nom->tid,
             'client_id' => $client_id,
+            'volume' => 0,
+            'date' => 0,
             'load' => [],
           ];
         }
-
         if (!isset($plan[$nom->tid]['load'][$produce_unit->tid])) $plan[$nom->tid]['load'][$produce_unit->tid] = [
           'pu_tid' => $produce_unit->tid,
           'pu_load' => [],
         ];
-        $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
 
+        // определить объём и дату начала
+        $plan[$nom->tid]['volume'] += $item['output'];
+        if (!$plan[$nom->tid]['date'] || $plan[$nom->tid]['date'] > $day_start) $plan[$nom->tid]['date'] = $day_start;
+
+        $plan[$nom->tid]['load'][$produce_unit->tid]['pu_load'][$day_start] = $item['output'];
         $plan[$nom->tid]['produce_units'][$produce_unit->tid] = $produce_unit->tid;
       }
     }
@@ -284,13 +289,26 @@ function prod_plan_import($array)
     // добавление Плана на месяц
     $user_mails = [];
     foreach ($plan as $plan_item) {
-      prod_plan_record_create([
+      $plan_rec = prod_plan_record_create([
         'import_time_ts' => REQUEST_TIME,
-        'month_ts' => $plan_item['month_ts'],
+        'month_ts' => $month_start,
         'nom_id' => $plan_item['nom_id'],
         'type' => $array['type'] == 'appr' ? PROD_PLAN_TYPE_APPR : PROD_PLAN_TYPE_PRED,
-        'load' => drupal_json_encode($plan_item['load']),
+        'load' => $plan_item['load'],
       ]);
+
+      // при утверждении плана создать Сообщение
+      if ($array['type'] == 'appr') {
+        prod_message_create([
+          'created' => REQUEST_TIME,
+          'month_ts' => $month_start,
+          'nom_id' => $plan_item['nom_id'],
+          'changes' => [PROD_CHANGE_APPROVE],
+          'plan_rec' => isset($plan_rec) ? $plan_rec->id : null,
+          'author' => PROD_MESSAGE_AUTHOR_SYS_PROD,
+          'params' => ['volume' => ['from' => $plan_item['volume'], 'to' => $plan_item['volume']], 'date' => ['from' => $plan_item['date'], 'to' => $plan_item['date']]],
+        ]);
+      }
 
       if (empty($user_mails[$plan_item['client_id']])) {
         $user_mails[$plan_item['client_id']] = [
@@ -301,24 +319,24 @@ function prod_plan_import($array)
     }
 
     if (!empty($array['service'])) {
-      $service_load_arr = [];
+      $service_load = [];
       foreach ($array['service'] as $item) {
         $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
         $day_start = helper_datetime_to_timestamp($item['date']);
-        if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
+        if (!isset($service_load[$produce_unit->tid])) $service_load[$produce_unit->tid] = [
           'pu_tid' => $produce_unit->tid,
           'pu_load' => [],
         ];
-        $service_load_arr[$produce_unit->tid]['pu_load'][$day_start] = 0;
+        $service_load[$produce_unit->tid]['pu_load'][$day_start] = 0;
       }
 
-      if ($service_load_arr) {
+      if ($service_load) {
         prod_plan_record_create([
           'import_time_ts' => REQUEST_TIME,
           'month_ts' => $month_start,
           'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
           'type' => $array['type'] == 'appr' ? PROD_PLAN_TYPE_APPR : PROD_PLAN_TYPE_PRED,
-          'load' => drupal_json_encode($service_load_arr),
+          'load' => $service_load,
         ]);
       }
     }
@@ -359,43 +377,85 @@ function prod_plan_import($array)
  */
 function prod_message_import($array)
 {
-  $message = null;
-  $message_parent_id = empty($array['ID']) ? 0 : $array['ID'];
-  $message_id_1c = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
-  $created = empty($array["created"]) ? REQUEST_TIME : helper_datetime_to_timestamp($array['created']);;
-  $month_start = helper_datetime_to_timestamp($array['month']);
+  $parent_id      = empty($array['ID']) ? 0 : $array['ID'];
+  $message_id_1c  = empty($array["ID_1c"]) ? '' : $array["ID_1c"];
+  $created        = empty($array["created"]) ? REQUEST_TIME : helper_datetime_to_timestamp($array['created']);
+  $nom_id_1c      = empty($array['nom_id']) ? '' : $array['nom_id'];
+  $nom_artikul    = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
+  $warning        = empty($array['warning']) || $array['warning'] === "false" ? null : PROD_WARNING_RED;
+  $comment        = empty($array['comment']) ? '' : $array['comment'];
+  $month_start  = helper_datetime_to_timestamp($array['month']);
+  $nom_id       = prod_nomenklatura_get_by_1c_params($nom_id_1c, $nom_artikul)->tid;
+  $reason       = prod_reason_get_by_1c_id($array['reason_id']);
 
-  $nom_id_1c = empty($array['nom_id']) ? '' : $array['nom_id'];
-  $nom_artikul = empty($array['artikul_1c']) ? '' : $array['artikul_1c'];
-  $nom = prod_nomenklatura_get_by_1c_params($nom_id_1c, $nom_artikul);
-
-  $changes_id = [];
-  if ($array['changes_id']) {
-    foreach ($array['changes_id'] as $chid) {
-      $change = prod_change_get_by_1c_id($chid);
-      $changes_id[] = $change->id;
-    }
-  }
-
-  $reason = prod_reason_get_by_1c_id($array['reason_id']);
-  $comment = empty($array['comment']) ? '' : $array['comment'];
-
-  // получить Загрузку
-  $load_arr = [];
+  // получить Загрузку, общий Объём и Дату начала выпуска
+  $load = [];
+  $volume = $date = 0;
   if (!empty($array['load'])) {
     foreach($array['load'] as $item) {
       $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
       $day_start = helper_datetime_to_timestamp($item['date']);
-      if (!isset($load_arr[$produce_unit->tid])) $load_arr[$produce_unit->tid] = [
+      if (!isset($load[$produce_unit->tid])) $load[$produce_unit->tid] = [
         'pu_tid' => $produce_unit->tid,
         'pu_load' => [],
       ];
+      $volume += $item['output'];
       $output = $item['output'];
-      $load_arr[$produce_unit->tid]['pu_load'][$day_start] = $output;
+      $load[$produce_unit->tid]['pu_load'][$day_start] = $output;
+      if (!$date || $date > $day_start) $date = $day_start;
     }
   }
 
-  // заполнить поля
+  // определить, какие произошли Изменения
+  $changes = [];
+  $volume_from = $date_from = null;
+    // предыдущая Запись плана
+  if ($plan_rec_prev = prod_plan_record_get_last($month_start, $nom_id)) {
+    $plan_rec_prev_info = prod_plan_record_get_info($plan_rec_prev->id);
+  }
+    // если нет Записей плана, то это Включение в план или Отказ
+  if (empty($plan_rec_prev_info)) {
+    if ($load)              $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // внесение в план
+    // если по инициативе клиента
+    elseif($reason->tid == 553) {
+                            $changes[] = PROD_CHANGE_CANCEL;                  // отмена
+    } else                  $changes[] = PROD_CHANGE_DENY;                    // отказ
+  }
+    // если есть Записи плана
+  else {
+    $volume_from = $plan_rec_prev_info['volume'];
+    $date_from = $plan_rec_prev_info['date'];
+    if ($volume == 0) {
+                            $changes[] = PROD_CHANGE_CANCEL;                  // отмена выпуска
+    } else {
+      if ($plan_rec_prev_info['volume'] == 0) {
+                            $changes[] = PROD_CHANGE_ADD_TO_PLAN;             // снова внесение в план
+      }
+      else {
+        if ($plan_rec_prev_info['volume'] != $volume) {
+                            $changes[] = PROD_CHANGE_VOLUME;                  // изменение объёма
+        }
+        // вместе с изменением Объёма может быть изменение Даты или Графика
+        if ($date) {
+          if ($plan_rec_prev_info['date'] != $date) {
+                            $changes[] = PROD_CHANGE_DATE;                   // изменение даты начала
+          }
+          elseif ($plan_rec_prev_info['load'] != $load) {
+                            $changes[] = PROD_CHANGE_SCHEDULE;               // изменение графика выпуска
+          }
+        }
+      }
+    }
+  }
+  if (!$changes) {
+    watchdog('import', 'Импорт Сообщения. Не определено Изменение Сообщение %message_id_1c', ['%message_id_1c' => $message_id_1c],WATCHDOG_ERROR);
+  }
+
+  // сохранить изменения объёма и даты в массиве параметров
+  $params['volume'] = ['from' => $volume_from, 'to' => $volume];
+  $params['date'] = ['from' => $date_from, 'to' => $date];
+
+  // создать записи плана и сообщения
   try {
     $plan_rec = null;
     if (prod_plan_has_approved($month_start) && $array['type'] == 'pred') {
@@ -409,7 +469,7 @@ function prod_message_import($array)
         )
       ));
 
-    // todo добавить в комментарий, что план не изменён
+    // todo добавить в комментарий, что план не изменён (о чём это?)
 
     } else {
       // в заявках план или Предварительный или Оперативный
@@ -417,47 +477,56 @@ function prod_message_import($array)
       $plan_rec = prod_plan_record_create([
         'import_time_ts' => REQUEST_TIME,
         'month_ts' => $month_start,
-        'nom_id' => $nom->tid,
+        'nom_id' => $nom_id,
         'type' => $array['type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-        'load' => drupal_json_encode($load_arr),
+        'load' => $load,
       ]);
     }
 
-    // todo определиться, нужно ли создавать доп.сообщение со стороны пользователя
-    //      если причина изменения, вносимого производством, на стороне клиента.
-    //      (время ставить на 1 сек раньше)
+    // Так как нужно подсвечивать, с чьей стороны возник риск срыва,
+    // создать системное сообщение для клиента для следующих причин:
+    //  - отсутствие сырья
+    //  - отсутствие материалов
+    if ($reason && in_array($reason->tid, [551, 552])) {
+      prod_message_create([
+        'created' => $created-1,   // сообщение должно размещаться до сообщения от производства
+        'month_ts' => $month_start,
+        'nom_id' => $nom_id,
+        'comment' => $reason->name,
+        'author' => PROD_MESSAGE_AUTHOR_SYS_CLIENT,
+        'warning' => PROD_WARNING_RED,
+      ]);
+    }
 
-    $message = entity_create('message', [
-      'type' => 'message',
+    prod_message_create([
       'created' => $created,
+      'month_ts' => $month_start,
+      'nom_id' => $nom_id,
+      'comment' => $comment,
+      '1c_id' => $message_id_1c,
+      'parent_id' => !empty($parent_id) ? $parent_id : null,
+      'changes' => !empty($changes) ? $changes : [],
+      'reason' => !empty($reason) ? $reason->tid : null,
+      'plan_rec' => !empty($plan_rec) ? $plan_rec->id : null,
+      'author' => PROD_MESSAGE_AUTHOR_PROD,
+      'params' => $params,
+      'warning' => !empty($warning) ? $warning : null,
     ]);
-    entity_save('message', $message);
-
-    $message_wr = entity_metadata_wrapper('message', $message);
-    $message_wr->field_m_month = $month_start;
-    $message_wr->field_m_nomenklatura = $nom->tid;
-    if ($changes_id) $message_wr->field_m_changes = $changes_id;
-    if ($reason) $message_wr->field_m_reason = $reason->tid;
-    $message_wr->field_comment = $comment;
-    $message_wr->field_1c_id = $message_id_1c;
-    if ($message_parent_id) $message_wr->field_m_parent = $message_parent_id;
-    if ($plan_rec) $message_wr->field_m_plan_record = $plan_rec->id;
-    $message_wr->save();
 
     // если пришла Занятость
     if (!empty($array['service'])) {
-      $service_load_arr = [];
+      $service_load = [];
       foreach($array['service'] as $item) {
         $produce_unit = prod_produce_unit_get_by_1c_id($item['unit_id_1c']);
         $day_start = helper_datetime_to_timestamp($item['date']);
-        if (!isset($service_load_arr[$produce_unit->tid])) $service_load_arr[$produce_unit->tid] = [
+        if (!isset($service_load[$produce_unit->tid])) $service_load[$produce_unit->tid] = [
           'pu_tid' => $produce_unit->tid,
           'pu_load' => [],
         ];
-        $service_load_arr[$produce_unit->tid]['pu_load'][$day_start] = 0;
+        $service_load[$produce_unit->tid]['pu_load'][$day_start] = 0;
       }
 
-      if ($service_load_arr) {
+      if ($service_load) {
         // удалить старую сервисную запись
         // история плана не нужна, поэтому достаточно текущей записи.
         prod_plan_record_delete_service($month_start);
@@ -467,7 +536,7 @@ function prod_message_import($array)
           'month_ts' => $month_start,
           'nom_id' => PROD_SERVICE_NOM_ID,                          // сервисная запись отличается только Номенклатурой
           'type' => $array['type'] == 'pred' ? PROD_PLAN_TYPE_PRED : PROD_PLAN_TYPE_OPER,
-          'load' => drupal_json_encode($service_load_arr),
+          'load' => $service_load,
         ]);
       }
     }
@@ -478,8 +547,8 @@ function prod_message_import($array)
 
 
   // todo переделать
-  // сразу уведомить клиента о новой заявке, если не установлена отправка раз в сутки
-  if ($message) {
+  //      сразу уведомить клиента о новой заявке, если не установлена отправка раз в сутки
+  if (false && $message) {
     $params = [
       'qid' => $message_wr->getIdentifier(),
       'month' => t(date('F', $message_wr->field_month->value())),

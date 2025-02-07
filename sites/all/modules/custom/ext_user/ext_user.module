@@ -158,13 +158,19 @@ function ext_user_get_company_by_user($user = null)
     $company = [
       'id' => $user_wr->field_user_company->getIdentifier(),
       'name' => $user_wr->field_user_company->label(),
-      'wwork_limit' => $user_wr->field_user_company->field_wwork_limit->value(),
+      'wwork_limit' => $user_wr->field_user_company->field_wwork_limit->value(), // legacy
       '1c_id' => $user_wr->field_user_company->field_1c_id->value(),
     ];
   }
   return $company;
 }
 
+/**
+ * Вернуть список компаний, доступных пользователю.
+ * Для менеджеров производства доступны все.
+ * @param $user
+ * @return array
+ */
 function ext_user_get_companies_by_user($user = null)
 {
   if (!$user) $user = user_load($GLOBALS['user']->uid);
@@ -173,14 +179,68 @@ function ext_user_get_companies_by_user($user = null)
   }
 
   $companies = false;
+  $tids = [];
   $user_wr = entity_metadata_wrapper('user', $user);
-  foreach ($user_wr->field_user_companies->getIterator() as $company_wr) {
-    $companies[$company_wr->getIdentifier()] = [
-      'id' => $company_wr->getIdentifier(),
-      'name' => $company_wr->label(),
-      'wwork_limit' => $company_wr->field_wwork_limit->value(),
-      '1c_id' => $company_wr->field_1c_id->value(),
+  // для клиентов и менеджеров, у кого задан список компаний
+  if (user_has_role(ROLE_USER_PRODUCTION) || (user_has_role(ROLE_MANAGER_PRODUCTION) && count($user_wr->field_user_companies->raw()))) {
+    $tids = $user_wr->field_user_companies->raw();
+  }
+  // для менеджеров без списка компаний вывести все
+  elseif (user_has_role(ROLE_MANAGER_PRODUCTION)) {
+    $query = db_select('taxonomy_term_data', 't');
+    $query ->condition('t.vid', taxonomy_vocabulary_machine_name_load('clients')->vid);
+    $query ->fields('t', ['tid']);
+    $tids = $query->execute()->fetchCol();
+  }
+
+  if ($tids) {
+    foreach ($tids as $tid) {
+      $companies[$tid] = ext_user_get_company_info($tid);
+    }
+  }
+
+  return $companies;
+}
+
+function ext_user_get_company_info($id)
+{
+  $info = [];
+
+  $term_wr = entity_metadata_wrapper('taxonomy_term', $id);
+  if ($term_wr->value()) {
+    $info = [
+      'id' => $term_wr->getIdentifier(),
+      'name' => $term_wr->label(),
+      '1c_id' => $term_wr->field_1c_id->value(),
     ];
   }
-  return $companies;
+
+  return $info;
+}
+
+/**
+ * Сохранить значение переменной для Пользователя.
+ * Удалить, если $value == null
+ * @param $name
+ * @param $value
+ */
+function ext_user_store_session_setting($name, $value)
+{
+  if (!isset($value) && isset($_SESSION[$name])) {
+    unset($_SESSION[$name]);
+  }
+
+  if (isset($value)) {
+    $_SESSION[$name] = $value;
+  }
+}
+
+/**
+ * Вернуть значение переменной для Пользователя
+ * @param $name
+ * @return mixed|null
+ */
+function ext_user_get_session_setting($name)
+{
+  return $_SESSION[$name] ?? null;
 }
