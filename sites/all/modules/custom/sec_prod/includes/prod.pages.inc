@@ -1,26 +1,29 @@
 <?php
 
-function prod_nom_list_form($form, &$form_values)
+function prod_nom_list_form($form, &$form_state)
 {
   // дефолтные значения из сессии или текущие
   $month_default    = ext_user_get_session_setting('page_nom_list_month') ?? date('n');
   $year_default     = ext_user_get_session_setting('page_nom_list_year') ?? date('Y');
   $sort_by          = ext_user_get_session_setting('page_nom_list_sort') ?? 'date';
 
-  $month    = empty($form_values["values"]["month"])    ? $month_default : $form_values["values"]['month'];
-  $year     = empty($form_values["values"]['year'])     ? $year_default : $form_values["values"]['year'];
-  $company  = empty($form_values["values"]['company'])  ? null : $form_values["values"]['company'];
+  $month          = empty($form_state["values"]["month"])   ? $month_default : $form_state["values"]['month'];
+  $year           = empty($form_state["values"]['year'])    ? $year_default : $form_state["values"]['year'];
+  $company        = empty($form_state["values"]['company']) ? null : $form_state["values"]['company'];
+  $nomenklatura   = empty($form_state["values"]['nom'])     ? null : $form_state["values"]['nom'];
 
   // если значение задано пользователем, сохранить в сессии
-  if (!empty($form_values["values"]["month"])) ext_user_store_session_setting('page_nom_list_month', $form_values["values"]["month"]);
-  if (!empty($form_values["values"]["year"])) ext_user_store_session_setting('page_nom_list_year', $form_values["values"]["year"]);
-  if (!empty($form_values["triggering_element"]) && in_array($form_values["triggering_element"]["#name"], ['abc', 'date'])) {
-    $sort_by = $form_values["triggering_element"]["#name"];
+  if (!empty($form_state["values"]["month"])) ext_user_store_session_setting('page_nom_list_month', $form_state["values"]["month"]);
+  if (!empty($form_state["values"]["year"])) ext_user_store_session_setting('page_nom_list_year', $form_state["values"]["year"]);
+  if (!empty($form_state["triggering_element"]) && in_array($form_state["triggering_element"]["#name"], ['abc', 'date'])) {
+    $sort_by = $form_state["triggering_element"]["#name"];
     ext_user_store_session_setting('page_nom_list_sort', $sort_by);
   }
 
+  $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+
   if (user_has_role(ROLE_USER_PRODUCTION))
-    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="600" href="/production/message/add">Новая заявка на выпуск</a>';
+    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="600" href="/production/message/add/0/' . $month_start . '">Новая заявка на выпуск</a>';
 
   $form = [
     '#prefix' => '<div id="nom-list-form-wrapper" class="nom-list-page">' .
@@ -70,33 +73,37 @@ function prod_nom_list_form($form, &$form_values)
   $companies = ext_user_get_companies_by_user();
 
   // подготовить массив с инфо о Номенклатуре и изменениями плана
-  $nom_arr = $sort_arr = [];
-  $month_start = gmmktime(0, 0, 0, $month, 1, $year);
+  $nom_arr = $sort_arr = $options_n = [];
   $nom_list = prod_nomenklatura_get_list_by_messages(['company_ids' => array_keys($companies), 'month_ts' => $month_start]);
-  $companies_fom_nom = [];
+  $companies_from_nom = [];
   foreach($nom_list as $nomid => $nom) {
-    $companies_fom_nom[$nom->company_id] = $nom->company_id;
+    $companies_from_nom[$nom->company_id] = $nom->company_id;
 
-    // выводим только для заданной компании
+    // выводим только для заданной компании и номенклатуры
     if (!$company || $nom->company_id == $company) {
+      // подготовить опции для селекта (ключ по label для сортировки)
       $nom_info = prod_nomenklatura_get_info($nomid);
-      $nom_arr[$nomid] = [
-        'nom' => $nom_info,
-        'message' => null,
-        'plan_rec' => null,
-      ];
+      $options_n[$nom_info['label']] = $nomid;
 
-      $nom_arr[$nomid]['warning'] = prod_nomenklatura_get_warning($month_start, $nomid);
+      if (!$nomenklatura || $nomid == $nomenklatura) {
+        $nom_arr[$nomid] = [
+          'nom' => $nom_info,
+          'message' => null,
+          'plan_rec' => null,
+        ];
 
-      if ($message_last = prod_message_get_last($month_start, $nomid)) {
-        $nom_arr[$nomid]['message'] = prod_message_get_info($message_last->id);
+        $nom_arr[$nomid]['warning'] = prod_nomenklatura_get_warning($month_start, $nomid);
+
+        if ($message_last = prod_message_get_last($month_start, $nomid)) {
+          $nom_arr[$nomid]['message'] = prod_message_get_info($message_last->id);
+        }
+        if ($plan_rec_last = prod_plan_record_get_last($month_start, $nomid)) {
+          $nom_arr[$nomid]['plan_rec'] = prod_plan_record_get_info($plan_rec_last->id);
+        }
+
+        $sort_key = ($sort_by == 'abc') ? $nom_info['label'] : $nom_arr[$nomid]['message']['created'] . str_pad($nomid, '10', '0', STR_PAD_LEFT);
+        $sort_arr[$sort_key] = $nomid;
       }
-      if ($plan_rec_last = prod_plan_record_get_last($month_start, $nomid)) {
-        $nom_arr[$nomid]['plan_rec'] = prod_plan_record_get_info($plan_rec_last->id);
-      }
-
-      $sort_key = ($sort_by == 'abc') ? $nom_info['label'] : $nom_arr[$nomid]['message']['created'] . str_pad($nomid, '10', '0', STR_PAD_LEFT);
-      $sort_arr[$sort_key] = $nomid;
     }
   }
 
@@ -111,23 +118,45 @@ function prod_nom_list_form($form, &$form_values)
   $output .= '</div>';
 
   // исключить из списка Компаний те, по которым нет Сообщений
-  $options = [];
-  foreach ($companies_fom_nom as $cid) {
-    $options[$cid] = $companies[$cid]['name'];
+  $options_c = [];
+  foreach ($companies_from_nom as $cid) {
+    $options_c[$cid] = $companies[$cid]['name'];
   }
-  if (count($options) != 1) {
-    $options[0] = '- Все -';
-    ksort($options);
+  if (count($options_c) != 1) {
+    $options_c[0] = '- Все -';
+    ksort($options_c);
   }
 
-  $company = $company ?? array_key_first($options);
+  $company = $company ?? array_key_first($options_c);
 
   // готовим форму
   $form['filters']['company'] = [
     '#title' => 'Компания',
     '#type' => 'select',
-    '#options' => $options,
+    '#options' => $options_c,
     '#default_value' => $company,
+    '#required' => true,
+    '#ajax' => [
+      'callback' => 'prod_nom_list_form_callback',
+      'wrapper' => 'nom-list-form-wrapper',
+    ],
+    '#prefix' => '<div class="filter">',
+    '#suffix' => '</div>',
+  ];
+
+
+  if (count($options_n) != 1) {
+    $options_n['- Все -'] = 0;
+  }
+  ksort($options_n);
+  $options_n = array_flip($options_n);
+  $nomenklatura = $nomenklatura ?? array_key_first($options_n);
+
+  $form['filters']['nom'] = [
+    '#title' => 'Номенклатура',
+    '#type' => 'select',
+    '#options' => $options_n,
+    '#default_value' => $nomenklatura,
     '#required' => true,
     '#ajax' => [
       'callback' => 'prod_nom_list_form_callback',
@@ -200,12 +229,12 @@ function prod_nom_page($nom_id, $month_start)
 
     $date = $plan_rec_info['date'];
   }
-  $title    = theme('field_custom', ['title' => 'Номенклатура', 'content' => $nom_info['label']]);
-  $volume   = $plan_rec ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($volume, 2, ' ')]) : '';
-  $date     = $plan_rec && $date ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m', $date)]) : '';
+  $field_title    = theme('field_custom', ['title' => 'Номенклатура', 'content' => $nom_info['label']]);
+  $field_volume   = $plan_rec ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($volume, 2, ' ')]) : '';
+  $field_date     = $plan_rec && $date ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m', $date)]) : '';
 
 
-  // вывести историю сообщений
+  // подготовить историю сообщений
   $output_m = '';
   if ($messages = prod_message_get_all($month_start, $nom_id)) {
     foreach ($messages as $message) {
@@ -224,22 +253,26 @@ function prod_nom_page($nom_id, $month_start)
   // определить доступные Действия
   $url = '/production/message/add/' . $nom_id . '/' . $month_start;
   $button_class = prod_plan_has_approved($month_start) ? ' btn-danger' : ' btn-primary';
-  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="600" href="' . $url . '?subject=date">Перенести дату выпуска</a>';
+  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="600" href="' . $url . '?subject=date"' . ($volume ? '' : 'disabled') . '>Перенести дату выпуска</a>';
   $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="600" href="' . $url . '?subject=volume">Изменить объём выпуска</a>';
-  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="600" href="' . $url . '?subject=cancel">Отменить выпуск</a>';
+  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="600" href="' . $url . '?subject=cancel"' . ($volume ? '' : 'disabled') . '>Отменить выпуск</a>';
   $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="600" href="' . $url . '?subject=docs">Отправить документы</a>';
+
+  // Настройки
+  $settings_form = drupal_get_form('prod_nom_page_settings_form', $month_start, $nom_id);
+  $output_s = drupal_render($settings_form);
 
   // сформировать вывод
   $output .=  '<div class="nom-page">';
   $output .=    '<div class="n-header' . $class_warn . '">';
   $output .=      '<div class="n-title">';
-  $output .=        $title;
+  $output .=        $field_title;
   $output .=      '</div>';
   $output .=      '<div class="n-volume">';
-  $output .=        $volume;
+  $output .=        $field_volume;
   $output .=      '</div>';
   $output .=      '<div class="n-date">';
-  $output .=        $date;
+  $output .=        $field_date;
   $output .=      '</div>';
   $output .=    '</div>';
 
@@ -248,9 +281,15 @@ function prod_nom_page($nom_id, $month_start)
   $output .=    '</div>';
 
   $output .=    '<div class="n-history">';
-  $output .=      '<div class="n-actions">';
-  $output .=      '<label class="field-label">Действия</label>';
-  $output .=        $output_a;
+  $output .=      '<div class="n-left">';
+  $output .=        '<div class="n-actions">';
+  $output .=        '<label class="field-label">Действия</label>';
+  $output .=          $output_a;
+  $output .=        '</div>';
+  $output .=        '<div class="n-settings">';
+  $output .=        '<label class="field-label">Настройки</label>';
+  $output .=          $output_s;
+  $output .=        '</div>';
   $output .=      '</div>';
 
   $output .=      '<div class="n-messages">';
@@ -277,9 +316,9 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
     'subject' => ['#type' => 'hidden', '#value' => $subject],
   ];
 
-  // если не задана Номенклатура, то это Сообщение о новом продукте
+  // если не задана Номенклатура, то это Сообщение о заявке на Новый продукт
   if (!$nomenklatura_id) {
-    $intro = '<p>Чтобы добавить заявку на выпуск продукта, выберите номенклатуру, задайте месяц и объём производства.</p><p>Обязательно заполните поле комментария.</p>';
+    $intro = '<p>Чтобы добавить заявку на выпуск продукта, выберите номенклатуру, задайте месяц, дату начала и объём производства.</p>';
 
     // подготовить список Номенклатуры клиента (если несколько компаний, то последовательно)
     $options = [];
@@ -287,8 +326,16 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
       foreach ($companies as $company) {
         $nom_list = prod_nomenklatura_get_list(['company_ids' => [$company['id']]]);
         foreach ($nom_list as $nom) {
-          $nom_info = production_nomenklatura_get_info($nom->nom_id);
+          $nom_info = prod_nomenklatura_get_info($nom->nom_id);
           $options[$nom->nom_id] = $nom_info['label'];
+        }
+      }
+
+      // исключить уже добавленные на месяц номенклатуру
+      if ($month_start) {
+        $nom_list_month = prod_nomenklatura_get_list_by_messages(['month_ts' => $month_start]);
+        foreach ($nom_list_month as $nom) {
+          unset($options[$nom->nom_id]);
         }
       }
     }
@@ -297,14 +344,14 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
     $options[$nomenklatura_id] = $nom_info['label'];
   }
 
-//  if ($subject == 'date') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p><p>Обязательно напишите комментарий.</p>';
-//  if ($subject == 'volume') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p><p>Обязательно напишите комментарий.</p>';
-//  if ($subject == 'cancel') $intro = '<p>Для отмены выпуска продукта заполните поле комментария и нажмите "Отправить сообщение".</p>';
+  if ($subject == 'date') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p>';
+  if ($subject == 'volume') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p>';
+  if ($subject == 'cancel') $intro = '<p>Для отмены выпуска продукта заполните поле комментария и нажмите "Отправить сообщение".</p>';
   // todo intro для загрузки документов
 
-//  $form['intro'] = [
-//    '#markup' => '<div class="intro">' . $intro . '</div>',
-//  ];
+  $form['intro'] = [
+    '#markup' => '<div class="intro">' . $intro . '</div>',
+  ];
 
   $form['nom'] = [
     '#title' => 'Номенклатура',
@@ -345,12 +392,16 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
   ];
 
 
-  // прошлые значения
-  // из последнего сообщения, клиентского или производственного с записью плана.
-  $date_vol_last = prod_message_get_last_date_volume($month_start, $nomenklatura_id);
-  $permitted_day_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60;
-  $date_default = date('Y-m-d', $date_vol_last['date'] ?: $permitted_day_start);
-  $volume_default = $date_vol_last['volume'] ?? 0;
+  if ($subject == 'add') {
+    $date_default = date('Y-m-d', $month_start);
+  } else {
+    // прошлые значения
+    // из последнего сообщения, клиентского или производственного с записью плана.
+    $date_vol_last = prod_message_get_last_date_volume($month_start, $nomenklatura_id);
+    $permitted_day_start = helper_get_day_start_from_timestamp() + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60;
+    $date_default = date('Y-m-d', $date_vol_last['date'] ?: $permitted_day_start);
+    $volume_default = $date_vol_last['volume'] ?? 0;
+  }
 
   $form['date'] = [
     '#type' => 'date_popup',
@@ -494,8 +545,7 @@ function prod_message_add_form_submit($form, &$form_state)
   $params['volume'] = ['from' => $date_vol_last['volume'], 'to' => $volume];
   $params['date'] = ['from' => $date_vol_last['date'], 'to' => $date];
 
-  // todo загрузить файлы
-
+  // загрузить файлы
   $files = [];
   if (!empty($form_state['values']['docs'])) {
     // на базе кода из plupload.module
@@ -529,15 +579,54 @@ function prod_message_add_form_submit($form, &$form_state)
   // todo экспортировать Сообщение
 
 
-
+  // если это первый запрос по Номенклатуре, установить настройку уведомления по email для пользователя
+  $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
+  $user_settings['mail'][$nom_id][$month_start] = 1;
+  variable_set('user_settings_' . $GLOBALS['user']->uid, $user_settings);
 
   // редирект на страницу Номенклатуры из ajax формы
   $url_redirect = '/production/nomenklatura/' . $form_state['values']['nom'] . '/' . $month_start;
   ctools_include('ajax');
   ctools_add_js('ajax-responder');
-  $commands[] = ctools_ajax_command_reload($url_redirect);
+  $commands[] = ctools_ajax_command_redirect($url_redirect);
   print ajax_render($commands);
   drupal_exit();
 }
 
+function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
+{
+  if (!empty($form_state["triggering_element"]) && $form_state["triggering_element"]["#name"] == 'mail') {
+    $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
+    $user_settings['mail'][$form_state['values']['nom_id']][$form_state['values']['month_start']] = $form_state['values']['mail'];
+    variable_set('user_settings_' . $GLOBALS['user']->uid, $user_settings);
+  }
 
+  $form = [
+    '#prefix' => '<div id="nom-page-settings-wrapper" class="nom-page-settings-wrapper">',
+    '#suffix' => '</div>',
+    'nom_id' => ['#type' => 'hidden', '#value' => $nom_id],
+    'month_start' => ['#type' => 'hidden', '#value' => $month_start],
+  ];
+
+  // найти настройки для номенклатуры-месяца, если нет, то не уведомлять
+  $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
+  $default = $user_settings['mail'][$nom_id][$month_start] ?? false;
+
+  $form['mail'] = [
+    '#type' => 'checkbox',
+    '#name' => 'mail',
+    '#title' => 'уведомлять об изменениях по e-mail',
+    '#default_value' => $default,
+    '#ajax' => [
+      'callback' => 'prod_nom_page_settings_form_callback',
+      'wrapper' => 'nom-page-settings-wrapper',
+    ],
+  ];
+
+  return $form;
+}
+
+function prod_nom_page_settings_form_callback($form, $form_state)
+{
+  return $form;
+}

@@ -184,7 +184,6 @@ function ext_admin_queue_callback($qid)
       $author = PROD_MESSAGE_AUTHOR_CLIENT;
     }
 
-
     // загрузка установок
     $load = drupal_json_decode($query_wr->field_load_json->value());
 

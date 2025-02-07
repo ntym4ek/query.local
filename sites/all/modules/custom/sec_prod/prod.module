@@ -224,11 +224,11 @@ function prod_message_get_info($mid)
     // изменение объёма
     if ($chid == 4740) {
       if (!empty($params['volume'])) {
-        $change = $change . ' <span class="nowrap">c ' . $volume_from_formatted . '</span>' . ' ' . '<span class="nowrap">до ' . $volume_to_formatted . '</span>';
+        $change = $change . ' <span class="nowrap">c ' . $volume_from_formatted . '</span>' . ' <span class="nowrap">до ' . $volume_to_formatted . '</span>';
       }
     }
     // перенос
-    if (in_array($chid, [4739])) {
+    if ($chid == 4739) {
       if (!empty($params['date'])) {
         $change = $change . ' <span class="nowrap">с ' . $date_from_formatted . ' на ' . $date_to_formatted . '</span>';
       }
@@ -240,7 +240,6 @@ function prod_message_get_info($mid)
 
     $changes[$chid] = $change;
   }
-
 
   $changes_formatted = '';
   $connector = '';
@@ -260,8 +259,6 @@ function prod_message_get_info($mid)
   if (!$changes_formatted && in_array($author, [PROD_MESSAGE_AUTHOR_PROD, PROD_MESSAGE_AUTHOR_SYS_PROD])) {
     $changes_formatted = 'Без изменений';
   }
-
-
 
   // причины
   $reason = $message_wr->field_m_reason->value() ? $message_wr->field_m_reason->name->value() : '';
@@ -317,13 +314,12 @@ function prod_message_get_last_date_volume($month_start, $nom_id)
     $volume_last = $plan_rec_last_info['volume'];
   }
 
-  $message_last = prod_message_get_last($month_start, $nom_id);
-  $message_last_info = prod_message_get_info($message_last->id);
-
-  if (!$plan_rec_last || $plan_rec_last_info['created'] < $message_last_info['created']) {
-
-    $date_last = $message_last_info['params']['date']['to'];
-    $volume_last = $message_last_info['params']['volume']['to'];
+  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
+    $message_last_info = prod_message_get_info($message_last->id);
+    if (!$plan_rec_last || $plan_rec_last_info['created'] < $message_last_info['created']) {
+      $date_last = $message_last_info['params']['date']['to'];
+      $volume_last = $message_last_info['params']['volume']['to'];
+    }
   }
 
   return [
