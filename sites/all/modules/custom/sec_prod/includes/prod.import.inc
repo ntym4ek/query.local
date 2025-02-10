@@ -341,25 +341,7 @@ function prod_plan_import($array)
       }
     }
 
-    // отправить письма об импорте Плана
-    if ($user_mails) {
-      foreach ($user_mails as $data) {
-        $params['month'] = t(date('F', $data['month_ts']));
-        $params['year'] = date('Y', $data['month_ts']);
-        try {
-          if ($users = ext_user_get_managers_by_client_id($data['client_id'], ROLE_USER_PRODUCTION)) {
-            foreach ($users as $manager_account) {
-              if ($manager_account->mail && empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
-                drupal_mail('mailer', 'user_notify_plan_import', $manager_account->mail, user_preferred_language($manager_account), $params);
-              }
-            }
-          }
-        } catch (Exception $e) {
-          watchdog('mail', 'Ошибка при отправке письма заявки. %mess', ['%mess' => $e->getMessage()],WATCHDOG_ERROR);
-          return false;
-        }
-      }
-    }
+    // todo возможно нужно отправить письмо об утверждении плана
 
     watchdog('import', 'План производства импортирован.', [], WATCHDOG_INFO);
     return $plan;
@@ -498,7 +480,7 @@ function prod_message_import($array)
       ]);
     }
 
-    prod_message_create([
+    $message = prod_message_create([
       'created' => $created,
       'month_ts' => $month_start,
       'nom_id' => $nom_id,
@@ -546,26 +528,18 @@ function prod_message_import($array)
   }
 
 
-  // todo переделать
-  //      сразу уведомить клиента о новой заявке, если не установлена отправка раз в сутки
-  if (false && $message) {
-    $params = [
-      'qid' => $message_wr->getIdentifier(),
-      'month' => t(date('F', $message_wr->field_month->value())),
-      'year' => date('Y', $message_wr->field_month->value()),
-      'product' => $message_wr->field_nomenklatura->name->value(),
-      'volume' => $message_wr->field_qty->value(),
-      'product_owner_id' => $message_wr->field_nomenklatura->field_client->getIdentifier(),
-      'type' => $message_wr->field_query_type->value(),
-      'reason' => $message_wr->field_query_reason->value() ? $message_wr->field_query_reason->name->value() : '',
-      'comment' => $message_wr->field_comment->value(),
-    ];
+  // уведомить клиентов о новой заявке
+  $nom_info = prod_nomenklatura_get_info($nom_id);
+  if ($message && $users = ext_user_get_users_by_company_id($nom_info)) {
+    foreach ($users as $user) {
+      // получить настройку пользователя для Номенклатуры/Месяца
+      $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);
+      $mail_nom = $user_settings['mail'][$nom_id] ?? false;
+      // получить настройку: отправлять сразу или раз в сутки
+      $mail_immediatelly = empty($user->field_notify_once_a_day["und"][0]["value"]);
 
-    if ($users = ext_user_get_managers_by_client_id($params['product_owner_id'], ROLE_USER_PRODUCTION)) {
-      foreach ($users as $manager_account) {
-        if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
-          drupal_mail('mailer', 'client_notify_query_correction_new', $manager_account->mail, user_preferred_language($manager_account), $params);
-        }
+      if ($mail_nom && $mail_immediatelly) {
+        drupal_mail('mailer', 'client_send_imported_message_mail', $user->mail, user_preferred_language($user), ['message_id' => $message->id]);
       }
     }
   }

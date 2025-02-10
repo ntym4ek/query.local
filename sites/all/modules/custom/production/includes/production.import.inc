@@ -357,7 +357,7 @@ function production_produce_plan_import($array)
         $params['month'] = t(date('F', $data['month']));
         $params['year'] = date('Y', $data['month']);
         try {
-          if ($users = ext_user_get_managers_by_client_id($data['client_id'], ROLE_USER_PRODUCTION)) {
+          if ($users = ext_user_get_users_by_company_id($data['client_id'], ROLE_USER_PRODUCTION)) {
             foreach ($users as $manager_account) {
               if ($manager_account->mail && empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
                 drupal_mail('mailer', 'user_notify_plan_import', $manager_account->mail, user_preferred_language($manager_account), $params);
@@ -632,7 +632,7 @@ function production_query_import($array)
       }
     }
 
-    if ($users = ext_user_get_managers_by_client_id($params['product_owner_id'], ROLE_USER_PRODUCTION)) {
+    if ($users = ext_user_get_users_by_company_id($params['product_owner_id'], ROLE_USER_PRODUCTION)) {
       foreach ($users as $manager_account) {
         if (empty($manager_account->field_notify_once_a_day["und"][0]["value"])) {
           drupal_mail('mailer', 'client_notify_query_correction_new', $manager_account->mail, user_preferred_language($manager_account), $params);

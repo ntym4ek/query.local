@@ -19,6 +19,9 @@ function prod_theme()
     'message' => [
       'variables' => ['message_info' => null],
     ],
+    'message_mail' => [
+      'variables' => ['message_info' => null],
+    ],
     'produce_unit' => [
       'variables' => ['produce_unit' => NULL, 'month_start' => null, 'show_amount' => null, 'show_nomenklatura' => null, 'show_month' => null],
     ],
@@ -28,6 +31,11 @@ function prod_theme()
   ];
 }
 
+/**
+ * Функция темизации Сообщения
+ * @param $vars
+ * @return string
+ */
 function prod_message($vars)
 {
 
@@ -78,6 +86,44 @@ function prod_message($vars)
   }
   $output .=   '</div>';
   $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Функция темизации Сообщения для письма (с встроенными стилями)
+ * @param $vars
+ * @return string
+ */
+function prod_message_mail($vars)
+{
+  // подготовить файлы
+  $files = '';
+  if ($vars['message_info']['files']) {
+    $arr = [];
+    foreach ($vars['message_info']['files'] as $file) {
+      $arr[] = '<a style="text-decoration: none;color: inherit;font-size: 12px;" href="' . url($file['url'], ['absolute' => true]) . '" title="Скачать файл" download>' . $file['name'] . '</a>';
+    }
+    $files = implode(', ', $arr);
+  }
+
+  $changes_formatted = str_replace('class="nowrap"', 'style="white-space: nowrap;"', $vars['message_info']['changes']['formatted']);
+
+  $output  =   '<div class="message" style="font-size: 14px;color: #333333;flex: 0 1 auto;background: #eee;border-radius: 5px;max-width: 500px; min-width: 150px;padding: 1.5rem 2rem 0.7rem; margin-bottom: 1rem;">';
+  if ($changes_formatted)
+    $output .=     '<div class="m-change" style="font-size: 18px;font-weight: 600;">' . $changes_formatted . '</div>';
+  if ($vars['message_info']['reason'])
+    $output .=     '<div class="m-reason" style="color: #999999;margin-bottom: 1rem;">' . $vars['message_info']['reason'] . '</div>';
+  if ($vars['message_info']['comment'])
+    $output .=     '<div class="m-comment" style="">' . $vars['message_info']['comment'] . '</div>';
+  if ($files) {
+    $output .=     '<div class="m-files" style="background: #dddddd;border-radius: 5px;padding: 2px 10px;margin-top: 5px;">';
+    $output .=       $files;
+    $output .=     '</div>';
+  }
+
+  $output .=     '<div class="m-date" style="color: #999999;font-size: 12px;text-align: right; margin-top:0.5rem;">' . date('d.m.Y H:i', $vars['message_info']['created']) . '</div>';
+  $output .=   '</div>';
 
   return $output;
 }
@@ -196,4 +242,18 @@ function prod_field_custom($vars)
   $output .=  '</div>';
 
   return $output;
+}
+
+function prod_preprocess_mimemail_message(&$vars)
+{
+  // переменные для шаблона письма
+  // logo для писем (берём лого из текущей темы, если существует)
+  $path = path_to_theme() . '/images/logo/logo_mail.png';
+  $vars['logo_mail'] = file_exists($path) ? file_create_url($path) : theme_get_setting('logo');
+  $site_name  = 'Кирово-Чепецкий завод «Агрохимикат»';
+  $vars['site_name'] = $site_name;
+  // подпись на языке письма
+  $vars['sign']   = empty($vars['message']['params']['context']['sign']) ? t('Postal robot') . ' ' . t($site_name) : $vars['message']['params']['context']['sign'];
+  // notice - текст сообщения о том, что письмо сформировано автоматически
+  $vars['notice'] = !isset($vars['message']['params']['context']['auto']) ? t('This message was generated automatically and does not require a response') : $vars['message'] ['params']['context']['auto'];
 }

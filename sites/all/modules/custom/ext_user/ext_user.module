@@ -117,25 +117,21 @@ function ext_user_user_load_by_login($login)
 }
 
 /**
+ * Вернуть Клиентов по заданной Компании и Роли
  * @param $company_id
- * @param $role - можно задать только для Производства или Склада
- * @return array
+ * @param $role -
  */
-function ext_user_get_managers_by_client_id($company_id, $role = null)
+function ext_user_get_users_by_company_id($company_id, $role = ROLE_USER_PRODUCTION)
 {
   $users = [];
   if (is_numeric($company_id)) {
     $query = db_select('users', 'u');
     $query ->condition('u.status', 1);
     $query ->fields('u', ['uid']);
-//    $query ->innerJoin('field_data_field_user_company', 'fc', 'fc.entity_id = u.uid');
-//    $query ->condition('fc.field_user_company_tid', $company_id);
     $query ->innerJoin('field_data_field_user_companies', 'fc', 'fc.entity_id = u.uid');
     $query ->condition('fc.field_user_companies_tid', $company_id);
-    if ($role) {
-      $query->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
-      $query->condition('ur.rid', $role);
-    }
+    $query->innerJoin('users_roles', 'ur', 'ur.uid = u.uid');
+    $query->condition('ur.rid', $role);
     $uids = $query->execute()->fetchCol();
     if ($uids) {
       $users = user_load_multiple($uids);
@@ -145,31 +141,10 @@ function ext_user_get_managers_by_client_id($company_id, $role = null)
   return $users;
 }
 
-function ext_user_get_company_by_user($user = null)
-{
-  if (!$user) $user = user_load($GLOBALS['user']->uid);
-  if (is_numeric($user)) {
-    $user = user_load($user);
-  }
-
-  $company = false;
-  $user_wr = entity_metadata_wrapper('user', $user);
-  if ($user_wr->field_user_company->value()) {
-    $company = [
-      'id' => $user_wr->field_user_company->getIdentifier(),
-      'name' => $user_wr->field_user_company->label(),
-      'wwork_limit' => $user_wr->field_user_company->field_wwork_limit->value(), // legacy
-      '1c_id' => $user_wr->field_user_company->field_1c_id->value(),
-    ];
-  }
-  return $company;
-}
-
 /**
- * Вернуть список компаний, доступных пользователю.
+ * Вернуть список Компаний, доступных пользователю.
  * Для менеджеров производства доступны все.
  * @param $user
- * @return array
  */
 function ext_user_get_companies_by_user($user = null)
 {
@@ -202,6 +177,10 @@ function ext_user_get_companies_by_user($user = null)
   return $companies;
 }
 
+/**
+ * Вернуть информацию о Компании
+ * @param $id
+ */
 function ext_user_get_company_info($id)
 {
   $info = [];
