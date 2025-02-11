@@ -253,7 +253,7 @@ function mailer_prod_mail_daily()
       $messages_by_companies_by_nom[$nom_info['company_id']]['nom'][$nom_id]['months'][$month_start][$message->id] = $message_info;
     }
 
-    // todo поставить в очередь на отправку
+    // поставить в очередь на отправку
     $mail_queue = DrupalQueue::get('daily_mails_queue');
     foreach ($messages_by_companies_by_nom as $company_id => $company) {
       if ($users = ext_user_get_users_by_company_id($company_id)) {

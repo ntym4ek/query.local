@@ -23,7 +23,7 @@ function prod_nom_list_form($form, &$form_state)
   $month_start = gmmktime(0, 0, 0, $month, 1, $year);
 
   if (user_has_role(ROLE_USER_PRODUCTION))
-    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="600" href="/production/message/add/0/' . $month_start . '">Новая заявка на выпуск</a>';
+    $button_add = '<a class="btn btn-primary autodialog" data-dialog-width="650" href="/production/message/add/0/' . $month_start . '">Новая заявка на выпуск</a>';
 
   $form = [
     '#prefix' => '<div id="nom-list-form-wrapper" class="nom-list-page">' .
@@ -49,7 +49,7 @@ function prod_nom_list_form($form, &$form_state)
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
     ],
-    '#prefix' => '<div class="month-select-wrapper filter">',
+    '#prefix' => '<div class="filter"><div class="month-select-wrapper ">',
   ];
   $year_opts = [];
   for($i = -1; $i <= 1; $i++) {
@@ -65,7 +65,7 @@ function prod_nom_list_form($form, &$form_state)
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
     ],
-    '#suffix' => '</div>',
+    '#suffix' => '</div></div>',
   ];
 
 
@@ -175,7 +175,7 @@ function prod_nom_list_form($form, &$form_state)
       'wrapper' => 'nom-list-form-wrapper',
     ],
     '#attributes' => ['class' => ['btn-link', $sort_by == 'abc' ? 'selected' : '']],
-    '#prefix' => '<div class="sort">',
+    '#prefix' => '<div class="sort form-item">',
   ];
   $form['filters']['datetime'] = [
     '#type' => 'button',
@@ -260,10 +260,10 @@ function prod_nom_page($nom_id, $month_start)
   $next_month_start = gmmktime(0, 0, 0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
   $month_is_over = $today_start + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60 >= $next_month_start;
 
-  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="600" href="' . $url . '?subject=date"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Перенести дату выпуска</a>';
-  $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="600" href="' . $url . '?subject=volume"' . (!$month_is_over ? '' : 'disabled') . '>Изменить объём выпуска</a>';
-  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="600" href="' . $url . '?subject=cancel"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Отменить выпуск</a>';
-  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="600" href="' . $url . '?subject=docs">Отправить документы</a>';
+  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=date"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Перенести дату выпуска</a>';
+  $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=volume"' . (!$month_is_over ? '' : 'disabled') . '>Изменить объём выпуска</a>';
+  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=cancel"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Отменить выпуск</a>';
+  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=docs">Отправить документы</a>';
 
   // Настройки
   $settings_form = drupal_get_form('prod_nom_page_settings_form', $month_start, $nom_id);
@@ -370,7 +370,6 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
   if ($subject == 'date') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p>';
   if ($subject == 'volume') $intro = '<p>Для изменения даты и/или объёма выпуска заполните соответствующие поля.</p>';
   if ($subject == 'cancel') $intro = '<p>Для отмены выпуска продукта заполните поле комментария и нажмите "Отправить сообщение".</p>';
-  // todo intro для загрузки документов
 
   $form['intro'] = [
     '#markup' => '<div class="intro">' . $intro . '</div>',
@@ -430,7 +429,7 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
 
   $form['date'] = [
     '#type' => 'date_popup',
-    '#title' => 'Дата начала выпуска',
+    '#title' => 'Начало выпуска',
     '#required' => in_array($subject, ['add', 'date']),
     '#default_value' => date('Y-m-d', $date_start),
     '#disabled' => !in_array($subject, ['add', 'volume', 'date']),
@@ -488,6 +487,7 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
   $form['actions']['submit'] = [
     '#type' => 'submit',
     '#value' => 'Отправить сообщение',
+    '#attributes' => ['class' => ['btn-primary']],
     '#ajax' => [
       'callback' => 'prod_message_add_callback',
       'wrapper' => 'message-add-wrapper',
@@ -616,7 +616,7 @@ function prod_message_add_form_submit($form, &$form_state)
   prod_message_export($message->id);
 
   // todo тестирование отправки письма
-  drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);
+//  drupal_mail('mailer', 'client_send_imported_message_mail', 'mega_comp@mail.ru', 'ru', ['message_id' => $message->id]);
 
   // если это первый запрос по Номенклатуре, установить настройку уведомления по email для пользователя
   $user_settings = variable_get('user_settings_' . $GLOBALS['user']->uid);

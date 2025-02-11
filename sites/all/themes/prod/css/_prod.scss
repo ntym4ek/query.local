@@ -757,9 +757,8 @@ form.query-form {
 .message-add-wrapper {
   max-width: 600px;
   .intro { padding-bottom: 2rem; }
-  .form-item-nom,
-  .form-item-comment {  }
-  .form-item-volume { max-width: 150px; }
+  .form-item-date .description { display: none; }
+  .form-item-volume { max-width: 150px; text-align: right; }
   .warning {
     background: $brand-danger;
     border-radius: 5px;

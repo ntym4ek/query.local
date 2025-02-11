@@ -1,0 +1,353 @@
+@import "variables"; // чтобы переменные не подсвечивались
+
+html {
+  height: 100%;
+  font-size: 12px;
+  @media #{$smart}    { font-size: 14px; }
+  @media #{$pad}      { font-size: 14px; }
+  @media #{$tablet}   { font-size: 16px; }
+  @media #{$laptop}   { font-size: 16px; }
+}
+
+body {
+  height: 100%;
+  .page-schedule { overflow: hidden; }
+}
+
+.page-header {
+  box-shadow: none;
+  position: absolute; top: 45px; left: 0; right: 0; z-index: 10;
+  padding: 0;
+  .container { padding: 0 1rem; }
+  .header-wr {
+    display: flex;
+    width: 100%; height: 100%;
+    &:before {
+      background-color: $brand-color;
+      content: "";
+      display: block;
+      flex: 1;
+      margin-right: -1px; // закрыть прозрачную полосу на макбуке
+    }
+    &:after {
+      background: rgba(27, 30, 40, 0.4);
+      content: "";
+      display: block;
+      flex: 1;
+    }
+  }
+  .col-1 {
+    flex: 0 0 auto;
+    padding-right: 30px;
+  }
+  .col-2 { flex: 1 0 auto; }
+  .branding {
+    display: flex; align-items: center;
+    background-color: $brand-color;
+    color: #fff; line-height: 1; text-align: center;
+    padding: 15px;
+    height: 100%; width: 270px;                     // определяет ширину брендовой части меню
+
+    a { color: inherit; }
+    .brand { flex: 1 0 auto; }
+    .name { font-size: 1.7em; font-weight: 700; text-transform: uppercase; }
+    .site-name {
+      font-size: .85em;
+      max-width: 200px;
+      margin: 0 auto;
+    }
+    .logo {
+      height: 100%;
+      flex: 0 0 41px;
+      img {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+    }
+  }
+
+  .menu-bkg {
+    display:grid; justify-content: flex-end; align-items: center;
+    background: rgba(27, 30, 40, 0.4);
+    height: 100%;
+    position: relative;
+    padding-right: 1rem;
+  }
+  .menu-wr {
+    display: flex; align-items: center;
+    height: 100%;
+    .primary-menu { flex: 1 1 auto; }
+    .language-switch { flex: 0 0 auto; }
+    .secondary-menu { flex: 0 0 auto; }
+    .icon-user { width: 1rem; }
+  }
+  .language-switch a {
+    color: #fff; transition: color 200ms;
+    &:hover { color: $menu-item-hover-color; }
+  }
+
+  @media #{$pad} {
+    .branding {
+      width: 315px;
+      padding: 15px;
+      .logo { flex: 0 0 55px; }
+    }
+    .menu-wr { padding-left: 2rem; }
+  }
+  @media #{$tablet} {
+    .menu-bkg { justify-content: normal; }
+  }
+  @media #{$laptop} {
+    height: 90px;
+    .branding {
+      font-size: 1rem;
+      padding-right: 30px;
+      width: 360px;
+    }
+    .menu {
+      font-size: 18px;
+      .sub-menu {
+        font-size: $font-size-base;
+        border-left: 5px solid $brand-color;
+        min-width: 230px;
+        .logo { flex: 0 0 55px; }
+      }
+      > li {
+        > a, &.first > a {
+          font-weight: 500;
+          padding: 1rem 2rem;
+        }
+      }
+    }
+    .language-switch a { font-weight: 500; }
+  }
+}
+
+.page-margin {
+  min-height: 120px;
+  @media #{$tablet} {
+    min-height: 130px;
+  }
+  @media #{$laptop} {
+    min-height: 140px;
+  }
+}
+
+.page-footer {
+  .branding { height: 60px; }
+  .logo { height: 100%; }
+}
+
+// - Оформление полей --------------------------------------------------------------------------------------------------
+.field {
+  margin-bottom: 1rem;
+  .field-label {
+    display: block;
+    color: $text-muted; font-weight: 400; font-size: $font-size-small;
+    cursor: inherit;
+    margin-bottom: 4px; padding: 0;
+  }
+}
+
+.month-select-wrapper {
+  display: flex;
+  .form-item.form-item-month { margin-right: .5rem; }
+}
+
+.message-row {
+  display: flex;
+  width: 100%;
+  margin-bottom: 1.5rem;
+  &.m-client { justify-content: right; }
+  &.m-prod { justify-content: left; }
+}
+.message {
+  flex: 0 1 auto;
+  background: #eee;
+  border-radius: 5px;
+  max-width: 67%; min-width: 150px;
+  padding: 1rem 1.5rem 2rem;
+  position: relative;
+  .m-date {
+    color: $text-muted; font-size: $font-size-small;
+    position: absolute; bottom: .5rem; right: 1.5rem;
+    a {
+      color: inherit;
+      &:hover { text-decoration: none; }
+    }
+  }
+  .m-change {
+    font-size: $font-size-large; font-weight: 600;
+  }
+  .m-reason { color: $text-muted; }
+  .m-comment { margin-top: 1rem; }
+  .m-files {
+    background: #ddd;
+    border-radius: 5px;
+    padding: 2px 10px; margin-top: 5px;
+    a { color: inherit; font-size: $font-size-small; }
+  }
+  .m-warning {
+    background-color: $brand-danger;
+    border-radius: 5px;
+    position: absolute; top: 10px; right: 10px;
+    width: 8px; height: 8px;
+  }
+}
+
+.message-add-wrapper {
+  max-width: 600px;
+  .intro { padding-bottom: 1rem; margin-top: 0; }
+  .form-item-date .description { display: none; }
+  .form-item-volume {
+    max-width: 150px;
+    input { text-align: right; }
+  }
+  .warning {
+    background: $brand-danger;
+    border-radius: 5px;
+    color: #fff; line-height: 1.2;
+    padding: 1rem 1.5rem 1.5rem;
+  }
+}
+
+.plupload_wrapper {
+  font-family: inherit;
+  .plupload_start { display: none; }
+  .plupload_filelist_footer {
+    height: auto;
+    line-height: initial;
+  }
+}
+
+.ui-widget-overlay {
+  background: #000;
+  opacity: .7;
+}
+.ui-widget { font-size: initial; font-family: inherit; }
+.ui-dialog {
+  .ui-dialog-content {
+    overflow: hidden;
+    padding: 1.5rem;
+  }
+}
+
+.produce-unit-legenda {
+  display: flex; flex-wrap: wrap; align-content: center;
+  flex: 0 0 200px;
+  padding-left: 15px;
+  color: $text-muted; font-size: $font-size-small;
+  span {
+    display: inline-block;
+    width: 20px; height: 10px;
+    border: 1px solid $gray-lightest;
+    margin-right: 5px;
+    vertical-align: middle;
+    &:not(:first-child) { margin-left: 30px; }
+    &.selected {
+      background: #caffca;
+      border-color: $brand-success;
+    }
+    &.loaded {
+      background: #ffc29f;
+      border-color: #ff5d00;
+    }
+    &.company-loaded {
+      background: #ffeacb;
+      border-color: $brand-warning;
+    }
+    &.unavailable {
+      background: #dedede;
+      border-color: #888888;
+    }
+    &.service {
+      background: #ffd2d1;
+      border-color: $brand-danger;
+    }
+  }
+  .attachment & {
+    margin-left: 162px;
+    margin-bottom: 15px;
+  }
+  &.top {
+    margin: 0 0 20px 130px;
+    > div { margin-right: 30px; }
+  }
+  &.bottom {
+    margin: 0 0 0 130px;
+    > div { margin-right: 30px; }
+  }
+}
+
+.produce-units {
+  display: flex;
+  .produce-units-list { flex: auto; }
+}
+.produce-unit {
+  display: flex; flex-wrap: wrap;
+  margin-bottom: 1rem;
+  h3 { margin: 0 0 2px 0; }
+  .label {
+    display: inline-block;
+    font-size: $font-size-small;
+    margin-bottom: 10px; padding: 0;
+  }
+  .produce-unit-name {
+    flex: 0 1 130px;
+    border-right: 1px solid $gray-lightest;
+    padding-right: 1rem; margin: 0;
+    position: relative;
+  }
+  .produce-unit-aux {
+    flex: 0 1 160px;
+    text-align: right;
+    padding: 0 1rem; margin: 0;
+  }
+  .produce-unit-nom {
+    flex: 100%;
+    padding-left: 150px;
+    color: $text-muted; font-size: $font-size-small;
+  }
+  .produce-unit-dates {
+    padding: 0 1rem;
+    margin: 0;
+    flex: auto;
+  }
+  .produce-unit-performance {
+    flex: 0 1 170px;
+    border-left: 1px solid $gray-lightest;
+    padding: 0 1rem;
+    margin: 0;
+  }
+  .pu-dates {
+    display: flex; justify-content: flex-start;
+    margin: 2px 0 10px 0;
+    label { padding: 0; }
+    .c-box {
+      color: #000; font-size: $font-size-small;
+      display: flex; justify-content: center; align-items: center;
+      width: 22px; height: 22px;
+      border: 1px solid $gray-lightest;
+      user-select: none;
+    }
+    .c-box.selected {
+      background: #caffca;
+      border-color: $brand-success;
+    }
+    .c-box.service {
+      background: #ffd2d1;
+      border-color: $brand-danger;
+    }
+    .c-box.loaded {
+      background: #ffc29f;
+      border-color: #ff5d00;
+    }
+    .c-box.company-loaded {
+      background: #ffeacb;
+      border-color: $brand-warning;
+    }
+  }
+
+  .c-box { margin: 0 3px 0; }
+}
