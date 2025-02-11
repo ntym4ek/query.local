@@ -26,8 +26,8 @@
     margin-bottom: 1rem;
   }
   .nom-item {
-    border: 1px solid $text-muted;
-    border-top-width: 3px;
+    border: 1px solid $brand-blue;
+    border-top-width: 5px;
     margin-bottom: 2rem; padding: 1rem 2rem;
     a {
       color: $text-color;
@@ -40,9 +40,10 @@
         flex: 0 0 150px;
         text-align: right;
       }
+      .n-date { margin-right: 1rem; }
       .n-volume {
-        flex: 0 0 auto;
-        .field-content { text-align: right; }
+        flex: 0 0 140px;
+        text-align: right;
       }
       .field-content {
         font-size: $font-size-h4; font-weight: 600;
@@ -64,15 +65,15 @@
       .field { margin-bottom: 0; }
     }
     &.warn-yellow { border-color: $brand-orange; }
-    &.warn-red { border-color: $brand-danger; }
+    &.warn-red { border-color: $brand-red; }
   }
 }
 
 .nom-page {
   margin-bottom: 4rem;
   .n-header {
-    color: #fff;
-    background: #333;
+    color: $brand-blue;
+    background: $brand-bg-blue;
     border-radius: 5px;
     display: flex;
     padding: 2rem; margin: 2rem 0 3rem;
@@ -81,21 +82,22 @@
       flex: auto;
       padding-right: 2rem;
     }
-    .n-month { flex: 0 0 190px; }
-    .n-date {
-      flex: 0 0 160px;
-      padding-left: 2rem;
+    .n-month {
+      flex: 0 0 auto;
       text-align: center;
+      margin-right: 1rem;
     }
     .n-volume {
-      flex: 0 0 auto;
-      padding: 0 2rem;
+      flex: 0 0 150px;
       text-align: center;
     }
-    .field-label { color: #fff; }
+    .field-label { color: $gray-darkest; }
     .field-content { font-size: $font-size-h2; font-weight: 600; }
-    &.warn-yellow { background-color: $brand-orange; }
-    &.warn-red { background-color: $brand-danger; }
+    &.warn-yellow { background-color: $brand-bg-orange; }
+    &.warn-red {
+      background-color: $brand-bg-red;
+      color: $brand-red;
+    }
   }
   .n-plan {
     margin-bottom: 3rem;
@@ -103,8 +105,10 @@
   }
   .n-history {
     display: flex;
-    align-items: flex-start;
-    label { margin-bottom: 1rem; }
+    label.block-label {
+      color: $text-color; font-weight: 700;
+      margin-bottom: 1rem;
+    }
   }
   .n-left {
     flex: 25%;
@@ -132,8 +136,126 @@
   }
   .n-messages {
     flex: 75%;
-    margin-left: 1rem;
     border: 1px solid #ddd; border-radius: 5px;
-    padding: 1rem 2rem;
+    height: auto;
+    padding: 1rem 2rem; margin-left: 1rem;
+  }
+}
+
+
+// - Устаревшие разделы ------------------------------------------------------------------------------------------------
+.view {
+  .view-filters {
+    .views-exposed-form {
+      .date-padding { display: flex; }
+    }
+  }
+  &.view-display-id-page_1 {
+    position: relative;
+    .attachment-before,
+    .view-filters,
+    .view-header {
+      margin-bottom: 1rem;
+      a.btn { margin: 0  5px 1rem 0; }
+    }
+    .views-widget {
+      display: flex;
+      .control-label { display: none; }
+      .form-item-month-min { margin-right: 15px; }
+      .form-item-month-min-month,
+      .form-item-month-max-month { margin-right: 5px; }
+    }
+    .form-item-field-month-value-value-month,
+    .form-item-field-produce-date-value-value-month,
+    .form-item-month-value-month { margin-right: 5px; }
+    .view-item {
+      display: flex; justify-content: space-between; flex-wrap: wrap;
+      margin-bottom: 1rem;
+      position: relative;
+      .views-field-created {
+        flex: 0 0 150px;
+        margin-bottom: 1rem;
+        a {
+          color: inherit; font-size: inherit; cursor: pointer;
+          &:hover { text-decoration: none; }
+        }
+      }
+
+      .views-field-field-qty { flex: 0 0 120px; }
+      .views-field-field-query-reason { flex: 300px; }
+      .views-field-field-query-status-manager { flex: 0 0 220px; }
+      .views-field-field-query-type { flex-basis: 100px; }
+      .views-field-uid {
+        flex: 100px;
+        text-align: right;
+      }
+
+      .views-field-produce-units-form {
+        flex: 100%;
+        padding: 1rem 0 0 0;
+        border-top: 1px solid $gray-light;
+        .query-comment {
+          width: 100%;
+        }
+      }
+      .views-field-produce-unit-load { flex: 100%; }
+    }
+    .views-field-nothing a {
+      font-size: $font-size-small;
+    }
+    .views-field-actions {
+      flex: 100%;
+      border-top: 1px solid $gray-light;
+      padding: .5rem 0;
+      text-align: right;
+      a { margin-left: 10px; }
+    }
+    .views-field-comment a {
+      text-decoration: underline;
+      text-decoration-style: dashed;
+    }
+    &.view-queries,
+    &.view-manager-queries {
+      .attachment-before {
+        text-align: right;
+        position: absolute; right: 0; top: 24px;
+      }
+      .view-content {
+        > h3 { margin-top: 40px; }
+        .collapse.in,
+        .collapsing { padding-top: 15px; }
+      }
+      .view-item {
+        justify-content: flex-start;
+        border: 1px solid $gray-light;
+        border-top: 8px solid $gray-light;
+        padding: 15px 20px 0;
+        &.actual:not(.produced) { border-color: $brand-success; }
+        &.attention { border-color: $brand-danger; }
+        &.processing { border-color: $brand-warning; }
+
+        .query-comment {
+          text-align: right;
+          .alert {
+            padding: 8px 15px; margin: 1rem 0;
+            color: #8a6d3b;
+            background-color: #fcf8e3;
+            border: 1px solid #faebcc;
+          }
+        }
+        &.from-client {
+          .query-comment { text-align: left; }
+        }
+        .views-label {
+          color: $label-color;
+          display: block;
+          margin-bottom: 3px;
+        }
+      }
+    }
+    &.view-manager-queries > div > .form-actions { display: none; } // кнопка сохранения для Editable fields
+    &.view-nomenklatura .table td {
+      font-size: 16px;
+    }
   }
 }

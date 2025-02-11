@@ -132,7 +132,7 @@ function project_nomenklatura_teaser($vars)
 {
   $output = '';
   $title        = theme('field_custom', ['title' => 'Номенклатура', 'content' => $vars['nom_info']['label']]);
-  $volume       = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
+  $volume       = $vars['plan_rec_info'] ? theme('field_custom', ['title' => 'Объём выпуска', 'content' => helper_number_format($vars['plan_rec_info']['volume'], 2, ' ')]) : '';
   $date         = !empty($vars['plan_rec_info']['date']) ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m.Y', $vars['plan_rec_info']['date'])]) : '';
   $date_change  = theme('field_custom', ['title' => 'Дата изменения', 'content' => date('d.m.Y', $vars['message_info']['created'])]);
 
@@ -156,13 +156,12 @@ function project_nomenklatura_teaser($vars)
     if ($vars['warning'] == PROD_WARNING_RED) $class_warn = ' warn-red';
   }
 
-
   $output .='<a href="">';
   $output .=  '<div class="nom-item' . $class_warn . '">';
   $output .=    '<div class="n-header">';
   $output .=      '<div class="n-title"><a href="' . $url . '">' . $title . '</a></div>';
-  $output .=      '<div class="n-volume">' . $volume . ' </div>';
   $output .=      '<div class="n-date">' . $date . '</div>';
+  $output .=      '<div class="n-volume">' . $volume . ' </div>';
   $output .=    '</div>';
   $output .=    '<div class="n-footer">';
   $output .=      '<div class="n-date-change">' . $date_change . '</div>';
@@ -201,8 +200,6 @@ function project_produce_unit($vars)
     $days .= '<span class="c-box ' . implode(' ', $classes) . '"' . $tooltip . '>' . $i . '</span>';
   }
 
-  $month_label = empty($vars['show_month']) ? 'Даты' : helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start);
-
   $output =
     '<div class="produce-unit" data-putid="' . $produce_unit['info']['id'] . '">' .
       '<div class="produce-unit-name">' .
@@ -210,7 +207,7 @@ function project_produce_unit($vars)
       '<h3>' . $pu_name . '</h3>' .
     '</div>' .
     '<div class="produce-unit-dates">' .
-      '<label class="label">' . $month_label . '</label>' .
+      '<label class="label">Даты</label>' .
       '<div class="pu-dates">' .
         $days .
       '</div>' .

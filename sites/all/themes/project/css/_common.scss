@@ -116,7 +116,7 @@ body {
       > li {
         > a, &.first > a {
           font-weight: 500;
-          padding: 1rem 2rem;
+          padding: 1rem;
         }
       }
     }
@@ -142,12 +142,7 @@ body {
 // - Оформление полей --------------------------------------------------------------------------------------------------
 .field {
   margin-bottom: 1rem;
-  .field-label {
-    display: block;
-    color: $text-muted; font-weight: 400; font-size: $font-size-small;
-    cursor: inherit;
-    margin-bottom: 4px; padding: 0;
-  }
+  .field-label { font-size: $font-size-small; }
 }
 
 .month-select-wrapper {
@@ -241,29 +236,25 @@ body {
   span {
     display: inline-block;
     width: 20px; height: 10px;
-    border: 1px solid $gray-lightest;
+    border: 1px solid $gray;
     margin-right: 5px;
     vertical-align: middle;
     &:not(:first-child) { margin-left: 30px; }
-    &.selected {
-      background: #caffca;
-      border-color: $brand-success;
+    &.service {
+      background: $brand-bg-red;
+      border-color: $brand-red;
     }
     &.loaded {
-      background: #ffc29f;
-      border-color: #ff5d00;
+      background: $brand-bg-orange;
+      border-color: $brand-orange;
     }
     &.company-loaded {
-      background: #ffeacb;
-      border-color: $brand-warning;
+      background: $brand-bg-blue;
+      border-color: $brand-blue;
     }
-    &.unavailable {
-      background: #dedede;
-      border-color: #888888;
-    }
-    &.service {
-      background: #ffd2d1;
-      border-color: $brand-danger;
+    &.selected {
+      background: $brand-blue;
+      border-color: $brand-blue;
     }
   }
   .attachment & {
@@ -320,6 +311,7 @@ body {
     padding: 0 1rem;
     margin: 0;
   }
+  .form-checkboxes,
   .pu-dates {
     display: flex; justify-content: flex-start;
     margin: 2px 0 10px 0;
@@ -331,21 +323,22 @@ body {
       border: 1px solid $gray-lightest;
       user-select: none;
     }
-    .c-box.selected {
-      background: #caffca;
-      border-color: $brand-success;
-    }
     .c-box.service {
-      background: #ffd2d1;
-      border-color: $brand-danger;
+      background: $brand-bg-red;
+      border-color: $brand-red;
     }
     .c-box.loaded {
-      background: #ffc29f;
-      border-color: #ff5d00;
+      background: $brand-bg-orange;
+      border-color: $brand-orange;
     }
     .c-box.company-loaded {
-      background: #ffeacb;
-      border-color: $brand-warning;
+      background: $brand-bg-blue;
+      border-color: $brand-blue;
+    }
+    .c-box.selected {
+      background: $brand-blue;
+      border-color: $brand-blue;
+      color: #fff;
     }
   }
 

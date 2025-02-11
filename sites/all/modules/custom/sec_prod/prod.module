@@ -1,6 +1,6 @@
 <?php
 
-const PROD_DAYS_BEFORE_PRODUCE_START = 1;
+const PROD_DAYS_BEFORE_PRODUCE_START = 7;
 
 // типы Записей плана (поле field_pp_type)
 const PROD_PLAN_TYPE_PRED = 1;
@@ -313,7 +313,7 @@ function prod_message_get_info($mid)
 }
 
 /**
- * Вернуть последние значения Даты и Объёма выпуска запрошенные клиентом или включённые в план
+ * Вернуть последние включённые в план значения Даты и Объёма выпуска
  * Используется в истории Сообщений
  * @param $month_start
  * @param $nom_id
@@ -322,20 +322,20 @@ function prod_message_get_info($mid)
 function prod_message_get_last_date_volume($month_start, $nom_id)
 {
   $date_last = null;
-  $volume_last = null;
+  $volume_last = 0;
   if ($plan_rec_last = prod_plan_record_get_last($month_start, $nom_id)) {
     $plan_rec_last_info = prod_plan_record_get_info($plan_rec_last->id);
     $date_last = $plan_rec_last_info['date'];
     $volume_last = $plan_rec_last_info['volume'];
   }
 
-  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
-    $message_last_info = prod_message_get_info($message_last->id);
-    if (!$plan_rec_last || $plan_rec_last_info['created'] < $message_last_info['created']) {
-      $date_last = $message_last_info['params']['date']['to'];
-      $volume_last = $message_last_info['params']['volume']['to'];
-    }
-  }
+//  if ($message_last = prod_message_get_last($month_start, $nom_id)) {
+//    $message_last_info = prod_message_get_info($message_last->id);
+//    if (!$plan_rec_last) {
+//      $date_last = $message_last_info['params']['date']['to'];
+//      $volume_last = $message_last_info['params']['volume']['to'];
+//    }
+//  }
 
   return [
     'date' => $date_last,

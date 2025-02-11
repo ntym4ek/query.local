@@ -135,7 +135,6 @@ function prod_nom_list_form($form, &$form_state)
     '#type' => 'select',
     '#options' => $options_c,
     '#default_value' => $company,
-    '#required' => true,
     '#ajax' => [
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
@@ -157,7 +156,6 @@ function prod_nom_list_form($form, &$form_state)
     '#type' => 'select',
     '#options' => $options_n,
     '#default_value' => $nomenklatura,
-    '#required' => true,
     '#ajax' => [
       'callback' => 'prod_nom_list_form_callback',
       'wrapper' => 'nom-list-form-wrapper',
@@ -207,7 +205,6 @@ function prod_nom_page($nom_id, $month_start)
 
   $nom_info = prod_nomenklatura_get_info($nom_id);
   $volume = null;
-  $date = 0;
 
   // собрать актуальную информацию о состоянии плана производства
   $output_pu = '';
@@ -226,12 +223,11 @@ function prod_nom_page($nom_id, $month_start)
       $output_pu .= '</div></div>';
       $output_pu .=  '<div class="produce-unit-legenda bottom"><div><span></span>- установка свободна</div><div><span class="loaded"></span>- установка занята</div><div><span class="company-loaded"></span>- другая продукция компании</div><div><span class="selected"></span>- даты производства</div></div>';
     }
-
-    $date = $plan_rec_info['date'];
   }
   $field_title    = theme('field_custom', ['title' => 'Номенклатура', 'content' => $nom_info['label']]);
-  $field_volume   = $plan_rec ? theme('field_custom', ['title' => 'Объём выпуска, л(кг)', 'content' => helper_number_format($volume, 2, ' ')]) : '';
-  $field_date     = $plan_rec && $date ? theme('field_custom', ['title' => 'Начало выпуска', 'content' => date('d.m', $date)]) : '';
+  $field_volume   = $plan_rec ? theme('field_custom', ['title' => 'Объём выпуска', 'content' => helper_number_format($volume, 2, ' ')]) : '';
+  $month_label    = drupal_strtolower(helper_month_label_ru(date('n', $month_start)) . ' ' . date('Y', $month_start));
+  $field_month    = theme('field_custom', ['title' => 'Период', 'content' => $month_label]);
 
 
   // подготовить историю сообщений
@@ -255,15 +251,16 @@ function prod_nom_page($nom_id, $month_start)
   $url = '/production/message/add/' . $nom_id . '/' . $month_start;
   $button_class = prod_plan_has_approved($month_start) ? ' btn-danger' : ' btn-primary';
 
-  // если до конца месяца осталось меньше чем PROD_DAYS_BEFORE_PRODUCE_START, запретить изменения, кроме документов
+  // если до конца месяца осталось меньше чем PROD_DAYS_BEFORE_PRODUCE_START, запретить приём заявок на изменения, кроме документов
   $today_start = helper_get_day_start_from_timestamp();
   $next_month_start = gmmktime(0, 0, 0, date('n', $month_start)+1, date('j', $month_start), date('Y', $month_start));
-  $month_is_over = $today_start + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60 >= $next_month_start;
+  $queries_not_allowed = $today_start + PROD_DAYS_BEFORE_PRODUCE_START * 24*60*60 >= $next_month_start;
+  $month_is_over = $today_start >= $next_month_start;
 
-  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=date"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Перенести дату выпуска</a>';
-  $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=volume"' . (!$month_is_over ? '' : 'disabled') . '>Изменить объём выпуска</a>';
-  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=cancel"' . ($date_vol_last['volume'] && !$month_is_over ? '' : 'disabled') . '>Отменить выпуск</a>';
-  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=docs">Отправить документы</a>';
+  $output_a  = '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=date"' . ($date_vol_last['volume'] && !$queries_not_allowed && !$month_is_over ? '' : 'disabled') . '>Перенести дату выпуска</a>';
+  $output_a .= '<a class="btn' . $button_class . ' autodialog" data-dialog-width="650" href="' . $url . '?subject=volume"' . (!$queries_not_allowed && !$month_is_over ? '' : 'disabled') . '>Изменить объём выпуска</a>';
+  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=cancel"' . ($date_vol_last['volume'] && !$queries_not_allowed && !$month_is_over ? '' : 'disabled') . '>Отменить выпуск</a>';
+  $output_a .= '<a class="btn btn-default autodialog" data-dialog-width="650" href="' . $url . '?subject=docs"' . (!$month_is_over ? '' : 'disabled') . '>Отправить документы</a>';
 
   // Настройки
   $settings_form = drupal_get_form('prod_nom_page_settings_form', $month_start, $nom_id);
@@ -275,11 +272,11 @@ function prod_nom_page($nom_id, $month_start)
   $output .=      '<div class="n-title">';
   $output .=        $field_title;
   $output .=      '</div>';
+  $output .=      '<div class="n-month">';
+  $output .=        $field_month;
+  $output .=      '</div>';
   $output .=      '<div class="n-volume">';
   $output .=        $field_volume;
-  $output .=      '</div>';
-  $output .=      '<div class="n-date">';
-  $output .=        $field_date;
   $output .=      '</div>';
   $output .=    '</div>';
 
@@ -290,17 +287,17 @@ function prod_nom_page($nom_id, $month_start)
   $output .=    '<div class="n-history">';
   $output .=      '<div class="n-left">';
   $output .=        '<div class="n-actions">';
-  $output .=        '<label class="field-label">Действия</label>';
+  $output .=        '<label class="block-label">Действия</label>';
   $output .=          $output_a;
   $output .=        '</div>';
   $output .=        '<div class="n-settings">';
-  $output .=        '<label class="field-label">Настройки</label>';
+  $output .=        '<label class="block-label">Настройки</label>';
   $output .=          $output_s;
   $output .=        '</div>';
   $output .=      '</div>';
 
   $output .=      '<div class="n-messages">';
-  $output .=      '<label class="field-label">История изменений</label>';
+  $output .=      '<label class="block-label">История изменений</label>';
   $output .=        $output_m;
   $output .=      '</div>';
   $output .=    '</div>';
@@ -461,7 +458,7 @@ function prod_message_add_form($form, $form_state, $nomenklatura_id = null, $mon
 
   // предупреждение о рисках
   if (prod_plan_has_approved($month_start) && in_array($subject, ['date', 'volume'])) {
-    $warning = '<p>План производства уже утверждён!</p><p>Внесение изменений может привести к возникновению рисков нарушения установленных сроков выпуска продукции, а также к увеличению стоимости предоставляемых услуг.</p>';
+    $warning = '<p>План производства уже утверждён!</p><p>Внесение изменений может привести к срыву установленных сроков выпуска продукции и к увеличению стоимости предоставляемых услуг.</p>';
     $form['warning'] = [
       '#markup' => '<div class="warning">' . $warning . '</div>',
     ];
@@ -654,7 +651,7 @@ function prod_nom_page_settings_form($form, $form_state, $month_start, $nom_id)
   $form['mail'] = [
     '#type' => 'checkbox',
     '#name' => 'mail',
-    '#title' => 'уведомлять об изменениях по e-mail',
+    '#title' => 'уведомлять на e-mail об изменениях по продукту',
     '#default_value' => $default,
     '#ajax' => [
       'callback' => 'prod_nom_page_settings_form_callback',
